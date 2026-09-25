@@ -1,0 +1,24 @@
+{
+  "modelo": "claude-opus-5",
+  "effort": "medium",
+  "max_tokens": 16000,
+  "web_search_max_uses_generar": 3,
+  "web_search_max_uses_ajustar": 2,
+  "max_reparaciones": 2,
+  "max_reanudaciones_pause_turn": 3,
+  "zona_horaria": "America/Bogota",
+  "dia_inicio_generacion": 15,
+  "dia_publicacion_propuesto": "martes",
+  "umbral_similitud": 0.5,
+  "umbral_similitud_semillas": 0.6,
+  "antiguedad_max_fuente_meses": 18,
+  "max_palabras_caption": 150,
+  "cta": "📲 Síguenos para más ideas que conectan data, experiencia y negocio.",
+  "hashtags_prohibidos": ["#viral", "#explore", "#trending", "#fyp", "#instagood", "#love", "#follow", "#like4like"],
+  "calendario": [
+    {"semana": 1, "formato": "Carrusel", "pilar": "Tendencias de marketing estratégico"},
+    {"semana": 2, "formato": "Reel", "pilar": "Tendencias de marketing BTL"},
+    {"semana": 3, "formato": "Carrusel", "pilar": "Tendencias de marketing BTL"},
+    {"semana": 4, "formato": "Reel", "pilar": "Tendencias de marketing estratégico"}
+  ]
+}

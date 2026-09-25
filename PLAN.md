@@ -647,7 +647,7 @@ Paleta **confirmada por RC** a partir de la guía visual en alta resolución (25
 - **En la web app:**
   - Los mismos tokens como variables CSS. Arial como fuente del sistema; no se carga Montserrat de Google Fonts, para no sumar dependencias externas.
   - Encabezado con el gradiente `noche` y el logo blanco.
-  - Botón primario `coral` con texto `azul_marino`. El texto blanco sobre `#F65155` no alcanza el contraste AA (4,5:1) en texto normal; **verificar el contraste en la Fase 4**.
+  - Botón primario `azul_medio` con texto blanco (contraste 5,33:1, cumple AA). El coral no alcanza AA con ningún color de texto (3,44:1 con azul marino y 3,37:1 con blanco), así que se usa solo en acentos, bordes y texto grande.
   - Estados: aprobado en `azul_medio`, advertencia en `coral`.
 
 ---
@@ -811,10 +811,7 @@ Los precios de Claude salen de la documentación de Anthropic (caché del 24/06/
 
 **Confirmado también (25/09/2026):** la paleta de color (9.3), los tipos de contenido y el reparto de pilares por semana.
 
-**Supuestos pendientes de confirmar:**
-1. A partir del día 15 se genera el contenido del **mes siguiente**.
-2. El botón "Aplicar ajustes" es **global** y procesa todas las piezas con comentarios pendientes.
-3. La app **no publica** en Instagram.
+**Confirmado también:** el día 15 se genera el contenido del mes siguiente; el botón "Aplicar ajustes" procesa todas las piezas con comentarios; la app no publica en Instagram, porque lo hace el equipo de publicación (Luis Alfonso) a partir del PowerPoint.
 
 ---
 

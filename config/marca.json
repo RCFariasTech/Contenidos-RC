@@ -1,0 +1,30 @@
+{
+  "paleta": {
+    "coral": "#F65155",
+    "celeste": "#A9DAF1",
+    "azul_medio": "#0069D1",
+    "gris_claro": "#D8D6D2",
+    "azul_marino": "#1F3864",
+    "blanco": "#FFFFFF"
+  },
+  "gradientes_verticales": {
+    "cielo": ["#FFFFFF", "#A9DAF1"],
+    "azul": ["#A9DAF1", "#0069D1"],
+    "noche": ["#0069D1", "#1F3864"],
+    "coral": ["#F65155", "#E88080"],
+    "niebla": ["#D8D6D2", "#FFFFFF"]
+  },
+  "colores_logo_solo_referencia": {"rojo_logo": "#FE171F", "azul_logo": "#010E30"},
+  "tipografias": {
+    "titulos": "Arial Black",
+    "subtitulos": "Arial Bold",
+    "parrafo": "Arial",
+    "secundaria": "Montserrat",
+    "respaldo": "Helvetica"
+  },
+  "logos": {
+    "fondo_claro": "plantilla/logo_rc_rojo.png",
+    "fondo_claro_sobrio": "plantilla/logo_rc_azul.png",
+    "fondo_oscuro": "plantilla/logo_rc_blanco.png"
+  }
+}

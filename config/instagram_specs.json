@@ -1,0 +1,15 @@
+{
+  "verificado": "2026-09-25",
+  "Carrusel": {
+    "tamano_px": "1080 × 1350",
+    "relacion": "4:5",
+    "notas": "Todas las tarjetas con la misma relación de aspecto. En la grilla del perfil (3:4) se recorta un poco arriba y abajo: mantener lo clave de la tarjeta 1 en el centro."
+  },
+  "Reel": {
+    "tamano_px": "1080 × 1920",
+    "relacion": "9:16",
+    "portada": "1080 × 1920; en la grilla del perfil se ve el recorte central 3:4 (1080 × 1440)",
+    "zona_segura": "Evitar texto en los ~220 px superiores y ~450 px inferiores (interfaz de Instagram)",
+    "video": "MP4/MOV, H.264, 30 fps"
+  }
+}

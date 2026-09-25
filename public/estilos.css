@@ -1,0 +1,31 @@
+:root {
+  --coral: #F65155;
+  --celeste: #A9DAF1;
+  --azul-medio: #0069D1;
+  --gris-claro: #D8D6D2;
+  --azul-marino: #1F3864;
+  --blanco: #FFFFFF;
+  --texto: #1F3864;
+  --fondo: #F7F7F6;
+  --fuente: Arial, Helvetica, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--fuente); color: var(--texto); background: var(--fondo); }
+.encabezado {
+  display: flex; align-items: center; gap: 16px; padding: 12px 16px;
+  background: linear-gradient(180deg, var(--azul-medio), var(--azul-marino)); color: var(--blanco);
+}
+.logo { height: 32px; width: auto; }
+.encabezado__titulo { font-weight: bold; flex: 1; }
+.contenedor { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+.tarjeta { background: var(--blanco); border: 1px solid var(--gris-claro); border-radius: 8px; padding: 24px; }
+.login { max-width: 380px; margin: 48px auto; }
+h1 { font-family: "Arial Black", Arial, sans-serif; font-size: 1.4rem; margin: 0 0 16px; }
+label { display: block; font-weight: bold; margin: 12px 0 4px; }
+input { width: 100%; padding: 10px; font: inherit; border: 1px solid var(--gris-claro); border-radius: 6px; }
+input:focus-visible, .btn:focus-visible { outline: 3px solid var(--azul-medio); outline-offset: 2px; }
+.btn { font: inherit; font-weight: bold; border: 0; border-radius: 6px; padding: 10px 16px; cursor: pointer; }
+.btn--primario { background: var(--azul-medio); color: var(--blanco); margin-top: 16px; width: 100%; }
+.btn--fantasma { background: transparent; color: var(--blanco); border: 1px solid var(--blanco); }
+.mensaje { min-height: 1.2em; }
+.mensaje--error { color: #B3261E; }

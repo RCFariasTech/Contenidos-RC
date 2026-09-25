@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contenido RC Farias</title>
+  <link rel="stylesheet" href="/estilos.css">
+</head>
+<body>
+  <header class="encabezado">
+    <img src="/logo_rc_blanco.png" alt="RC Farias" class="logo">
+    <span class="encabezado__titulo">Contenido Instagram</span>
+    <button id="btn-salir" class="btn btn--fantasma" hidden>Salir</button>
+  </header>
+
+  <main class="contenedor">
+    <section id="vista-login" class="tarjeta login" hidden>
+      <h1>Ingresar</h1>
+      <form id="form-login">
+        <label for="email">Correo</label>
+        <input id="email" type="email" autocomplete="username" required>
+        <label for="clave">Contraseña</label>
+        <input id="clave" type="password" autocomplete="current-password" required>
+        <button type="submit" class="btn btn--primario">Ingresar</button>
+        <p id="login-error" class="mensaje mensaje--error" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="vista-app" class="tarjeta" hidden>
+      <h1>Conexión verificada</h1>
+      <p id="estado-app" class="mensaje"></p>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
