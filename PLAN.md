@@ -595,20 +595,26 @@ Verificado el **25/09/2026** en fuentes secundarias actualizadas (sección 16). 
 
 ### 9.3 Identidad de marca (`config/marca.json`)
 
-Los colores se midieron en los píxeles de los logos entregados y de la guía visual. La guía llegó en baja resolución y sus códigos impresos no se leen con total seguridad, así que **RC debe confirmarlos** (ver 14).
+Paleta **confirmada por RC** a partir de la guía visual en alta resolución (25/09/2026). Los dos colores de logo se midieron en los archivos PNG entregados y se usan **solo** a través de las imágenes del logo, nunca como colores de interfaz.
 
 ```json
 {
-  "colores": {
-    "rojo_rc":      "#FE171F",
-    "azul_rc":      "#010E30",
-    "azul_guia":    "#1F3864",
-    "coral":        "#F65155",
-    "azul_medio":   "#0069D1",
-    "celeste":      "#A9DAF1",
-    "gris_claro":   "#D8D6D2",
-    "blanco":       "#FFFFFF"
+  "paleta": {
+    "coral":      "#F65155",
+    "celeste":    "#A9DAF1",
+    "azul_medio": "#0069D1",
+    "gris_claro": "#D8D6D2",
+    "azul_marino":"#1F3864",
+    "blanco":     "#FFFFFF"
   },
+  "gradientes_verticales": {
+    "cielo":  ["#FFFFFF", "#A9DAF1"],
+    "azul":   ["#A9DAF1", "#0069D1"],
+    "noche":  ["#0069D1", "#1F3864"],
+    "coral":  ["#F65155", "#E88080"],
+    "niebla": ["#D8D6D2", "#FFFFFF"]
+  },
+  "colores_logo_solo_referencia": {"rojo_logo": "#FE171F", "azul_logo": "#010E30"},
   "tipografias": {
     "titulos":    "Arial Black",
     "subtitulos": "Arial Bold",
@@ -617,21 +623,31 @@ Los colores se midieron en los píxeles de los logos entregados y de la guía vi
     "respaldo":   "Helvetica"
   },
   "logos": {
-    "fondo_claro":  "plantilla/logo_rc_rojo.png",
+    "fondo_claro":        "plantilla/logo_rc_rojo.png",
     "fondo_claro_sobrio": "plantilla/logo_rc_azul.png",
-    "fondo_oscuro": "plantilla/logo_rc_blanco.png"
+    "fondo_oscuro":       "plantilla/logo_rc_blanco.png"
   }
 }
 ```
 
-- `rojo_rc` y `azul_rc` son los colores exactos de los archivos de logo. `azul_guia`, `coral`, `azul_medio`, `celeste` y `gris_claro` corresponden a la paleta de la guía (1F3864, 0069D1 y D8D6D2 coinciden con los códigos legibles en la imagen).
+- **Gradientes:** reproducen los cinco "fondos gradientes" de la guía, de arriba hacia abajo. Todos los extremos son colores de la paleta, salvo el final del gradiente `coral` (`#E88080`), que es una **aproximación** medida en la imagen: la guía no publica ese valor.
 - **En el PPT:**
   - Arial en todo el documento. Viene instalada en Windows y macOS, así que no hace falta incrustar fuentes y la presentación se ve igual en cualquier equipo. Montserrat es la fuente secundaria de la guía, pero no se usa en el PPT porque podría no estar instalada.
-  - Barra de título en `azul_guia` con texto blanco.
-  - Etiquetas de sección (FICHA TÉCNICA, CAPTION…) en Arial Bold `rojo_rc`.
-  - Encabezado de las tablas en `azul_guia` y filas alternas en `gris_claro` al 40 %.
-  - Logo rojo arriba a la derecha en las slides de contenido y logo blanco en la portada.
-- **En la web app:** los mismos tokens como variables CSS. Arial como fuente del sistema; no se carga Montserrat de Google Fonts, para no sumar dependencias externas. Botón primario `rojo_rc`, encabezados `azul_guia`.
+  - **Portada:** fondo con el gradiente `noche`, logo blanco y título en Arial Black blanco.
+  - **Slides de contenido:**
+    - fondo blanco;
+    - barra de título en `azul_marino` con texto blanco;
+    - etiquetas de sección (FICHA TÉCNICA, CAPTION…) en Arial Bold `coral`;
+    - encabezado de las tablas en `azul_marino` y filas alternas en `celeste` al 35 %;
+    - enlaces de fuente en `azul_medio`;
+    - logo rojo arriba a la derecha.
+  - **Identificador de formato:** una etiqueta de color junto al título, `coral` para Reel y `azul_medio` para Carrusel, para distinguirlos de un vistazo.
+  - Gradientes con `fill.gradient()` de `python-pptx` (ángulo de 90°).
+- **En la web app:**
+  - Los mismos tokens como variables CSS. Arial como fuente del sistema; no se carga Montserrat de Google Fonts, para no sumar dependencias externas.
+  - Encabezado con el gradiente `noche` y el logo blanco.
+  - Botón primario `coral` con texto `azul_marino`. El texto blanco sobre `#F65155` no alcanza el contraste AA (4,5:1) en texto normal; **verificar el contraste en la Fase 4**.
+  - Estados: aprobado en `azul_medio`, advertencia en `coral`.
 
 ---
 
@@ -687,7 +703,7 @@ Los colores se midieron en los píxeles de los logos entregados y de la guía vi
 - **Tipo:** rotación. Se elige el de uso más antiguo; los nunca usados van primero y, en empate, gana el orden de la lista. No se repite tipo entre dos piezas del mismo formato en el mes.
 - `temas_ya_usados` alimenta el prompt (como referencia de estilo) y la semilla del histórico (4, sección 8.6).
 
-> La lista de **tipos** sigue siendo una propuesta; RC no la ha confirmado.
+> Tipos de contenido y reparto de pilares **confirmados por RC**.
 
 ### 10.3 Variables de entorno (Vercel → Settings → Environment Variables)
 
@@ -792,15 +808,12 @@ Los precios de Claude salen de la documentación de Anthropic (caché del 24/06/
 - Caption de máximo **150 palabras**.
 - Marca: logos, paleta y tipografías entregados (9.3).
 
+**Confirmado también (25/09/2026):** la paleta de color (9.3), los tipos de contenido y el reparto de pilares por semana.
+
 **Supuestos pendientes de confirmar:**
-1. A partir del día 15 se genera el contenido del **mes siguiente**, en el orden Carrusel, Reel, Carrusel, Reel, con los pilares repartidos como en 10.1.
-2. La lista de **tipos** (Educativo, Tendencia, Mito vs. realidad, Checklist) es una propuesta.
-3. Los **colores HEX** de 9.3 se midieron en los píxeles de las imágenes. En particular:
-   - El rojo del logo es `#FE171F` y el de la guía se ve como `#ED1D24`.
-   - El azul del logo es `#010E30` y el de la guía es `#1F3864`.
-   Hay que confirmar cuáles son los oficiales.
-4. El botón "Aplicar ajustes" es **global** y procesa todas las piezas con comentarios pendientes.
-5. La app **no publica** en Instagram.
+1. A partir del día 15 se genera el contenido del **mes siguiente**.
+2. El botón "Aplicar ajustes" es **global** y procesa todas las piezas con comentarios pendientes.
+3. La app **no publica** en Instagram.
 
 ---
 
