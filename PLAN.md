@@ -113,7 +113,8 @@ Implicaciones de diseño:
 │   ├── logo_rc_rojo.png           ← logo sobre fondos claros (entregado por RC)
 │   ├── logo_rc_azul.png           ← logo sobre fondos claros, versión sobria
 │   ├── logo_rc_blanco.png         ← logo sobre fondos azules
-│   └── guia_visual_referencia.png ← guía visual (baja resolución, solo referencia)
+│   ├── guia_visual_referencia.png ← guía visual completa (baja resolución, referencia)
+│   └── paleta_color.png           ← paleta y gradientes oficiales (alta resolución)
 │   (el diseño del PPT se construye por código desde config/marca.json; no hace falta un .pptx maestro)
 ├── config/marca.json              ← colores HEX y tipografías de la guía visual (sección 9.3)
 ├── supabase/migrations/001_esquema.sql
