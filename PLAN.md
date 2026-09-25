@@ -109,7 +109,13 @@ Implicaciones de diseño:
 │   ├── pilares.json
 │   └── instagram_specs.json       ← tamaños oficiales (fecha de verificación incluida)
 ├── prompts/{sistema.md, generar.md, ajustar.md}
-├── plantilla/rc_farias.pptx       ← plantilla con marca RC (logo y colores). TODO: la entrega RC
+├── plantilla/
+│   ├── logo_rc_rojo.png           ← logo sobre fondos claros (entregado por RC)
+│   ├── logo_rc_azul.png           ← logo sobre fondos claros, versión sobria
+│   ├── logo_rc_blanco.png         ← logo sobre fondos azules
+│   └── guia_visual_referencia.png ← guía visual (baja resolución, solo referencia)
+│   (el diseño del PPT se construye por código desde config/marca.json; no hace falta un .pptx maestro)
+├── config/marca.json              ← colores HEX y tipografías de la guía visual (sección 9.3)
 ├── supabase/migrations/001_esquema.sql
 └── tests/                         ← unittest, sin red
     ├── fixtures/
@@ -143,7 +149,7 @@ create table piezas (
   id              bigint generated always as identity primary key,
   mes_id          bigint not null references meses(id) on delete cascade,
   semana          smallint not null check (semana between 1 and 5),
-  fecha_sugerida  date not null,
+  fecha_publicacion date not null,               -- sugerida al crear; editable por el usuario pieza a pieza
   formato         text not null check (formato in ('Carrusel','Reel')),
   tipo            text not null,
   pilar           text not null,
@@ -191,7 +197,16 @@ alter table comentarios      enable row level security;
 
 **Historial anti-repetición** (para prompt y validador): la tendencia y la estrategia de todas las piezas con `contenido` no nulo, de cualquier mes, **excepto** el mes en curso, al que se le pasa la lista de piezas hermanas por separado.
 
-**Migración del historial previo:** importar el historial existente (de Make u otra fuente) como un mes con `estado = 'historico'` y piezas con `contenido` mínimo (`tendencia` y `estrategia_clave`).
+**Migración del historial previo:** importar el historial existente (de Make u otra fuente) como un mes con `estado = 'historico'` y piezas con `contenido` mínimo (`tema_especifico`, `tendencia` y `estrategia_clave`).
+
+**Temas ya usados, confirmados por RC:** se cargan como semilla del histórico con solo `tema_especifico`, para que no se repitan:
+1. Cómo llegar a las nuevas generaciones
+2. Qué es el greenwashing en las marcas
+3. Por qué necesitas datos de tus eventos
+4. Impacto de la IA en el BTL
+5. Cringe marketing
+6. BTL phygital
+7. Marketing sensorial
 
 ---
 
@@ -230,11 +245,13 @@ Reglas:
 
 **Mes objetivo:** el mes siguiente a la fecha actual en `America/Bogota`. Se puede sobrescribir con un selector en "Generar ahora".
 
-### 5.3 Fechas sugeridas de publicación
+### 5.3 Fechas de publicación (elegidas por el usuario, pieza a pieza)
 
-`config/ajustes.json → dia_publicacion` (por defecto `"martes"`). La semana N corresponde al N-ésimo martes del mes objetivo. La función es pura y tiene tests.
-
-> ⚠️ **Supuesto por confirmar:** se publica un día fijo por semana.
+- Al crear los slots, cada pieza recibe una fecha **propuesta**: el martes de su semana (N-ésimo martes del mes objetivo, según `ajustes.dia_publicacion_propuesto`). Es una función pura con tests.
+- El usuario **cambia la fecha de cada post individualmente** con un selector de fecha en su tarjeta, en cualquier estado salvo `generando` o `ajustando`.
+  - Cambiar la fecha **no** crea una versión nueva ni quita la aprobación, porque no altera el contenido.
+- Advertencias no bloqueantes en la UI: si la fecha cae fuera del mes objetivo o si dos piezas tienen la misma fecha.
+- La fecha elegida se usa en el Repositorio y en el PowerPoint.
 
 ---
 
@@ -250,7 +267,7 @@ Reglas:
 ```
 ┌ Octubre · En revisión · 2/4 aprobadas ─ [Generar ahora] [Aplicar ajustes (3)] [Descargar PowerPoint] ┐
 │                                                                                                      │
-│ ┌ Semana 1 · Carrusel · Educativo · mar 6 oct ─────────────────────── v2 ── ☐ Aprobado ┐              │
+│ ┌ Semana 1 · Carrusel · Educativo · Publicar: [📅 06/10/2026] ──────── v2 ── ☐ Aprobado ┐              │
 │ │ Pilar: Trade marketing…   Tema: …                                                    │              │
 │ │ Investigación: tendencia · resumen · Fuente (enlace, fecha)                          │              │
 │ │ Tarjetas: 1 Gancho … | 2 … | 3 … | 4 … | 5 Cierre …                                  │              │
@@ -268,7 +285,7 @@ Reglas:
 - Mientras una pieza está `generando` o `ajustando`, su tarjeta muestra un indicador y bloquea los controles.
 
 ### 6.3 Sección "Repositorio"
-- Tabla con columnas: mes objetivo, semana, fecha sugerida, formato, tipo, pilar, tema, tendencia, **fecha de creación**, **fecha de aprobación** y **fecha de entrega**.
+- Tabla con columnas: mes objetivo, semana, **fecha de publicación**, formato, tipo, pilar, tema, tendencia, **fecha de creación**, **fecha de aprobación** y **fecha de entrega**.
 - Filtros por mes, formato y pilar, aplicados en el cliente (el volumen es pequeño).
 - Al hacer clic en una fila se abre el detalle completo en modo solo lectura, con sus versiones.
 - Botón "Descargar PPT" por mes para re-descargarlo.
@@ -294,6 +311,7 @@ Todas las rutas, salvo `/api/config` y `/api/diario`, exigen un `Bearer` válido
 | `DELETE /api/comentarios/{id}` | Borra un comentario **pendiente** |
 | `POST /api/ajustar-pieza` `{pieza_id}` | Aplica todos los comentarios pendientes de la pieza (sección 8.4) |
 | `POST /api/aprobar` `{pieza_id, aprobada: bool}` | Marca o desmarca la aprobación (valida las reglas de 5.1) |
+| `POST /api/fecha` `{pieza_id, fecha: "AAAA-MM-DD"}` | Cambia la fecha de publicación de una pieza (5.3) |
 | `GET /api/exportar-pptx?mes=AAAA-MM` | Devuelve el `.pptx` (`Content-Disposition: attachment`). Solo si el mes está `aprobado`, `entregado` o `historico` |
 | `GET /api/repositorio` | Listado de piezas del repositorio |
 | `GET /api/piezas/{id}/versiones` | Versiones de una pieza |
@@ -395,6 +413,13 @@ REGLAS DURAS (se validan automáticamente; si no se cumplen, la pieza se rechaza
 - El caption debe terminar EXACTAMENTE con: 📲 Síguenos para más ideas que conectan data, experiencia y negocio.
   Ese texto también va en el campo "cta".
 - Nunca repitas tendencias ni estrategias del HISTORIAL ni de las OTRAS PIEZAS DEL MES.
+
+TEMÁTICA: toda pieza trata sobre TENDENCIAS DE MARKETING ESTRATÉGICO y/o TENDENCIAS DE MARKETING BTL.
+Referencia de la granularidad y el estilo de tema esperado (YA USADOS: no repetirlos, solo tomar el estilo):
+"Cómo llegar a las nuevas generaciones", "Qué es el greenwashing en las marcas",
+"Por qué necesitas datos de tus eventos", "Impacto de la IA en el BTL", "Cringe marketing",
+"BTL phygital", "Marketing sensorial".
+Es decir: un concepto, fenómeno o pregunta concreta que un gerente de marca reconozca y quiera entender.
 
 INVESTIGACIÓN (obligatoria):
 - Usa la herramienta de búsqueda web. No respondas de memoria.
@@ -498,7 +523,7 @@ $pieza_json
 
 ### 8.6 Similitud anti-repetición (sin embeddings)
 
-1. Texto = `tendencia + " " + estrategia_clave`.
+1. Texto = `tema_especifico + " " + tendencia + " " + estrategia_clave`. En los temas semilla del histórico solo hay `tema_especifico`: contra ellos se compara únicamente `tema_especifico`, con umbral 0,6, porque los textos son cortos.
 2. Normalizar:
    - pasar a minúsculas;
    - quitar tildes con `unicodedata.normalize("NFKD")`;
@@ -520,10 +545,9 @@ Verificado el **25/09/2026** en fuentes secundarias actualizadas (sección 16). 
 {
   "verificado": "2026-09-25",
   "Carrusel": {
-    "tamano_px": "1080 × 1440",
-    "relacion": "3:4",
-    "alternativa": "1080 × 1350 (4:5)",
-    "notas": "Todas las tarjetas con la misma relación de aspecto. 3:4 se muestra sin recorte en la grilla del perfil."
+    "tamano_px": "1080 × 1350",
+    "relacion": "4:5",
+    "notas": "Todas las tarjetas con la misma relación de aspecto. En la grilla del perfil (3:4) se recorta un poco arriba y abajo: mantener lo clave de la tarjeta 1 en el centro."
   },
   "Reel": {
     "tamano_px": "1080 × 1920",
@@ -535,22 +559,17 @@ Verificado el **25/09/2026** en fuentes secundarias actualizadas (sección 16). 
 }
 ```
 
-> **Decisión por confirmar (RC):**
-> - Carrusel en **3:4 (1080 × 1440)**. Recomendado: es el formato más alto admitido y el único que la grilla no recorta. Instagram lo admite desde mayo de 2025.
-> - O bien **4:5 (1080 × 1350)**, que sigue siendo el valor por defecto del uploader y el de mayor trayectoria.
->
-> Cambiar de uno a otro es editar una línea del JSON.
+> **Decisión de RC:** carrusel en **4:5 (1080 × 1350)**. Si en el futuro se quiere 3:4 (1080 × 1440, admitido desde mayo de 2025), basta con editar este JSON.
 
 ### 9.2 Estructura del archivo
 
-- Se construye sobre la plantilla `plantilla/rc_farias.pptx`, con master, logo, colores y tipografías de RC, en formato **16:9**.
-  - Si la plantilla no existe, se usa la de `python-pptx` por defecto y se registra una advertencia en el log.
-- **Slide 0, portada:** "Contenido Instagram · <Mes AAAA>", fecha de aprobación y el resumen de las 4 piezas. La portada sí puede llevar el año, porque es un documento interno.
+- Presentación **16:9** construida por código con `python-pptx`, usando los colores, tipografías y logos de la sección 9.3. No se necesita un `.pptx` maestro.
+- **Slide 0, portada:** fondo Azul RC, logo blanco, "Contenido Instagram · <Mes AAAA>" en Arial Black blanco, la fecha de aprobación y el resumen de las 4 piezas con su fecha de publicación. La portada sí puede llevar el año, porque es un documento interno.
 - **Slides 1 a 4, una por contenido**, ordenadas por semana:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│ SEMANA 2 · REEL · Publicación sugerida: martes 13 oct              [logo RC]  │
+│ SEMANA 2 · REEL · Publicación: martes 13 oct                       [logo RC]  │
 │ Tema: <tema_especifico>                                                        │
 ├──────────────────────────────┬────────────────────────────────────────────────┤
 │ FICHA TÉCNICA                │ TEXTOS POR ESCENA  (Carrusel: POR TARJETA)     │
@@ -574,6 +593,46 @@ Verificado el **25/09/2026** en fuentes secundarias actualizadas (sección 16). 
 - Nombre del archivo: `RC_Farias_Instagram_AAAA-MM.pptx`. Se genera en memoria (`io.BytesIO`) y **no se almacena**; se regenera en cada descarga desde los datos aprobados.
 - Test: generar el PPTX desde fixtures, reabrirlo con `python-pptx` y comprobar 5 slides, los textos presentes y las medidas correctas por formato.
 
+### 9.3 Identidad de marca (`config/marca.json`)
+
+Los colores se midieron en los píxeles de los logos entregados y de la guía visual. La guía llegó en baja resolución y sus códigos impresos no se leen con total seguridad, así que **RC debe confirmarlos** (ver 14).
+
+```json
+{
+  "colores": {
+    "rojo_rc":      "#FE171F",
+    "azul_rc":      "#010E30",
+    "azul_guia":    "#1F3864",
+    "coral":        "#F65155",
+    "azul_medio":   "#0069D1",
+    "celeste":      "#A9DAF1",
+    "gris_claro":   "#D8D6D2",
+    "blanco":       "#FFFFFF"
+  },
+  "tipografias": {
+    "titulos":    "Arial Black",
+    "subtitulos": "Arial Bold",
+    "parrafo":    "Arial",
+    "secundaria": "Montserrat",
+    "respaldo":   "Helvetica"
+  },
+  "logos": {
+    "fondo_claro":  "plantilla/logo_rc_rojo.png",
+    "fondo_claro_sobrio": "plantilla/logo_rc_azul.png",
+    "fondo_oscuro": "plantilla/logo_rc_blanco.png"
+  }
+}
+```
+
+- `rojo_rc` y `azul_rc` son los colores exactos de los archivos de logo. `azul_guia`, `coral`, `azul_medio`, `celeste` y `gris_claro` corresponden a la paleta de la guía (1F3864, 0069D1 y D8D6D2 coinciden con los códigos legibles en la imagen).
+- **En el PPT:**
+  - Arial en todo el documento. Viene instalada en Windows y macOS, así que no hace falta incrustar fuentes y la presentación se ve igual en cualquier equipo. Montserrat es la fuente secundaria de la guía, pero no se usa en el PPT porque podría no estar instalada.
+  - Barra de título en `azul_guia` con texto blanco.
+  - Etiquetas de sección (FICHA TÉCNICA, CAPTION…) en Arial Bold `rojo_rc`.
+  - Encabezado de las tablas en `azul_guia` y filas alternas en `gris_claro` al 40 %.
+  - Logo rojo arriba a la derecha en las slides de contenido y logo blanco en la portada.
+- **En la web app:** los mismos tokens como variables CSS. Arial como fuente del sistema; no se carga Montserrat de Google Fonts, para no sumar dependencias externas. Botón primario `rojo_rc`, encabezados `azul_guia`.
+
 ---
 
 ## 10. Configuración
@@ -589,40 +648,46 @@ Verificado el **25/09/2026** en fuentes secundarias actualizadas (sección 16). 
   "max_reparaciones": 2,
   "zona_horaria": "America/Bogota",
   "dia_inicio_generacion": 15,
-  "dia_publicacion": "martes",
+  "dia_publicacion_propuesto": "martes",
   "umbral_similitud": 0.5,
   "antiguedad_max_fuente_meses": 18,
   "max_palabras_caption": 150,
   "calendario": [
-    {"semana": 1, "formato": "Carrusel"},
-    {"semana": 2, "formato": "Reel"},
-    {"semana": 3, "formato": "Carrusel"},
-    {"semana": 4, "formato": "Reel"}
+    {"semana": 1, "formato": "Carrusel", "pilar": "Tendencias de marketing estratégico"},
+    {"semana": 2, "formato": "Reel",     "pilar": "Tendencias de marketing BTL"},
+    {"semana": 3, "formato": "Carrusel", "pilar": "Tendencias de marketing BTL"},
+    {"semana": 4, "formato": "Reel",     "pilar": "Tendencias de marketing estratégico"}
   ]
 }
 ```
 
-### 10.2 `config/pilares.json` (propuesta, RC debe validarla)
+### 10.2 `config/pilares.json` (confirmado por RC)
 
 ```json
 {
   "pilares": [
-    "Activaciones de marca y experiencias en vivo",
-    "Eventos corporativos y lanzamientos de producto",
-    "Trade marketing y experiencia en punto de venta",
-    "Medición y data de experiencias (ROI de BTL)",
-    "Tecnología aplicada a experiencias (inmersivo, phygital)",
-    "Sampling y prueba de producto",
-    "Sostenibilidad en producción de eventos",
-    "Estrategia de marca y comportamiento del consumidor"
+    "Tendencias de marketing estratégico",
+    "Tendencias de marketing BTL"
+  ],
+  "temas_ya_usados": [
+    "Cómo llegar a las nuevas generaciones",
+    "Qué es el greenwashing en las marcas",
+    "Por qué necesitas datos de tus eventos",
+    "Impacto de la IA en el BTL",
+    "Cringe marketing",
+    "BTL phygital",
+    "Marketing sensorial"
   ],
   "tipos": ["Educativo", "Tendencia", "Mito vs. realidad", "Checklist / cómo hacerlo"]
 }
 ```
 
-**Rotación** (`planificador.py`, función pura con tests):
-- **Pilar:** el de uso más antiguo; los nunca usados van primero y, en empate, gana el orden de la lista. No se repite pilar dentro del mes.
-- **Tipo:** el mismo criterio, sin repetir tipo entre dos piezas del mismo formato en el mes.
+**Asignación** (`planificador.py`, función pura con tests):
+- **Pilar:** fijo por calendario. Cada mes lleva 2 piezas por pilar, y cada pilar tiene un carrusel y un reel. Un tema puede ser estratégico **y** BTL a la vez, porque RC los definió como "y/o".
+- **Tipo:** rotación. Se elige el de uso más antiguo; los nunca usados van primero y, en empate, gana el orden de la lista. No se repite tipo entre dos piezas del mismo formato en el mes.
+- `temas_ya_usados` alimenta el prompt (como referencia de estilo) y la semilla del histórico (4, sección 8.6).
+
+> La lista de **tipos** sigue siendo una propuesta; RC no la ha confirmado.
 
 ### 10.3 Variables de entorno (Vercel → Settings → Environment Variables)
 
@@ -689,7 +754,7 @@ Cada fase se cierra con su criterio cumplido **antes** de pasar a la siguiente.
 - ✅ Criterio: el flujo completo funciona desde el navegador de escritorio y del móvil, incluido comentar, ajustar y aprobar.
 
 ### Fase 5: PowerPoint y cron
-- [ ] Exportación con la plantilla RC. El cron diario inicia el mes el día 15 y mantiene activo Supabase.
+- [ ] Exportación con la identidad de marca de 9.3. El cron diario inicia el mes el día 15 y mantiene activo Supabase.
 - ✅ Criterio: el PPT abre sin errores en PowerPoint y Keynote, cada contenido ocupa su propia slide con las medidas correctas y el texto cabe. El cron, disparado a mano con `vercel crons run /api/diario`, crea el mes.
 
 ### Fase 6: Migración del historial
@@ -718,16 +783,24 @@ Los precios de Claude salen de la documentación de Anthropic (caché del 24/06/
 
 ---
 
-## 14. Supuestos tomados (confirmar con RC Farias)
+## 14. Decisiones confirmadas y supuestos pendientes
 
-1. A partir del día 15 se genera el contenido del **mes siguiente**, en el orden Carrusel, Reel, Carrusel, Reel.
-2. Se publica **un día fijo por semana** (martes por defecto), y de ahí salen las fechas sugeridas.
-3. La lista de **pilares y tipos** (10.2) es una propuesta.
-4. Carrusel en **3:4 (1080 × 1440)** frente a 4:5 (9.1).
-5. El caption tiene un máximo de **150 palabras**. Es una regla nueva, necesaria para que quepa en la slide y se lea bien; se puede ajustar.
-6. El botón "Aplicar ajustes" es **global** y procesa todas las piezas con comentarios pendientes.
-7. La plantilla de marca `plantilla/rc_farias.pptx` la entrega RC, con logo, colores HEX y tipografías.
-8. La app **no publica** en Instagram.
+**Confirmado por RC (25/09/2026):**
+- Carrusel en **4:5 (1080 × 1350)**.
+- **Fecha de publicación elegida por el usuario para cada post**, con una propuesta inicial.
+- Pilares: **Tendencias de marketing estratégico y/o BTL**, más los 7 temas ya usados.
+- Caption de máximo **150 palabras**.
+- Marca: logos, paleta y tipografías entregados (9.3).
+
+**Supuestos pendientes de confirmar:**
+1. A partir del día 15 se genera el contenido del **mes siguiente**, en el orden Carrusel, Reel, Carrusel, Reel, con los pilares repartidos como en 10.1.
+2. La lista de **tipos** (Educativo, Tendencia, Mito vs. realidad, Checklist) es una propuesta.
+3. Los **colores HEX** de 9.3 se midieron en los píxeles de las imágenes. En particular:
+   - El rojo del logo es `#FE171F` y el de la guía se ve como `#ED1D24`.
+   - El azul del logo es `#010E30` y el de la guía es `#1F3864`.
+   Hay que confirmar cuáles son los oficiales.
+4. El botón "Aplicar ajustes" es **global** y procesa todas las piezas con comentarios pendientes.
+5. La app **no publica** en Instagram.
 
 ---
 
