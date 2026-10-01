@@ -175,9 +175,9 @@ function renderTextos(pieza) {
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
   const boton = pieza.formato === "Carrusel" && pieza.id ? el("button", {
     clase: "btn btn--secundario", type: "button",
-    title: "PDF 3:4 (1080 × 1440) con texto editable y espacios para las ilustraciones 3D",
-    onclick: (ev) => descargarTarjetas(pieza.id, ev.currentTarget),
-  }, "Descargar tarjetas (PDF)") : null;
+    title: "Vista previa de las 5 tarjetas (3:4); desde ahí descargas el PDF editable",
+    onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget),
+  }, "Ver tarjetas") : null;
   return el("section", { clase: "bloque" }, el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), boton), el("ol", { clase: "textos" }, items));
 }
 
@@ -410,7 +410,7 @@ $("btn-ajustes").addEventListener("click", async () => {
   aviso("");
 });
 
-async function descargarArchivo(url, nombrePorDefecto) {
+async function pedirArchivo(url, nombrePorDefecto) {
   const pedir = () => fetch(url, { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
   let r = await pedir();
   if (r.status === 401 && Sesion.leer()?.refresh_token) {
@@ -422,11 +422,20 @@ async function descargarArchivo(url, nombrePorDefecto) {
     throw new Error(datos.error || `Error ${r.status}`);
   }
   const nombre = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || nombrePorDefecto;
-  const enlace = el("a", { href: URL.createObjectURL(await r.blob()), download: nombre });
+  return { nombre, url: URL.createObjectURL(await r.blob()) };
+}
+
+function guardarArchivo({ nombre, url }) {
+  const enlace = el("a", { href: url, download: nombre });
   document.body.append(enlace);
   enlace.click();
   enlace.remove();
-  setTimeout(() => URL.revokeObjectURL(enlace.href), 10000);
+}
+
+async function descargarArchivo(url, nombrePorDefecto) {
+  const archivo = await pedirArchivo(url, nombrePorDefecto);
+  guardarArchivo(archivo);
+  setTimeout(() => URL.revokeObjectURL(archivo.url), 10000);
 }
 
 async function descargarPptx(mesIso) {
@@ -445,19 +454,34 @@ async function descargarPptx(mesIso) {
   }
 }
 
-async function descargarTarjetas(piezaId, boton) {
+let vistaTarjetas = null;
+
+function cerrarVistaTarjetas() {
+  if (vistaTarjetas) URL.revokeObjectURL(vistaTarjetas.url);
+  vistaTarjetas = null;
+  $("visor-tarjetas").removeAttribute("src");
+}
+
+async function verTarjetas(piezaId, boton) {
   boton.disabled = true;
   const texto = boton.textContent;
-  boton.textContent = "Generando PDF…";
+  boton.textContent = "Generando vista previa…";
   try {
-    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaId}`, "tarjetas.pdf");
+    cerrarVistaTarjetas();
+    vistaTarjetas = await pedirArchivo(`/api/tarjetas-pdf?pieza=${piezaId}`, "tarjetas.pdf");
+    $("visor-tarjetas").src = `${vistaTarjetas.url}#toolbar=0&navpanes=0&view=FitH`;
+    $("dialogo-tarjetas").showModal();
   } catch (e) {
-    aviso(`No se pudieron generar las tarjetas: ${e.message}`);
+    aviso(`No se pudo generar la vista previa: ${e.message}`);
   } finally {
     boton.disabled = false;
     boton.textContent = texto;
   }
 }
+
+$("tarjetas-descargar").addEventListener("click", () => vistaTarjetas && guardarArchivo(vistaTarjetas));
+$("tarjetas-cerrar").addEventListener("click", () => $("dialogo-tarjetas").close());
+$("dialogo-tarjetas").addEventListener("close", cerrarVistaTarjetas);
 
 $("btn-pptx").addEventListener("click", () => descargarPptx());
 

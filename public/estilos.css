@@ -204,6 +204,9 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .dialogo form { display: grid; gap: 10px; }
 .dialogo input[type="text"], .dialogo textarea { width: 100%; }
 .dialogo h2 { font-family: "Arial Black", Arial, sans-serif; font-size: 1.2rem; }
+.dialogo--visor { width: min(760px, calc(100vw - 32px)); }
+.dialogo--visor[open] { display: grid; gap: 10px; }
+.visor-tarjetas { width: 100%; height: min(70vh, 900px); border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); }
 .dialogo__acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .envio-favoritos { border: 1px solid var(--borde); border-radius: 8px; padding: 8px 12px; margin: 0; }
 .envio-favoritos legend { font-weight: bold; padding: 0 6px; }
