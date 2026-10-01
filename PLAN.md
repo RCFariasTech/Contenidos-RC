@@ -728,7 +728,7 @@ Paleta **confirmada por RC** a partir de la guía visual en alta resolución (25
 ```
 
 - El cron corre a las 12:17 UTC, que son las 07:17 en Bogotá.
-- `maxDuration: 300` es el valor objetivo. **Verificar el máximo permitido por el plan contratado** y ajustarlo. El diseño (una pieza por request) funciona incluso con 60 s si cada pieza termina en ese tiempo; medirlo en la Fase 3.
+- `maxDuration: 300`: **verificado el 01/10/2026**. El despliegue en el plan Hobby lo aceptó (build `READY`). El diseño (una pieza por request) funciona incluso con 60 s si cada pieza termina en ese tiempo; medirlo en la Fase 3.
 
 ---
 
