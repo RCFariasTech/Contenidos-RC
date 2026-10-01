@@ -25,6 +25,8 @@
   "logos": {
     "fondo_claro": "plantilla/logo_rc_rojo.png",
     "fondo_claro_sobrio": "plantilla/logo_rc_azul.png",
-    "fondo_oscuro": "plantilla/logo_rc_blanco.png"
+    "fondo_oscuro": "plantilla/logo_rc_blanco.png",
+    "constellation_negro": "plantilla/logo_constellation_negro.svg",
+    "constellation_blanco": "plantilla/logo_constellation_blanco.svg"
   }
 }
