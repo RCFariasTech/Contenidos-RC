@@ -36,4 +36,9 @@ FORMATO CARRUSEL:
 - slide_1_gancho: máximo 8 palabras. Afirmación provocadora o pregunta disruptiva.
 - slide_2, slide_3, slide_4: máximo 30 palabras cada uno.
 - slide_5_cierre: máximo 30 palabras. Debe mencionar "RC Farías" y "Constellation".
-
+- "diseno": lista de EXACTAMENTE 5 elementos (uno por tarjeta, en orden) que parte el texto de cada tarjeta para diseñarla.
+  Por tarjeta: "titular" (la idea o dato central, máximo 8 palabras, va en negrita grande), "texto" (el resto) y
+  "ilustracion" (una frase que describe la ilustración 3D de esa tarjeta: personaje, objeto y escena concretos).
+  titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).
+  Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre; su ilustracion puede ir vacía.
+  Si una tarjeta gira en torno a una cifra, ponla en el titular.

@@ -30,16 +30,34 @@ CAMPOS_TEXTO = {
 }
 
 
+# Solo carrusel: cómo se parte el texto de cada tarjeta para diseñarla (titular + texto) y qué ilustrar.
+DISENO = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "titular": {"type": "string"},
+            "texto": {"type": "string"},
+            "ilustracion": {"type": "string"},
+        },
+        "required": ["titular", "texto", "ilustracion"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _esquema_formato(formato: str) -> dict:
     campos = CAMPOS_TEXTO[formato]
+    extra = {"diseno": DISENO} if formato == "Carrusel" else {}
     return {
         "type": "object",
         "properties": {
             **COMUNES,
             "formato": {"type": "string", "enum": [formato]},
             **{c: {"type": "string"} for c in campos},
+            **extra,
         },
-        "required": [*COMUNES, "formato", *campos],
+        "required": [*COMUNES, "formato", *campos, *extra],
         "additionalProperties": False,
     }
 

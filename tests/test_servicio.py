@@ -14,6 +14,7 @@ from rc import correos, fuentes
 from rc import db as db_real
 from rc import servicio
 from rc.config import ajustes
+from tests.test_logica import diseno_de
 
 CTA = ajustes()["cta"]
 URL = "https://www.warc.com/estudio"
@@ -122,6 +123,7 @@ def pieza_generada(formato, tema):
     if formato == "Carrusel":
         base.update(slide_1_gancho="Gancho corto", slide_2="a", slide_3="b", slide_4="c",
                     slide_5_cierre="Desde RC Farías, miembro de Constellation.")
+        base["diseno"] = diseno_de(base)
     else:
         base.update(escena_1_gancho="Gancho corto", escena_2_desarrollo_a="a", escena_3_desarrollo_b="b",
                     escena_4_desarrollo_c="c", escena_5_cta="Síguenos ya")
@@ -140,6 +142,8 @@ class TestFlujo(unittest.TestCase):
 
         def ajustar(slot, pieza, comentarios, historial, hermanas):
             nueva = dict(pieza, slide_1_gancho="Nuevo gancho directo") if slot["formato"] == "Carrusel" else dict(pieza)
+            if slot["formato"] == "Carrusel":
+                nueva["diseno"] = diseno_de(nueva)
             return {"pieza": nueva, "urls": [], "uso": {"input_tokens": 10, "output_tokens": 5}}
 
         parches = [mock.patch.object(servicio, "db", self.bd), mock.patch.object(fuentes, "db", self.bd),
@@ -165,6 +169,14 @@ class TestFlujo(unittest.TestCase):
         estado = servicio.estado_mes(mes)
         self.assertEqual(estado["mes"]["estado"], "en_revision")
         self.assertNotIn("urls", estado["piezas"][0]["validacion"])
+
+        carruseles = [p for p in estado["piezas"] if p["formato"] == "Carrusel"]
+        for c in carruseles:
+            nombre, pdf = servicio.tarjetas_pdf(c["id"])
+            self.assertTrue(nombre.startswith("tarjetas-2026-11-") and pdf.startswith(b"%PDF"))
+        reel = next(p for p in estado["piezas"] if p["formato"] == "Reel")
+        with self.assertRaises(servicio.ErrorNegocio):
+            servicio.tarjetas_pdf(reel["id"])
 
         primera = estado["piezas"][0]["id"]
         servicio.comentar(primera, "Haz el gancho más directo")

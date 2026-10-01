@@ -12,6 +12,7 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | 4. Interfaz | ✅ Propuestas (comentarios, ajustes, aprobación, fechas) y Repositorio |
 | 5. PowerPoint y cron | ✅ Exportación con marca; cron diario desde el día 15 |
 | 6. Migración del historial | ✅ 7 temas previos cargados como histórico |
+| 7. Tarjetas de carrusel | ✅ PDF 3:4 (1080 × 1440) por carrusel para diseño: texto editable, 7 estilos de la guía, espacios para ilustraciones 3D (`rc/tarjetas.py`) |
 
 ## Infraestructura
 
@@ -48,6 +49,10 @@ En Gmail, la contraseña de aplicación se crea en la cuenta de Google → Segur
 Mientras falten `SMTP_USER` y `SMTP_PASSWORD`, la app avisa que el envío no está activado y el resto funciona igual.
 
 Después de agregar o cambiar variables hay que **volver a desplegar** (Deployments → ⋯ → Redeploy).
+
+## Tarjetas de carrusel
+
+Cada carrusel tiene el botón **Descargar tarjetas (PDF)**: 5 páginas 3:4 con Montserrat, colores de `config/marca.json` y los logos de `plantilla/`. La portada y el cierre usan siempre sus estilos; las 3 intermedias rotan entre los demás (distinto en cada carrusel). Las ilustraciones 3D (Krea) quedan como espacios con la nota de qué ilustrar. La generación ahora devuelve también `diseno` (titular + texto + nota por tarjeta); los carruseles generados antes no lo tienen y usan una división automática del texto hasta que se ajusten. Fuentes en `plantilla/fuentes/`.
 
 ## Protección de despliegues
 

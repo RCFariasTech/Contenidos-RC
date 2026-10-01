@@ -173,7 +173,12 @@ function renderTextos(pieza) {
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`));
   });
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
-  return el("section", { clase: "bloque" }, el("h3", {}, titulo), el("ol", { clase: "textos" }, items));
+  const boton = pieza.formato === "Carrusel" && pieza.id ? el("button", {
+    clase: "btn btn--secundario", type: "button",
+    title: "PDF 3:4 (1080 × 1440) con texto editable y espacios para las ilustraciones 3D",
+    onclick: (ev) => descargarTarjetas(pieza.id, ev.currentTarget),
+  }, "Descargar tarjetas (PDF)") : null;
+  return el("section", { clase: "bloque" }, el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), boton), el("ol", { clase: "textos" }, items));
 }
 
 function renderCaption(c) {
@@ -405,38 +410,52 @@ $("btn-ajustes").addEventListener("click", async () => {
   aviso("");
 });
 
+async function descargarArchivo(url, nombrePorDefecto) {
+  const pedir = () => fetch(url, { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
+  let r = await pedir();
+  if (r.status === 401 && Sesion.leer()?.refresh_token) {
+    await authSupabase("refresh_token", { refresh_token: Sesion.leer().refresh_token });
+    r = await pedir();
+  }
+  if (!r.ok) {
+    const datos = await r.json().catch(() => ({}));
+    throw new Error(datos.error || `Error ${r.status}`);
+  }
+  const nombre = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || nombrePorDefecto;
+  const enlace = el("a", { href: URL.createObjectURL(await r.blob()), download: nombre });
+  document.body.append(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 10000);
+}
+
 async function descargarPptx(mesIso) {
   const mes = (typeof mesIso === "string" ? mesIso : estado.mesObjetivo).slice(0, 7);
   const boton = $("btn-pptx");
   boton.disabled = true;
   aviso("Generando el PowerPoint…");
   try {
-    let r = await fetch(`/api/exportar-pptx?mes=${mes}`, {
-      headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
-    });
-    if (r.status === 401 && Sesion.leer()?.refresh_token) {
-      await authSupabase("refresh_token", { refresh_token: Sesion.leer().refresh_token });
-      r = await fetch(`/api/exportar-pptx?mes=${mes}`, {
-        headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
-      });
-    }
-    if (!r.ok) {
-      const datos = await r.json().catch(() => ({}));
-      throw new Error(datos.error || `Error ${r.status}`);
-    }
-    const nombre = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "contenido.pptx";
-    const url = URL.createObjectURL(await r.blob());
-    const enlace = el("a", { href: url, download: nombre });
-    document.body.append(enlace);
-    enlace.click();
-    enlace.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    await descargarArchivo(`/api/exportar-pptx?mes=${mes}`, "contenido.pptx");
     aviso("");
     await cargarMes();
   } catch (e) {
     aviso(`No se pudo generar el PowerPoint: ${e.message}`);
   } finally {
     renderBarra();
+  }
+}
+
+async function descargarTarjetas(piezaId, boton) {
+  boton.disabled = true;
+  const texto = boton.textContent;
+  boton.textContent = "Generando PDF…";
+  try {
+    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaId}`, "tarjetas.pdf");
+  } catch (e) {
+    aviso(`No se pudieron generar las tarjetas: ${e.message}`);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = texto;
   }
 }
 

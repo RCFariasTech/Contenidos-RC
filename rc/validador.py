@@ -82,6 +82,29 @@ def dominio_permitido(url: str, dominios: list[str]) -> bool:
     return any(host == d or host.endswith("." + d) for d in (x.split("/")[0].lower() for x in dominios))
 
 
+def _palabras_texto(texto: str) -> list[str]:
+    return re.findall(r"\w+", _normalizar(texto))
+
+
+def _validar_diseno(pieza: dict) -> list[str]:
+    """`diseno` parte cada tarjeta en titular + texto sin cambiar sus palabras (V13)."""
+    diseno = pieza.get("diseno")
+    campos = CAMPOS_TEXTO["Carrusel"]
+    if not isinstance(diseno, list) or len(diseno) != len(campos):
+        return [f'"diseno" debe tener exactamente {len(campos)} elementos, uno por tarjeta.']
+    errores = []
+    for i, (campo, d) in enumerate(zip(campos, diseno), 1):
+        partes = f'{d.get("titular", "")} {d.get("texto", "")}'
+        if _palabras_texto(partes) != _palabras_texto(pieza.get(campo, "")):
+            errores.append(f"En diseno, titular + texto de la tarjeta {i} deben contener exactamente las mismas "
+                           f"palabras, en el mismo orden, que {campo}.")
+        if contar_palabras(d.get("titular", "")) > 10:
+            errores.append(f"El titular de la tarjeta {i} tiene más de 10 palabras.")
+        if not (d.get("ilustracion") or "").strip() and 1 <= i <= 4:
+            errores.append(f"Falta la nota de ilustración de la tarjeta {i}.")
+    return errores
+
+
 def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[dict],
             hermanas: list[dict], ajustes: dict, hoy: date, dominios: list[str] | None = None) -> dict:
     """Devuelve {"errores": [...], "advertencias": [...], "reparables": [...]}.
@@ -110,6 +133,9 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
         cierre = (pieza.get("slide_5_cierre") or "").lower()
         if "rc farías" not in cierre or "constellation" not in cierre:
             errores.append('La tarjeta 5 debe mencionar "RC Farías" (con tilde) y "Constellation".')
+
+    if formato == "Carrusel":
+        errores.extend(_validar_diseno(pieza))
 
     textos = [pieza.get(c, "") for c in CAMPOS_TEXTO[formato]] + [pieza.get("caption", "")]
 

@@ -1,9 +1,9 @@
 {
   "verificado": "2026-09-25",
   "Carrusel": {
-    "tamano_px": "1080 × 1350",
-    "relacion": "4:5",
-    "notas": "Todas las tarjetas con la misma relación de aspecto. En la grilla del perfil (3:4) se recorta un poco arriba y abajo: mantener lo clave de la tarjeta 1 en el centro."
+    "tamano_px": "1080 × 1440",
+    "relacion": "3:4",
+    "notas": "Formato de los carruseles publicados de RC Farías. Todas las tarjetas con la misma relación de aspecto."
   },
   "Reel": {
     "tamano_px": "1080 × 1920",

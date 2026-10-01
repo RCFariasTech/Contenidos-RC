@@ -33,7 +33,7 @@ class TestPptx(unittest.TestCase):
             self.assertIn(p["contenido"]["tema_especifico"], portada)
 
     def test_cada_slide_tiene_formato_medidas_textos_caption_y_hashtags(self):
-        medidas = {"Carrusel": "1080 × 1350", "Reel": "1080 × 1920"}
+        medidas = {"Carrusel": "1080 × 1440", "Reel": "1080 × 1920"}
         for slide, pieza in zip(list(self.prs.slides)[1:], sorted(self.datos["piezas"], key=lambda p: p["semana"])):
             texto = textos_de(slide)
             c = pieza["contenido"]

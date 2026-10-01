@@ -12,6 +12,16 @@ HOY = date(2026, 10, 1)
 URL = "https://www.warc.com/estudio"
 
 
+def diseno_de(p):
+    """Parte cada tarjeta en titular + texto sin cambiar palabras (como pide el prompt)."""
+    d = [{"titular": p["slide_1_gancho"], "texto": "", "ilustracion": "Góndola 3D"}]
+    for c in ("slide_2", "slide_3", "slide_4"):
+        palabras = p[c].split()
+        d.append({"titular": " ".join(palabras[:2]), "texto": " ".join(palabras[2:]), "ilustracion": "Personaje 3D"})
+    d.append({"titular": "", "texto": p["slide_5_cierre"], "ilustracion": ""})
+    return d
+
+
 def carrusel(**cambios):
     pieza = {
         "formato": "Carrusel",
@@ -25,8 +35,32 @@ def carrusel(**cambios):
         "caption": f"Un caption atemporal.\n\n{CTA}", "cta": CTA,
         "hashtags": ["#RCFarias", "#BTL", "#Marketing"],
     }
+    pieza["diseno"] = diseno_de(pieza)
     pieza.update(cambios)
     return pieza
+
+
+class TestDiseno(unittest.TestCase):
+    def _errores(self, pieza):
+        return validar("Carrusel", pieza, [URL], [], [], ajustes(), HOY)["errores"]
+
+    def test_diseno_valido(self):
+        self.assertEqual(self._errores(carrusel()), [])
+
+    def test_diseno_con_palabras_distintas(self):
+        p = carrusel()
+        p["diseno"][1]["texto"] = "Otra cosa totalmente distinta."
+        self.assertTrue(any("mismas palabras" in e for e in self._errores(p)))
+
+    def test_diseno_incompleto(self):
+        p = carrusel()
+        p["diseno"] = p["diseno"][:4]
+        self.assertTrue(any("exactamente 5" in e for e in self._errores(p)))
+
+    def test_falta_nota_de_ilustracion(self):
+        p = carrusel()
+        p["diseno"][2]["ilustracion"] = ""
+        self.assertTrue(any("ilustración" in e for e in self._errores(p)))
 
 
 class TestPlanificador(unittest.TestCase):

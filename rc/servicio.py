@@ -287,6 +287,22 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
     return nombre, contenido
 
 
+def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
+    """PDF con las 5 tarjetas (3:4) del carrusel para el equipo de diseño."""
+    from rc import tarjetas  # import diferido: reportlab/svglib solo se cargan al generar tarjetas
+    pieza = _pieza(pieza_id)
+    if pieza["formato"] != "Carrusel":
+        raise ErrorNegocio("Las tarjetas solo existen para los carruseles.")
+    if not pieza.get("contenido"):
+        raise ErrorNegocio("Esta pieza aún no tiene contenido.")
+    mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
+    carruseles = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}", formato="eq.Carrusel", order="semana")
+    variante = [c["id"] for c in carruseles].index(pieza_id)
+    contenido = pieza["contenido"]
+    pdf = tarjetas.generar_pdf(contenido, f"Carrusel · {contenido.get('tema_especifico', '')}", variante)
+    return tarjetas.nombre_archivo(contenido, mes), pdf
+
+
 def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:
     """Envía el PowerPoint por correo; marca el mes como entregado solo si el envío salió bien."""
     from rc import pptx_export
