@@ -2,6 +2,17 @@
 
 Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de Instagram de RC Farias, y exportarlo a PowerPoint. El diseño completo está en [`PLAN.md`](PLAN.md).
 
+## Estado (01/10/2026)
+
+| Fase | Estado |
+|---|---|
+| 1. Infraestructura y prueba de API | ✅ Supabase, Vercel y Claude con búsqueda web funcionando |
+| 2. Lógica determinista | ✅ Planificador y validador con tests |
+| 3. Generación y ajustes | ✅ Primer mes real generado (≈ USD 1,49 con 3 ajustes) |
+| 4. Interfaz | ✅ Propuestas (comentarios, ajustes, aprobación, fechas) y Repositorio |
+| 5. PowerPoint y cron | ✅ Exportación con marca; cron diario desde el día 15 |
+| 6. Migración del historial | ✅ 7 temas previos cargados como histórico |
+
 ## Infraestructura
 
 | Pieza | Dónde |

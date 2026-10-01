@@ -28,9 +28,12 @@
 
     <section id="vista-app" hidden>
       <nav class="pestanas" aria-label="Secciones">
-        <button class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
-        <button class="pestana" type="button" disabled title="Disponible en la siguiente fase">Repositorio</button>
+        <button id="tab-propuestas" class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
+        <button id="tab-repositorio" class="pestana" type="button">Repositorio</button>
       </nav>
+      <p id="aviso-global" class="aviso" role="status" hidden></p>
+
+      <div id="seccion-propuestas">
 
       <div class="barra-mes">
         <div>
@@ -44,9 +47,45 @@
                   title="Se habilita cuando las 4 piezas están aprobadas">Descargar PowerPoint</button>
         </div>
       </div>
-      <p id="aviso-global" class="aviso" role="status" hidden></p>
 
       <div id="lista-piezas" class="lista-piezas"></div>
+      </div>
+
+      <div id="seccion-repositorio" hidden>
+        <div class="barra-mes">
+          <div>
+            <h1>Repositorio</h1>
+            <p id="resumen-repo" class="barra-mes__resumen"></p>
+          </div>
+        </div>
+        <form id="filtros-repo" class="filtros" role="search" aria-label="Filtrar el repositorio">
+          <label>Mes
+            <select id="filtro-mes"><option value="">Todos</option></select>
+          </label>
+          <label>Formato
+            <select id="filtro-formato"><option value="">Todos</option><option>Carrusel</option><option>Reel</option></select>
+          </label>
+          <label>Pilar
+            <select id="filtro-pilar"><option value="">Todos</option></select>
+          </label>
+          <label class="filtros__buscar">Buscar
+            <input id="filtro-texto" type="search" placeholder="Tema o tendencia">
+          </label>
+        </form>
+        <div class="tabla-contenedor">
+          <table class="tabla-repo">
+            <thead>
+              <tr>
+                <th scope="col">Mes</th><th scope="col">Publicación</th><th scope="col">Formato</th>
+                <th scope="col">Tema</th><th scope="col">Tipo · Pilar</th>
+                <th scope="col">Creada</th><th scope="col">Aprobada</th><th scope="col">Entregada</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpo-repo"></tbody>
+          </table>
+        </div>
+        <div id="detalle-repo" class="detalle-repo" hidden></div>
+      </div>
     </section>
   </main>
 

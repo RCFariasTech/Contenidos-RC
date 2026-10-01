@@ -47,12 +47,19 @@ class BDFalsa:
 
     def _filtrar(self, tabla, filtros):
         especiales = {"select", "order", "limit"}
+
+        def valor_fila(fila, campo):
+            if campo.startswith("meses."):  # filtro sobre la tabla embebida (meses!inner)
+                mes = next(m for m in self.tablas["meses"] if m["id"] == fila["mes_id"])
+                return {campo: mes[campo.split(".", 1)[1]]}
+            return fila
+
         return [f for f in self.tablas[tabla]
-                if all(self._cumple(f, c, v) for c, v in filtros.items() if c not in especiales)]
+                if all(self._cumple(valor_fila(f, c), c, v) for c, v in filtros.items() if c not in especiales)]
 
     def _con_embebidos(self, tabla, fila, select):
         fila = copy.deepcopy(fila)
-        if tabla == "piezas" and "meses(" in select:
+        if tabla == "piezas" and ("meses(" in select or "meses!inner(" in select):
             fila["meses"] = next(m for m in self.tablas["meses"] if m["id"] == fila["mes_id"])
         if tabla == "piezas" and "comentarios(" in select:
             fila["comentarios"] = [c for c in self.tablas["comentarios"] if c["pieza_id"] == fila["id"]]
@@ -184,6 +191,26 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(fila["estado"], "entregado")
         self.assertIsNotNone(fila["entregado_en"])
         servicio.exportar_pptx(mes)  # se puede volver a descargar
+
+    def test_repositorio_y_versiones(self):
+        historico = self.bd.insertar("meses", {"mes_objetivo": "2000-01-01", "estado": "historico"})[0]
+        self.bd.insertar("piezas", {"mes_id": historico["id"], "semana": 1, "formato": "Carrusel", "tipo": "Histórico",
+                                    "pilar": "Histórico", "estado": "aprobada", "version": 1,
+                                    "contenido": {"tema_especifico": "Cringe marketing", "semilla": True}})
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        self.assertEqual([r["tema"] for r in servicio.repositorio()], ["Cringe marketing"])  # mes sin aprobar no aparece
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+            servicio.aprobar(p["id"], True)
+        repo = servicio.repositorio()
+        self.assertEqual(len(repo), 5)
+        self.assertEqual(repo[0]["mes_objetivo"], "2026-11-01")
+        self.assertEqual(repo[0]["semana"], 4)  # más recientes primero
+        self.assertTrue(repo[-1]["historico"])
+        self.assertIsNone(repo[-1]["mes_objetivo"])
+        primera = servicio.estado_mes(mes)["piezas"][0]["id"]
+        self.assertEqual([v["version"] for v in servicio.versiones(primera)], [1])
 
     def test_fecha_y_comentarios(self):
         mes = date(2026, 11, 1)

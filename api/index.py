@@ -126,6 +126,16 @@ def ruta_fecha(req):
     return 200, _servicio().cambiar_fecha(_entero(req["cuerpo"], "pieza_id"), req["cuerpo"].get("fecha"))
 
 
+def ruta_repositorio(req):
+    _dueno(req)
+    return 200, {"piezas": _servicio().repositorio()}
+
+
+def ruta_versiones(req):
+    _dueno(req)
+    return 200, {"versiones": _servicio().versiones(_entero(req["query"], "pieza_id"))}
+
+
 def ruta_exportar_pptx(req):
     _dueno(req)
     nombre, contenido = _servicio().exportar_pptx(_mes_param(req["query"].get("mes")))
@@ -186,6 +196,8 @@ RUTAS = {
     ("POST", "aprobar"): ruta_aprobar,
     ("POST", "fecha"): ruta_fecha,
     ("GET", "exportar-pptx"): ruta_exportar_pptx,
+    ("GET", "repositorio"): ruta_repositorio,
+    ("GET", "versiones"): ruta_versiones,
     ("GET", "diario"): ruta_diario,
     ("GET", "diagnostico"): ruta_diagnostico,
 }

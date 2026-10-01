@@ -150,3 +150,28 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
   .texto-item { grid-template-columns: auto 1fr; }
   .contador { grid-column: 2; padding-top: 0; }
 }
+
+/* Repositorio */
+.filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px;
+  background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio); padding: 14px; }
+.filtros label { display: grid; gap: 4px; font-size: .9rem; }
+.filtros select, .filtros input { width: 100%; padding: 8px; }
+.filtros__buscar { grid-column: span 2; }
+@media (max-width: 600px) { .filtros__buscar { grid-column: auto; } }
+.tabla-contenedor { overflow-x: auto; background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio); }
+.tabla-repo { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 820px; }
+.tabla-repo th { text-align: left; background: var(--celeste-suave); color: var(--azul-marino); padding: 10px 12px;
+  font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.tabla-repo td { padding: 10px 12px; border-top: 1px solid var(--borde); vertical-align: top; }
+.tabla-repo tbody tr { cursor: pointer; }
+.tabla-repo tbody tr:hover, .tabla-repo tbody tr:focus-visible { background: var(--fondo); outline: none; }
+.tabla-repo tbody tr[aria-selected="true"] { background: var(--ok-fondo); }
+.tabla-repo .tema { font-weight: bold; color: var(--azul-marino); min-width: 260px; }
+.tabla-repo .tenue { color: var(--texto-suave); white-space: nowrap; }
+.vacio { padding: 24px; text-align: center; color: var(--texto-suave); }
+.detalle-repo { margin-top: 20px; }
+.detalle-repo__acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.versiones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.version-btn { font: inherit; font-size: .85rem; border: 1px solid var(--gris-claro); background: var(--blanco); color: var(--azul-marino);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.version-btn[aria-pressed="true"] { background: var(--azul-marino); color: var(--blanco); border-color: var(--azul-marino); }

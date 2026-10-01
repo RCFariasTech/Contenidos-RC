@@ -279,3 +279,36 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
         db.actualizar("meses", {"estado": "entregado", "entregado_en": _ahora()},
                       id=f"eq.{fila_mes['id']}", estado="eq.aprobado")
     return pptx_export.nombre_archivo(fila_mes["mes_objetivo"]), contenido
+
+
+# ---------- repositorio ----------
+
+def repositorio() -> list[dict]:
+    """Piezas con contenido de meses aprobados, entregados o históricos (más recientes primero)."""
+    filas = db.seleccionar(
+        "piezas",
+        select="id,semana,fecha_publicacion,formato,tipo,pilar,estado,version,contenido,aprobada_en,creado_en,"
+               "meses!inner(mes_objetivo,estado,aprobado_en,entregado_en)",
+        contenido="not.is.null", **{"meses.estado": "in.(aprobado,entregado,historico)"})
+    resultado = []
+    for f in filas:
+        m = f.pop("meses") or {}
+        contenido = f.get("contenido") or {}
+        historico = m.get("estado") == "historico"
+        resultado.append({
+            **f,
+            "mes_objetivo": None if historico else m.get("mes_objetivo"),
+            "estado_mes": m.get("estado"),
+            "mes_aprobado_en": m.get("aprobado_en"),
+            "mes_entregado_en": m.get("entregado_en"),
+            "historico": historico,
+            "tema": contenido.get("tema_especifico", ""),
+            "tendencia": (contenido.get("investigacion") or {}).get("tendencia", ""),
+        })
+    resultado.sort(key=lambda r: (r["mes_objetivo"] or "", r["semana"]), reverse=True)
+    return resultado
+
+
+def versiones(pieza_id: int) -> list[dict]:
+    return db.seleccionar("versiones_pieza", select="version,motivo,contenido,creado_en",
+                          pieza_id=f"eq.{int(pieza_id)}", order="version.desc")

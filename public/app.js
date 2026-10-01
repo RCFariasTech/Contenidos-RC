@@ -402,17 +402,18 @@ $("btn-ajustes").addEventListener("click", async () => {
   aviso("");
 });
 
-async function descargarPptx() {
+async function descargarPptx(mesIso) {
+  const mes = (typeof mesIso === "string" ? mesIso : estado.mesObjetivo).slice(0, 7);
   const boton = $("btn-pptx");
   boton.disabled = true;
   aviso("Generando el PowerPoint…");
   try {
-    let r = await fetch(`/api/exportar-pptx?mes=${estado.mesObjetivo.slice(0, 7)}`, {
+    let r = await fetch(`/api/exportar-pptx?mes=${mes}`, {
       headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
     });
     if (r.status === 401 && Sesion.leer()?.refresh_token) {
       await authSupabase("refresh_token", { refresh_token: Sesion.leer().refresh_token });
-      r = await fetch(`/api/exportar-pptx?mes=${estado.mesObjetivo.slice(0, 7)}`, {
+      r = await fetch(`/api/exportar-pptx?mes=${mes}`, {
         headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
       });
     }
@@ -436,7 +437,156 @@ async function descargarPptx() {
   }
 }
 
-$("btn-pptx").addEventListener("click", descargarPptx);
+$("btn-pptx").addEventListener("click", () => descargarPptx());
+
+// ---------- repositorio ----------
+
+const repo = { piezas: [], cargado: false, seleccion: null, versiones: [], version: null };
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function fechaCorta(iso) {
+  if (!iso) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {  // fecha sin hora: sin conversión de zona horaria
+    const [a, m, d] = iso.split("-").map(Number);
+    return `${d} ${MESES_CORTOS[m - 1]} ${a}`;
+  }
+  // Fecha con hora: se lleva a la fecha de Bogotá y se formatea igual que las fechas simples
+  const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(new Date(iso));
+  return fechaCorta(partes);
+}
+
+function opciones(select, valores, etiqueta = (v) => v) {
+  const actual = select.value;
+  select.replaceChildren(el("option", { value: "" }, "Todos"), ...valores.map((v) => el("option", { value: v }, etiqueta(v))));
+  if (valores.includes(actual)) select.value = actual;
+}
+
+function filtrarRepo() {
+  const mes = $("filtro-mes").value, formato = $("filtro-formato").value, pilar = $("filtro-pilar").value;
+  const texto = $("filtro-texto").value.trim().toLowerCase();
+  return repo.piezas.filter((p) => (!mes || (mes === "historico" ? p.historico : p.mes_objetivo === mes))
+    && (!formato || p.formato === formato) && (!pilar || p.pilar === pilar)
+    && (!texto || `${p.tema} ${p.tendencia}`.toLowerCase().includes(texto)));
+}
+
+function renderRepo() {
+  const meses = [...new Set(repo.piezas.filter((p) => !p.historico).map((p) => p.mes_objetivo))];
+  opciones($("filtro-mes"), [...meses, ...(repo.piezas.some((p) => p.historico) ? ["historico"] : [])],
+    (v) => (v === "historico" ? "Histórico (antes de la app)" : nombreMes(v)));
+  opciones($("filtro-pilar"), [...new Set(repo.piezas.filter((p) => !p.historico).map((p) => p.pilar))]);
+
+  const filas = filtrarRepo();
+  const entregados = new Set(repo.piezas.filter((p) => p.estado_mes === "entregado").map((p) => p.mes_objetivo)).size;
+  $("resumen-repo").textContent = `${repo.piezas.length} contenidos · ${entregados} ${entregados === 1 ? "mes entregado" : "meses entregados"}`
+    + (filas.length !== repo.piezas.length ? ` · mostrando ${filas.length}` : "");
+
+  const cuerpo = $("cuerpo-repo");
+  if (!filas.length) {
+    cuerpo.replaceChildren(el("tr", {}, el("td", { colspan: "8", clase: "vacio" }, "No hay contenidos con esos filtros.")));
+    return;
+  }
+  cuerpo.replaceChildren(...filas.map((p) => {
+    const abrir = () => abrirDetalle(p.id);
+    return el("tr", {
+      tabindex: "0", "aria-selected": repo.seleccion === p.id ? "true" : "false",
+      onclick: abrir, onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); abrir(); } },
+    },
+    el("td", { clase: "tenue" }, p.historico ? "Histórico" : nombreMes(p.mes_objetivo)),
+    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.fecha_publicacion)),
+    el("td", {}, p.historico ? "—" : el("span", { clase: `etiqueta etiqueta--${p.formato.toLowerCase()}` }, p.formato)),
+    el("td", { clase: "tema" }, p.tema),
+    el("td", {}, p.historico ? "—" : `${p.tipo} · ${p.pilar}`),
+    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.creado_en)),
+    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.aprobada_en)),
+    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.mes_entregado_en)));
+  }));
+}
+
+async function cargarRepositorio() {
+  $("resumen-repo").textContent = "Cargando…";
+  try {
+    repo.piezas = (await api("repositorio")).piezas;
+    repo.cargado = true;
+    renderRepo();
+  } catch (e) {
+    $("resumen-repo").textContent = `No se pudo cargar el repositorio: ${e.message}`;
+  }
+}
+
+function renderDetalle() {
+  const nodo = $("detalle-repo");
+  const p = repo.piezas.find((x) => x.id === repo.seleccion);
+  if (!p) { nodo.hidden = true; return; }
+  const version = repo.versiones.find((v) => v.version === repo.version);
+  const vista = { ...p, contenido: version ? version.contenido : p.contenido };
+  const cuerpo = el("div", { clase: "pieza__cuerpo" });
+  if (p.historico) {
+    cuerpo.append(el("div", { clase: "pieza__titulo" }, el("h2", {}, p.tema),
+      el("p", {}, "Tema publicado antes de la app. Se usa para no repetir contenidos.")));
+  } else {
+    cuerpo.append(
+      el("div", { clase: "pieza__titulo" }, el("h2", {}, vista.contenido.tema_especifico), el("p", {}, p.pilar)),
+      repo.versiones.length > 1 ? el("div", { clase: "versiones", role: "group", "aria-label": "Versiones" },
+        el("span", { clase: "ayuda" }, "Versiones:"),
+        repo.versiones.map((v) => el("button", {
+          clase: "version-btn", type: "button", "aria-pressed": v.version === repo.version ? "true" : "false",
+          onclick: () => { repo.version = v.version; renderDetalle(); },
+        }, `v${v.version} · ${v.motivo === "generacion" ? "original" : v.motivo} · ${fechaCorta(v.creado_en)}`))) : null,
+      renderInvestigacion(vista.contenido.investigacion),
+      renderTextos(vista),
+      renderCaption(vista.contenido));
+  }
+  const acciones = el("div", { clase: "pieza__controles" },
+    !p.historico && p.estado_mes !== "historico" ? el("button", {
+      clase: "btn btn--primario", type: "button",
+      onclick: () => descargarPptx(p.mes_objetivo),
+    }, `Descargar PowerPoint de ${nombreMes(p.mes_objetivo)}`) : null,
+    el("button", { clase: "btn btn--secundario", type: "button", onclick: () => { repo.seleccion = null; renderDetalle(); renderRepo(); } }, "Cerrar"));
+  nodo.replaceChildren(el("article", { clase: "pieza" },
+    el("header", { clase: "pieza__cabecera" },
+      el("div", { clase: "pieza__meta" },
+        p.historico ? el("span", { clase: "etiqueta etiqueta--estado" }, "Histórico")
+          : [el("span", { clase: `etiqueta etiqueta--${p.formato.toLowerCase()}` }, p.formato),
+            el("span", {}, `Semana ${p.semana} · ${p.tipo} · Publicación ${fechaCorta(p.fecha_publicacion)}`)]),
+      acciones),
+    cuerpo));
+  nodo.hidden = false;
+}
+
+async function abrirDetalle(id) {
+  repo.seleccion = id;
+  repo.versiones = [];
+  repo.version = null;
+  renderRepo();
+  renderDetalle();
+  $("detalle-repo").scrollIntoView({ behavior: "smooth", block: "start" });
+  const p = repo.piezas.find((x) => x.id === id);
+  if (p && !p.historico) {
+    try {
+      repo.versiones = (await api(`versiones?pieza_id=${id}`)).versiones;
+      repo.version = repo.versiones[0]?.version ?? null;
+      if (repo.seleccion === id) renderDetalle();
+    } catch { /* el detalle ya muestra la versión vigente */ }
+  }
+}
+
+["filtro-mes", "filtro-formato", "filtro-pilar", "filtro-texto"].forEach((id) => $(id).addEventListener("input", renderRepo));
+$("filtros-repo").addEventListener("submit", (ev) => ev.preventDefault());
+
+function mostrarSeccion(nombre) {
+  const esRepo = nombre === "repositorio";
+  $("seccion-propuestas").hidden = esRepo;
+  $("seccion-repositorio").hidden = !esRepo;
+  for (const [id, activa] of [["tab-propuestas", !esRepo], ["tab-repositorio", esRepo]]) {
+    $(id).classList.toggle("pestana--activa", activa);
+    if (activa) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
+  }
+  if (esRepo) cargarRepositorio();
+}
+
+$("tab-propuestas").addEventListener("click", () => mostrarSeccion("propuestas"));
+$("tab-repositorio").addEventListener("click", () => mostrarSeccion("repositorio"));
 
 // ---------- login ----------
 
