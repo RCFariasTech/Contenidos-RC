@@ -221,7 +221,7 @@ def ruta_tarjetas_vista(req):
         pieza_id = int(req["query"].get("pieza", ""))
     except ValueError:
         raise ErrorCliente(400, "Falta la pieza.")
-    return 200, {"imagenes": _servicio().vista_tarjetas(pieza_id)}
+    return 200, _servicio().vista_tarjetas(pieza_id)
 
 
 def ruta_probar_teams(req):

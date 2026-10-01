@@ -292,28 +292,30 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
 
 
 def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
-    """PDF con las 5 tarjetas (3:4) del carrusel para el equipo de diseño."""
-    from rc import tarjetas  # import diferido: reportlab/svglib solo se cargan al generar tarjetas
+    """PDF para diseño: las 5 tarjetas 3:4 de un carrusel o el guion visual 9:16 de un reel."""
+    from rc import reels, tarjetas  # import diferido: reportlab/svglib solo se cargan al generar
     pieza = _pieza(pieza_id)
-    if pieza["formato"] != "Carrusel":
-        raise ErrorNegocio("Las tarjetas solo existen para los carruseles.")
     if not pieza.get("contenido"):
         raise ErrorNegocio("Esta pieza aún no tiene contenido.")
     mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
-    carruseles = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}", formato="eq.Carrusel", order="semana")
-    # Cambia de un carrusel a otro y de un mes a otro: así las portadas del feed rotan de color.
-    variante = int(mes[5:7]) * 2 + [c["id"] for c in carruseles].index(pieza_id)
+    mismas = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}",
+                            formato=f"eq.{pieza['formato']}", order="semana")
+    # Cambia de una pieza a otra y de un mes a otro: así los colores del feed rotan.
+    variante = int(mes[5:7]) * 2 + [c["id"] for c in mismas].index(pieza_id)
     contenido = pieza["contenido"]
-    pdf = tarjetas.generar_pdf(contenido, f"Carrusel · {contenido.get('tema_especifico', '')}", variante)
-    return tarjetas.nombre_archivo(contenido, mes), pdf
+    modulo, rotulo = (reels, "Reel") if pieza["formato"] == "Reel" else (tarjetas, "Carrusel")
+    pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante)
+    return modulo.nombre_archivo(contenido, mes), pdf
 
 
-def vista_tarjetas(pieza_id: int) -> list[str]:
-    """Las 5 tarjetas como imágenes PNG (data URI) para la vista previa tipo carrusel."""
+def vista_tarjetas(pieza_id: int) -> dict:
+    """Las páginas como imágenes PNG (data URI) para la vista previa tipo carrusel, y su relación de aspecto."""
     import base64
     from rc import tarjetas
+    pieza = _pieza(pieza_id)
     _nombre, pdf = tarjetas_pdf(pieza_id)
-    return ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf)]
+    imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf)]
+    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 3 / 4}
 
 
 def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:

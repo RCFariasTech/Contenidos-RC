@@ -75,8 +75,8 @@ def ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter):
 
 
 class Lienzo:
-    def __init__(self, c, col):
-        self.c, self.col = c, col
+    def __init__(self, c, col, alto=H, ancho=W):
+        self.c, self.col, self.alto, self.ancho = c, col, alto, ancho
 
     def bloque(self, texto, fuente, color, x, y_sup, ancho, alto, tam_max, alinear="izq", inter=1.2, tam_min=34):
         """Texto con el borde superior en y_sup (medido desde arriba). Devuelve el alto usado."""
@@ -86,7 +86,7 @@ class Lienzo:
         tam, lineas = ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter)
         c.setFillColor(self.col[color])
         c.setFont(fuente, tam)
-        y = H - y_sup - tam * 0.95
+        y = self.alto - y_sup - tam * 0.95
         for ln in lineas:
             w = stringWidth(ln, fuente, tam)
             px = x if alinear == "izq" else (x + ancho - w if alinear == "der" else x + (ancho - w) / 2)
@@ -96,7 +96,7 @@ class Lienzo:
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color])
-        self.c.rect(0, 0, W, H, stroke=0, fill=1)
+        self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
 
     def marcador(self, x, y_sup, ancho, alto, nota, claro=True):
         """Espacio reservado para la ilustración 3D de Krea, con la nota de qué ilustrar."""

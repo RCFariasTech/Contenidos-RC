@@ -173,11 +173,11 @@ function renderTextos(pieza) {
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`));
   });
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
-  const boton = pieza.formato === "Carrusel" && pieza.id ? el("button", {
+  const boton = pieza.id ? el("button", {
     clase: "btn btn--secundario", type: "button",
-    title: "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
+    title: pieza.formato === "Reel" ? "Vista previa del guion visual (9:16); desde ahí descargas el PDF para Adobe Express" : "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
     onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget),
-  }, "Ver tarjetas") : null;
+  }, pieza.formato === "Reel" ? "Ver guion visual" : "Ver tarjetas") : null;
   return el("section", { clase: "bloque" }, el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), boton), el("ol", { clase: "textos" }, items));
 }
 
@@ -470,7 +470,7 @@ function irATarjeta(i) {
 function actualizarCarrusel() {
   const n = $("tarjetas-pista").children.length;
   const i = tarjetaActual();
-  $("tarjetas-contador").textContent = `Tarjeta ${i + 1} de ${n}`;
+  $("tarjetas-contador").textContent = `${$("dialogo-tarjetas").style.getPropertyValue("--rel") < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${n}`;
   $("tarjetas-ant").disabled = i <= 0;
   $("tarjetas-sig").disabled = i >= n - 1;
 }
@@ -480,9 +480,14 @@ async function verTarjetas(piezaId, boton) {
   const texto = boton.textContent;
   boton.textContent = "Generando vista previa…";
   try {
-    const { imagenes } = await api(`tarjetas-vista?pieza=${piezaId}`);
+    const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}`);
     piezaTarjetas = piezaId;
-    $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `Tarjeta ${i + 1} de ${imagenes.length}` })));
+    $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
+    $("tarjetas-ayuda").textContent = relacion < 0.7
+      ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable y el espacio para la imagen o el video. Ábrelo en Adobe Express con «Empezar con tu contenido»."
+      : "3:4 · 1080 × 1440. Los recuadros punteados son los espacios para las ilustraciones 3D de Krea; el PDF conserva el texto editable.";
+    $("tarjetas-titulo").textContent = relacion < 0.7 ? "Vista previa del guion visual" : "Vista previa del carrusel";
+    $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` })));
     $("dialogo-tarjetas").showModal();
     $("tarjetas-pista").scrollLeft = 0;
     actualizarCarrusel();
