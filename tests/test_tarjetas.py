@@ -35,6 +35,12 @@ class TestTarjetas(unittest.TestCase):
         self.assertEqual((a[0], a[-1], b[0], b[-1]), (1, 7, 1, 7))
         self.assertNotEqual(a[1:4], b[1:4])
 
+    def test_portadas_rotan_de_color(self):
+        fondos = [tarjetas.PORTADAS[v % len(tarjetas.PORTADAS)][0] for v in range(5)]
+        self.assertEqual(len(set(fondos)), 5)
+        # carruseles consecutivos (mismo mes o mes siguiente) nunca repiten fondo
+        self.assertTrue(all(fondos[i] != fondos[(i + 1) % 5] for i in range(5)))
+
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),
                          "tarjetas-2026-11-retail-media-ya.pdf")

@@ -297,7 +297,8 @@ def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
         raise ErrorNegocio("Esta pieza aún no tiene contenido.")
     mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
     carruseles = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}", formato="eq.Carrusel", order="semana")
-    variante = [c["id"] for c in carruseles].index(pieza_id)
+    # Cambia de un carrusel a otro y de un mes a otro: así las portadas del feed rotan de color.
+    variante = int(mes[5:7]) * 2 + [c["id"] for c in carruseles].index(pieza_id)
     contenido = pieza["contenido"]
     pdf = tarjetas.generar_pdf(contenido, f"Carrusel · {contenido.get('tema_especifico', '')}", variante)
     return tarjetas.nombre_archivo(contenido, mes), pdf

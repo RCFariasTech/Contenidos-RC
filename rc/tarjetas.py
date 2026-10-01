@@ -136,12 +136,23 @@ class Lienzo:
 
 # ---------- los 7 estilos (todos reciben titular, texto y nota de ilustración) ----------
 
+# Portadas: el color de fondo rota para que el feed se vea variado (fondo, titular, texto, ilustración sobre fondo oscuro)
+PORTADAS = (
+    ("coral", "blanco", "blanco", True),
+    ("celeste", "azul_marino", "azul_marino", False),
+    ("azul_medio", "blanco", "celeste", True),
+    ("gris_claro", "azul_marino", "coral", False),
+    ("azul_marino", "blanco", "celeste", True),
+)
+
+
 def estilo1_portada(L, d):
-    """Coral · ilustración arriba · titular grande abajo."""
-    L.fondo("coral")
-    L.marcador(M, 84, W - 2 * M, 640, d["nota"])
-    usado = L.bloque(d["titular"], MUY_NEGRITA, "blanco", M, 780, W - 2 * M, 440, 124, tam_min=64, inter=1.08)
-    L.bloque(d["texto"], NORMAL, "blanco", M, 780 + usado + 24, W - 2 * M, 200, 52)
+    """Fondo que rota (coral, celeste, azul, gris, marino) · ilustración arriba · titular grande abajo."""
+    fondo, c_titular, c_texto, oscuro = PORTADAS[d.get("variante", 0) % len(PORTADAS)]
+    L.fondo(fondo)
+    L.marcador(M, 84, W - 2 * M, 640, d["nota"], claro=oscuro)
+    usado = L.bloque(d["titular"], MUY_NEGRITA, c_titular, M, 780, W - 2 * M, 440, 124, tam_min=64, inter=1.08)
+    L.bloque(d["texto"], NORMAL, c_texto, M, 780 + usado + 24, W - 2 * M, 200, 52)
 
 
 def estilo2_navy_centro(L, d):
@@ -269,7 +280,7 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0) ->
     c.setAuthor("RC Farías")
     L = Lienzo(c, col)
     for estilo, datos in zip(estilos_sugeridos(variante), datos_tarjetas(contenido)):
-        ESTILOS[estilo](L, datos)
+        ESTILOS[estilo](L, {**datos, "variante": variante})
         c.showPage()
     c.save()
     return buffer.getvalue()
