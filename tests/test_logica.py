@@ -96,6 +96,15 @@ class TestValidador(unittest.TestCase):
         self.assertTrue(any("con tilde" in e for e in r["errores"]))
         self.assertEqual(self._validar(carrusel(caption=f"En RC Farías lo hacemos.\n\n{CTA}"))["errores"], [])
 
+    def test_lista_de_fuentes_bien_formada(self):
+        from rc.config import dominios_confiables
+        lista = dominios_confiables()
+        self.assertEqual(len(lista), len(set(lista)))
+        for d in lista:
+            self.assertRegex(d, r"^[a-z0-9.-]+\.[a-z]{2,}(/[\w./-]*)?$", d)
+        for esperado in ("fastcompany.mx", "marketingdirecto.com", "merca20.com", "revistapym.com.co"):
+            self.assertIn(esperado, lista)
+
     def test_fuente_solo_de_dominios_confiables(self):
         dominios = ["warc.com", "business.google.com/think"]
         def validar_con(url):
