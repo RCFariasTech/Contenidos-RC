@@ -94,7 +94,8 @@ class TestRouter(unittest.TestCase):
     def test_diagnostico_sin_secreto(self):
         with mock.patch.dict(os.environ, {"CRON_SECRET": "s3creto"}):
             self.assertEqual(self._llamar("diagnostico")[0], 401)
-            self.assertEqual(self._llamar("diagnostico", cabeceras={"Authorization": "Bearer otro"})[0], 401)
+            with mock.patch("rc.auth.usuario_desde_token", side_effect=__import__("rc.auth").auth.NoAutorizado("x")):
+                self.assertEqual(self._llamar("diagnostico", cabeceras={"Authorization": "Bearer otro"})[0], 401)
 
     def test_yo_sin_token(self):
         with mock.patch.dict(os.environ, {"SUPABASE_URL": "https://x", "SUPABASE_ANON_KEY": "a", "OWNER_EMAIL": "o@x"}):

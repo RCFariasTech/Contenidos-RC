@@ -50,7 +50,32 @@ async function api(ruta, opciones = {}, reintentar = true) {
 function mostrar(vista) {
   document.getElementById("vista-login").hidden = vista !== "login";
   document.getElementById("vista-app").hidden = vista !== "app";
-  document.getElementById("btn-salir").hidden = vista !== "app";
+  async function probar(formato) {
+  const botones = document.querySelectorAll(".acciones .btn");
+  const estado = document.getElementById("estado-prueba");
+  const salida = document.getElementById("resultado-prueba");
+  botones.forEach((b) => { b.disabled = true; });
+  salida.hidden = true;
+  estado.textContent = `Generando ${formato.toLowerCase()} de prueba… (1-3 minutos)`;
+  const inicio = Date.now();
+  try {
+    const r = await api(`diagnostico?prueba=claude&formato=${formato}`);
+    const u = r.uso || {};
+    estado.textContent = `Listo en ${r.duracion_s} s · modelo ${r.modelo} · JSON estructurado: ${r.formato_estructurado ? "sí" : "no (Plan B)"} · `
+      + `tokens: ${u.input_tokens} entrada / ${u.output_tokens} salida · búsquedas: ${u.web_search_requests} · URLs encontradas: ${r.urls.length}`;
+    salida.textContent = JSON.stringify(r.pieza, null, 2);
+    salida.hidden = false;
+  } catch (e) {
+    estado.textContent = `Error tras ${Math.round((Date.now() - inicio) / 1000)} s: ${e.message}`;
+  } finally {
+    botones.forEach((b) => { b.disabled = false; });
+  }
+}
+
+document.getElementById("btn-probar-carrusel").addEventListener("click", () => probar("Carrusel"));
+document.getElementById("btn-probar-reel").addEventListener("click", () => probar("Reel"));
+
+document.getElementById("btn-salir").hidden = vista !== "app";
 }
 
 async function entrarApp() {
@@ -81,6 +106,31 @@ document.getElementById("form-login").addEventListener("submit", async (ev) => {
     error.textContent = e.message;
   }
 });
+
+async function probar(formato) {
+  const botones = document.querySelectorAll(".acciones .btn");
+  const estado = document.getElementById("estado-prueba");
+  const salida = document.getElementById("resultado-prueba");
+  botones.forEach((b) => { b.disabled = true; });
+  salida.hidden = true;
+  estado.textContent = `Generando ${formato.toLowerCase()} de prueba… (1-3 minutos)`;
+  const inicio = Date.now();
+  try {
+    const r = await api(`diagnostico?prueba=claude&formato=${formato}`);
+    const u = r.uso || {};
+    estado.textContent = `Listo en ${r.duracion_s} s · modelo ${r.modelo} · JSON estructurado: ${r.formato_estructurado ? "sí" : "no (Plan B)"} · `
+      + `tokens: ${u.input_tokens} entrada / ${u.output_tokens} salida · búsquedas: ${u.web_search_requests} · URLs encontradas: ${r.urls.length}`;
+    salida.textContent = JSON.stringify(r.pieza, null, 2);
+    salida.hidden = false;
+  } catch (e) {
+    estado.textContent = `Error tras ${Math.round((Date.now() - inicio) / 1000)} s: ${e.message}`;
+  } finally {
+    botones.forEach((b) => { b.disabled = false; });
+  }
+}
+
+document.getElementById("btn-probar-carrusel").addEventListener("click", () => probar("Carrusel"));
+document.getElementById("btn-probar-reel").addEventListener("click", () => probar("Reel"));
 
 document.getElementById("btn-salir").addEventListener("click", () => { Sesion.borrar(); mostrar("login"); });
 

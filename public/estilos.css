@@ -29,3 +29,9 @@ input:focus-visible, .btn:focus-visible { outline: 3px solid var(--azul-medio); 
 .btn--fantasma { background: transparent; color: var(--blanco); border: 1px solid var(--blanco); }
 .mensaje { min-height: 1.2em; }
 .mensaje--error { color: #B3261E; }
+h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+.acciones { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn--auto { width: auto; }
+.btn:disabled { opacity: .6; cursor: wait; }
+.resultado { background: var(--fondo); border: 1px solid var(--gris-claro); border-radius: 6px; padding: 12px;
+  overflow-x: auto; white-space: pre-wrap; word-break: break-word; font-size: .85rem; max-height: 60vh; }

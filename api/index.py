@@ -55,9 +55,9 @@ def ruta_diario(req):
 
 
 def ruta_diagnostico(req):
-    """Pruebas de riesgo de la Fase 1. Protegido con CRON_SECRET."""
+    """Pruebas de riesgo de la Fase 1. Acceso: CRON_SECRET o la sesión del dueño."""
     if not auth.es_cron_valido(req["authorization"]):
-        raise ErrorCliente(401, "No autorizado")
+        auth.usuario_desde_token(req["authorization"])
     prueba = req["query"].get("prueba", "db")
     if prueba == "db":
         filas = db.seleccionar("piezas", select="id,contenido->>tema_especifico", limit="10")
