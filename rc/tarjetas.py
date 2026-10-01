@@ -52,15 +52,23 @@ def envolver(texto, fuente, tam, ancho):
     return lineas
 
 
+TAM_MINIMO = 16  # suelo absoluto: el texto siempre debe caber completo, aunque la letra quede pequeña
+
+
 def ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter):
-    """Mayor tamaño (entre tam_max y tam_min) con el que el texto cabe en el alto dado."""
+    """Mayor tamaño de letra con el que el texto cabe entero (en alto y en ancho) en la caja dada.
+
+    tam_min es el tamaño mínimo *deseado*; si aun así no cabe, se sigue achicando hasta TAM_MINIMO.
+    """
     tam = tam_max
-    while tam > tam_min:
+    while tam > TAM_MINIMO:
         lineas = envolver(texto, fuente, tam, ancho)
-        if len(lineas) * tam * inter <= alto:
+        cabe_alto = len(lineas) * tam * inter <= alto
+        cabe_ancho = all(stringWidth(ln, fuente, tam) <= ancho for ln in lineas)
+        if cabe_alto and cabe_ancho:
             return tam, lineas
         tam -= 2
-    return tam_min, envolver(texto, fuente, tam_min, ancho)
+    return TAM_MINIMO, envolver(texto, fuente, TAM_MINIMO, ancho)
 
 
 class Lienzo:
@@ -104,9 +112,10 @@ class Lienzo:
         c.setFillColor(tinta)
         c.setFont(NEGRITA, 28)
         c.drawCentredString(x + ancho / 2, y + alto / 2 + 30, "ILUSTRACIÓN 3D · Krea")
-        c.setFont(NORMAL, 22)
-        for i, ln in enumerate(envolver(nota or "", NORMAL, 22, ancho - 120)[:6]):
-            c.drawCentredString(x + ancho / 2, y + alto / 2 - 14 - i * 30, ln)
+        tam, lineas = ajustar(nota or "", NORMAL, ancho - 120, alto / 2 - 50, 22, 14, 1.35)
+        c.setFont(NORMAL, tam)
+        for i, ln in enumerate(lineas):
+            c.drawCentredString(x + ancho / 2, y + alto / 2 - 14 - i * tam * 1.35, ln)
 
     def flecha(self, x, y_sup, escala=1.0):
         """Punto + flecha coral de las tarjetas publicadas."""
@@ -151,8 +160,9 @@ def estilo1_portada(L, d):
     fondo, c_titular, c_texto, oscuro = PORTADAS[d.get("variante", 0) % len(PORTADAS)]
     L.fondo(fondo)
     L.marcador(M, 84, W - 2 * M, 640, d["nota"], claro=oscuro)
-    usado = L.bloque(d["titular"], MUY_NEGRITA, c_titular, M, 780, W - 2 * M, 440, 124, tam_min=64, inter=1.08)
-    L.bloque(d["texto"], NORMAL, c_texto, M, 780 + usado + 24, W - 2 * M, 200, 52)
+    usado = L.bloque(d["titular"], MUY_NEGRITA, c_titular, M, 780, W - 2 * M, 380, 124, tam_min=64, inter=1.08)
+    y = 780 + usado + 24
+    L.bloque(d["texto"], NORMAL, c_texto, M, y, W - 2 * M, H - 70 - y, 52)
 
 
 def estilo2_navy_centro(L, d):
@@ -178,7 +188,7 @@ def estilo4_blanco_lateral(L, d):
     """Blanco · ilustración a la izquierda · texto coral alineado a la derecha."""
     L.fondo("blanco")
     L.marcador(M, 190, 410, 880, d["nota"], claro=False)
-    u = L.bloque(d["titular"], NEGRITA, "coral", 520, 190, W - 520 - M, 560, 80, alinear="der", tam_min=44, inter=1.15)
+    u = L.bloque(d["titular"], NEGRITA, "coral", 520, 190, W - 520 - M, 420, 80, alinear="der", tam_min=44, inter=1.15)
     L.bloque(d["texto"], NORMAL, "coral", 520, 190 + u + 60, W - 520 - M, 880 - u - 60, 50, alinear="der", tam_min=32)
 
 

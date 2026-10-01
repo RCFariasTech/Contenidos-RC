@@ -41,6 +41,40 @@ class TestTarjetas(unittest.TestCase):
         # carruseles consecutivos (mismo mes o mes siguiente) nunca repiten fondo
         self.assertTrue(all(fondos[i] != fondos[(i + 1) % 5] for i in range(5)))
 
+    def test_todo_el_texto_cabe_dentro_de_la_tarjeta_sin_solaparse(self):
+        """Textos extremos en los 7 estilos: nada se sale de la página ni se pisa con otro texto."""
+        import random
+        rnd = random.Random(7)
+        lex = ("activación retail media experiencia consumidor marca estrategia incremental conversión "
+               "audiencia segmentación medición omnicanalidad personalización sostenibilidad").split()
+
+        def frase(n):
+            return " ".join(rnd.choice(lex) for _ in range(n))
+
+        for _ in range(12):
+            tarjs = [{"titular": frase(rnd.randint(1, 14)), "texto": frase(rnd.randint(0, 55)),
+                      "nota": frase(rnd.randint(3, 40)), "variante": rnd.randint(0, 9)} for _ in range(7)]
+            for estilo, fn in tarjetas.ESTILOS.items():
+                import io
+                from reportlab.pdfgen import canvas
+                tarjetas._registrar_fuentes()
+                buf = io.BytesIO()
+                c = canvas.Canvas(buf, pagesize=(tarjetas.W, tarjetas.H))
+                fn(tarjetas.Lienzo(c, tarjetas._colores()), tarjs[estilo - 1])
+                c.showPage()
+                c.save()
+                pagina = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0]
+                lineas = [pymupdf.Rect(ln["bbox"]) for b in pagina.get_text("dict")["blocks"] if b["type"] == 0
+                          for ln in b["lines"]]
+                for r in lineas:
+                    self.assertTrue(pymupdf.Rect(20, 20, tarjetas.W - 20, tarjetas.H - 20).contains(r),
+                                    f"estilo {estilo}: texto fuera de la tarjeta {r}")
+                for i, a in enumerate(lineas):
+                    for b in lineas[i + 1:]:
+                        inter = a & b
+                        self.assertFalse(inter.width > 3 and inter.height > 0.4 * min(a.height, b.height),
+                                         f"estilo {estilo}: textos superpuestos {a} / {b}")
+
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),
                          "tarjetas-2026-11-retail-media-ya.pdf")
