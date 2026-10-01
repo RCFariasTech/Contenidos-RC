@@ -175,7 +175,7 @@ function renderTextos(pieza) {
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
   const boton = pieza.formato === "Carrusel" && pieza.id ? el("button", {
     clase: "btn btn--secundario", type: "button",
-    title: "Vista previa de las 5 tarjetas (3:4); desde ahí descargas el PDF editable",
+    title: "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
     onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget),
   }, "Ver tarjetas") : null;
   return el("section", { clase: "bloque" }, el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), boton), el("ol", { clase: "textos" }, items));
@@ -454,12 +454,25 @@ async function descargarPptx(mesIso) {
   }
 }
 
-let vistaTarjetas = null;
+let piezaTarjetas = null;
 
-function cerrarVistaTarjetas() {
-  if (vistaTarjetas) URL.revokeObjectURL(vistaTarjetas.url);
-  vistaTarjetas = null;
-  $("visor-tarjetas").removeAttribute("src");
+function tarjetaActual() {
+  const pista = $("tarjetas-pista");
+  return Math.round(pista.scrollLeft / pista.clientWidth);
+}
+
+function irATarjeta(i) {
+  const pista = $("tarjetas-pista");
+  const n = pista.children.length;
+  pista.scrollTo({ left: Math.max(0, Math.min(n - 1, i)) * pista.clientWidth, behavior: "smooth" });
+}
+
+function actualizarCarrusel() {
+  const n = $("tarjetas-pista").children.length;
+  const i = tarjetaActual();
+  $("tarjetas-contador").textContent = `Tarjeta ${i + 1} de ${n}`;
+  $("tarjetas-ant").disabled = i <= 0;
+  $("tarjetas-sig").disabled = i >= n - 1;
 }
 
 async function verTarjetas(piezaId, boton) {
@@ -467,10 +480,13 @@ async function verTarjetas(piezaId, boton) {
   const texto = boton.textContent;
   boton.textContent = "Generando vista previa…";
   try {
-    cerrarVistaTarjetas();
-    vistaTarjetas = await pedirArchivo(`/api/tarjetas-pdf?pieza=${piezaId}`, "tarjetas.pdf");
-    $("visor-tarjetas").src = `${vistaTarjetas.url}#toolbar=0&navpanes=0&view=FitH`;
+    const { imagenes } = await api(`tarjetas-vista?pieza=${piezaId}`);
+    piezaTarjetas = piezaId;
+    $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `Tarjeta ${i + 1} de ${imagenes.length}` })));
     $("dialogo-tarjetas").showModal();
+    $("tarjetas-pista").scrollLeft = 0;
+    actualizarCarrusel();
+    $("tarjetas-pista").focus();
   } catch (e) {
     aviso(`No se pudo generar la vista previa: ${e.message}`);
   } finally {
@@ -479,9 +495,27 @@ async function verTarjetas(piezaId, boton) {
   }
 }
 
-$("tarjetas-descargar").addEventListener("click", () => vistaTarjetas && guardarArchivo(vistaTarjetas));
+$("tarjetas-pista").addEventListener("scroll", actualizarCarrusel, { passive: true });
+$("tarjetas-ant").addEventListener("click", () => irATarjeta(tarjetaActual() - 1));
+$("tarjetas-sig").addEventListener("click", () => irATarjeta(tarjetaActual() + 1));
+$("dialogo-tarjetas").addEventListener("keydown", (ev) => {
+  if (ev.key === "ArrowLeft") { ev.preventDefault(); irATarjeta(tarjetaActual() - 1); }
+  if (ev.key === "ArrowRight") { ev.preventDefault(); irATarjeta(tarjetaActual() + 1); }
+});
+window.addEventListener("resize", () => { if ($("dialogo-tarjetas").open) irATarjeta(tarjetaActual()); });
 $("tarjetas-cerrar").addEventListener("click", () => $("dialogo-tarjetas").close());
-$("dialogo-tarjetas").addEventListener("close", cerrarVistaTarjetas);
+$("dialogo-tarjetas").addEventListener("close", () => $("tarjetas-pista").replaceChildren());
+$("tarjetas-descargar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  boton.disabled = true;
+  try {
+    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaTarjetas}`, "tarjetas.pdf");
+  } catch (e) {
+    aviso(`No se pudo descargar el PDF: ${e.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
 
 $("btn-pptx").addEventListener("click", () => descargarPptx());
 

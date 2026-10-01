@@ -2,3 +2,4 @@ anthropic==1.8.0
 python-pptx==1.0.2
 reportlab==5.0.1
 svglib==2.2.0
+pymupdf==1.28.2

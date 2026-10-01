@@ -214,6 +214,15 @@ def ruta_tarjetas_pdf(req):
     return 200, Archivo(nombre, contenido, "application/pdf")
 
 
+def ruta_tarjetas_vista(req):
+    _dueno(req)
+    try:
+        pieza_id = int(req["query"].get("pieza", ""))
+    except ValueError:
+        raise ErrorCliente(400, "Falta la pieza.")
+    return 200, {"imagenes": _servicio().vista_tarjetas(pieza_id)}
+
+
 def ruta_diario(req):
     """Cron diario: mantiene activo Supabase y, desde el día 15, prepara y genera el mes siguiente."""
     if not auth.es_cron_valido(req["authorization"]):
@@ -268,6 +277,7 @@ RUTAS = {
     ("POST", "fecha"): ruta_fecha,
     ("GET", "exportar-pptx"): ruta_exportar_pptx,
     ("GET", "tarjetas-pdf"): ruta_tarjetas_pdf,
+    ("GET", "tarjetas-vista"): ruta_tarjetas_vista,
     ("GET", "configuracion"): ruta_configuracion,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,

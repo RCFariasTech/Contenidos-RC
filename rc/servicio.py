@@ -304,6 +304,14 @@ def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
     return tarjetas.nombre_archivo(contenido, mes), pdf
 
 
+def vista_tarjetas(pieza_id: int) -> list[str]:
+    """Las 5 tarjetas como imágenes PNG (data URI) para la vista previa tipo carrusel."""
+    import base64
+    from rc import tarjetas
+    _nombre, pdf = tarjetas_pdf(pieza_id)
+    return ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf)]
+
+
 def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:
     """Envía el PowerPoint por correo; marca el mes como entregado solo si el envío salió bien."""
     from rc import pptx_export

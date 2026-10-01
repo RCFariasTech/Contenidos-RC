@@ -204,9 +204,20 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .dialogo form { display: grid; gap: 10px; }
 .dialogo input[type="text"], .dialogo textarea { width: 100%; }
 .dialogo h2 { font-family: "Arial Black", Arial, sans-serif; font-size: 1.2rem; }
-.dialogo--visor { width: min(760px, calc(100vw - 32px)); }
-.dialogo--visor[open] { display: grid; gap: 10px; }
-.visor-tarjetas { width: 100%; height: min(70vh, 900px); border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); }
+/* La tarjeta (3:4) siempre cabe completa: el ancho del diálogo sale del alto disponible de la ventana */
+.dialogo--visor { width: min(calc(100vw - 24px), calc((100vh - 250px) * 0.75 + 52px)); width: min(calc(100vw - 24px), calc((100dvh - 250px) * 0.75 + 52px)); min-width: 280px; padding: 16px 20px; }
+.dialogo--visor[open] { display: grid; gap: 8px; }
+.carrusel { position: relative; }
+.carrusel__pista { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 8px; outline-offset: 2px; }
+.carrusel__pista::-webkit-scrollbar { display: none; }
+.carrusel__pista img { flex: 0 0 100%; width: 100%; aspect-ratio: 3 / 4; object-fit: contain; scroll-snap-align: center; scroll-snap-stop: always; background: var(--fondo); }
+.carrusel__flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: rgba(31, 56, 100, .85); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0 0 4px; }
+.carrusel__flecha:hover:not(:disabled) { background: var(--azul-marino); }
+.carrusel__flecha:disabled { opacity: .3; cursor: default; }
+.carrusel__flecha--ant { left: 8px; }
+.carrusel__flecha--sig { right: 8px; }
+.carrusel__contador { text-align: center; font-weight: bold; color: var(--azul-marino); margin: 0; }
 .dialogo__acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .envio-favoritos { border: 1px solid var(--borde); border-radius: 8px; padding: 8px 12px; margin: 0; }
 .envio-favoritos legend { font-weight: bold; padding: 0 6px; }

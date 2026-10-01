@@ -289,3 +289,10 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0) ->
 def nombre_archivo(contenido: dict, mes_iso: str) -> str:
     tema = re.sub(r"[^a-z0-9]+", "-", (contenido.get("tema_especifico") or "carrusel").lower().encode("ascii", "ignore").decode()).strip("-")[:40]
     return f"tarjetas-{mes_iso[:7]}-{tema or 'carrusel'}.pdf"
+
+
+def imagenes_png(pdf: bytes, ancho: int = 720) -> list[bytes]:
+    """Una imagen PNG por tarjeta (para la vista previa en pantalla)."""
+    import pymupdf  # import diferido: solo se usa en la vista previa
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+        return [pagina.get_pixmap(matrix=pymupdf.Matrix(ancho / W, ancho / W)).tobytes("png") for pagina in doc]

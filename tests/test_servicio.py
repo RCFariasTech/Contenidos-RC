@@ -174,6 +174,9 @@ class TestFlujo(unittest.TestCase):
         for c in carruseles:
             nombre, pdf = servicio.tarjetas_pdf(c["id"])
             self.assertTrue(nombre.startswith("tarjetas-2026-11-") and pdf.startswith(b"%PDF"))
+            imagenes = servicio.vista_tarjetas(c["id"])
+            self.assertEqual(len(imagenes), 5)
+            self.assertTrue(all(i.startswith("data:image/png;base64,") for i in imagenes))
         reel = next(p for p in estado["piezas"] if p["formato"] == "Reel")
         with self.assertRaises(servicio.ErrorNegocio):
             servicio.tarjetas_pdf(reel["id"])

@@ -136,9 +136,14 @@
     </section>
 
     <dialog id="dialogo-tarjetas" class="dialogo dialogo--visor" aria-labelledby="titulo-tarjetas">
-      <h2 id="titulo-tarjetas">Vista previa de las tarjetas</h2>
-      <p class="ayuda">3:4 · 1080 × 1440. Los recuadros punteados son los espacios para las ilustraciones 3D de Krea. El PDF conserva el texto editable.</p>
-      <iframe id="visor-tarjetas" class="visor-tarjetas" title="Vista previa de las tarjetas del carrusel"></iframe>
+      <h2 id="titulo-tarjetas">Vista previa del carrusel</h2>
+      <div class="carrusel" role="group" aria-roledescription="carrusel" aria-label="Tarjetas del carrusel">
+        <button type="button" id="tarjetas-ant" class="carrusel__flecha carrusel__flecha--ant" aria-label="Tarjeta anterior">‹</button>
+        <div id="tarjetas-pista" class="carrusel__pista" tabindex="0"></div>
+        <button type="button" id="tarjetas-sig" class="carrusel__flecha carrusel__flecha--sig" aria-label="Tarjeta siguiente">›</button>
+      </div>
+      <p id="tarjetas-contador" class="carrusel__contador" aria-live="polite"></p>
+      <p class="ayuda">3:4 · 1080 × 1440. Los recuadros punteados son los espacios para las ilustraciones 3D de Krea; el PDF conserva el texto editable.</p>
       <div class="dialogo__acciones">
         <button type="button" id="tarjetas-cerrar" class="btn btn--secundario">Cerrar</button>
         <button type="button" id="tarjetas-descargar" class="btn btn--primario">Descargar PDF</button>
