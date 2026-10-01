@@ -7,7 +7,7 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | Pieza | Dónde |
 |---|---|
 | Base de datos y login | Supabase, proyecto `contenidos-rc` (ref `xfcmsisssfgezvlxwqfj`, región `us-east-1`) |
-| Frontend y API | Vercel, proyecto `contenidos-rc` → https://contenidos-rc.vercel.app |
+| Frontend y API | Vercel, proyecto `contenidos-rc` → https://contenidos-rc.vercel.app (vinculado al repo: cada push a la rama de producción despliega) |
 | LLM | API de Anthropic (Claude) con búsqueda web |
 
 ## Variables de entorno (Vercel → Settings → Environment Variables)
