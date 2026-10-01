@@ -27,10 +27,11 @@ def _solicitud(metodo: str, tabla: str, params: dict | None = None,
     clave = env("SUPABASE_SERVICE_ROLE_KEY")
     cabeceras = {
         "apikey": clave,
-        "Authorization": f"Bearer {clave}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    if not clave.startswith("sb_secret_"):  # la service_role heredada es un JWT; las sb_secret_ no
+        cabeceras["Authorization"] = f"Bearer {clave}"
     if prefer:
         cabeceras["Prefer"] = prefer
     datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
