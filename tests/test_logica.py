@@ -57,6 +57,12 @@ class TestDiseno(unittest.TestCase):
         p["diseno"] = p["diseno"][:4]
         self.assertTrue(any("exactamente 5" in e for e in self._errores(p)))
 
+    def test_titular_cortado_a_mitad_de_frase(self):
+        p = carrusel(slide_2="El 78% admite que al menos el 10% de su presupuesto se desperdicia.")
+        p["diseno"][1] = {"titular": "El 78% admite que al", "texto": "menos el 10% de su presupuesto se desperdicia.",
+                          "ilustracion": "Personaje 3D"}
+        self.assertTrue(any("a la mitad" in e for e in self._errores(p)))
+
     def test_falta_nota_de_ilustracion(self):
         p = carrusel()
         p["diseno"][2]["ilustracion"] = ""

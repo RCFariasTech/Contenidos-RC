@@ -193,19 +193,21 @@ def estilo4_blanco_lateral(L, d):
 
 
 def estilo5_gris_pildora(L, d):
-    """Gris · '+' coral · texto azul marino · píldora coral con el titular (dato)."""
+    """Gris · píldora coral con el titular (dato) arriba · '+' coral y texto azul marino debajo."""
     c = L.c
     L.fondo("gris_claro")
+    ancho, alto, y0 = W - 2 * M, 300, 190
     c.setFillColor(L.col["coral"])
-    c.rect(M + 20, H - 590, 190, 34, stroke=0, fill=1)
-    c.rect(M + 98, H - 668, 34, 190, stroke=0, fill=1)
-    L.bloque(d["texto"], NORMAL, "azul_marino", 330, 200, W - 330 - M, 680, 60)
-    ancho, alto = W - 2 * M, 280
+    c.roundRect(M, H - y0 - alto, ancho, alto, 150, stroke=0, fill=1)
+    tam, lineas = ajustar(d["titular"], NEGRITA, ancho - 140, 210, 74, 40, 1.15)
+    L.bloque(d["titular"], NEGRITA, "blanco", M + 70, y0 + (alto - len(lineas) * tam * 1.15) / 2 - 4,
+             ancho - 140, 210, 74, alinear="centro", inter=1.15)
+    y_texto = y0 + alto + 90
     c.setFillColor(L.col["coral"])
-    c.roundRect(M, H - 1200, ancho, alto, 140, stroke=0, fill=1)
-    tam, lineas = ajustar(d["titular"], NEGRITA, ancho - 140, 190, 74, 40, 1.15)
-    L.bloque(d["titular"], NEGRITA, "blanco", M + 70, 920 + (alto - len(lineas) * tam * 1.15) / 2 - 4,
-             ancho - 140, 190, 74, alinear="centro", tam_min=40, inter=1.15)
+    cx, cy = M + 115, H - y_texto - 70  # centro del "+"
+    c.rect(cx - 95, cy - 17, 190, 34, stroke=0, fill=1)
+    c.rect(cx - 17, cy - 95, 34, 190, stroke=0, fill=1)
+    L.bloque(d["texto"], NORMAL, "azul_marino", 330, y_texto, W - 330 - M, H - 90 - y_texto, 60)
 
 
 def estilo6_celeste(L, d):
@@ -247,12 +249,16 @@ CAMPOS_SLIDE = ("slide_1_gancho", "slide_2", "slide_3", "slide_4", "slide_5_cier
 
 
 def _separar(texto: str) -> tuple[str, str]:
-    """Titular + resto para contenidos viejos sin `diseno`: primera frase corta, o las primeras palabras."""
-    partes = re.split(r"(?<=[:.])\s+", (texto or "").strip(), maxsplit=1)
-    if len(partes) == 2 and len(partes[0].split()) <= 9:
+    """Titular + resto para contenidos viejos sin `diseno`.
+
+    Solo parte en un límite natural (fin de oración o dos puntos); si no lo hay, todo va como titular,
+    porque partir una frase a la mitad deja un titular sin sentido.
+    """
+    texto = (texto or "").strip()
+    partes = re.split(r"(?<=[:.?!])\s+", texto, maxsplit=1)
+    if len(partes) == 2 and 0 < len(partes[0].split()) <= 12:
         return partes[0].rstrip(":."), partes[1]
-    palabras = (texto or "").split()
-    return " ".join(palabras[:5]), " ".join(palabras[5:])
+    return texto, ""
 
 
 def datos_tarjetas(contenido: dict) -> list[dict]:

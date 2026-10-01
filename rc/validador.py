@@ -82,6 +82,9 @@ def dominio_permitido(url: str, dominios: list[str]) -> bool:
     return any(host == d or host.endswith("." + d) for d in (x.split("/")[0].lower() for x in dominios))
 
 
+PALABRAS_ENLACE = set("a al ante con contra de del desde e en entre hacia hasta la las lo los o para por que se según sin sobre su sus tras u un una unos unas y el".split())
+
+
 def _palabras_texto(texto: str) -> list[str]:
     return re.findall(r"\w+", _normalizar(texto))
 
@@ -100,6 +103,12 @@ def _validar_diseno(pieza: dict) -> list[str]:
                            f"palabras, en el mismo orden, que {campo}.")
         if contar_palabras(d.get("titular", "")) > 10:
             errores.append(f"El titular de la tarjeta {i} tiene más de 10 palabras.")
+        titular, texto = (d.get("titular") or "").strip(), (d.get("texto") or "").strip()
+        if titular and texto:
+            ultima = (_palabras_texto(titular) or [""])[-1]
+            if ultima in PALABRAS_ENLACE or texto[0].islower():
+                errores.append(f"En diseno, la tarjeta {i} parte una frase a la mitad: el titular debe ser una "
+                               "oración completa con sentido propio y el texto debe comenzar una idea nueva (con mayúscula).")
         if not (d.get("ilustracion") or "").strip() and 1 <= i <= 4:
             errores.append(f"Falta la nota de ilustración de la tarjeta {i}.")
     return errores

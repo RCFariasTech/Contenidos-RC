@@ -75,6 +75,33 @@ class TestTarjetas(unittest.TestCase):
                         self.assertFalse(inter.width > 3 and inter.height > 0.4 * min(a.height, b.height),
                                          f"estilo {estilo}: textos superpuestos {a} / {b}")
 
+    def test_orden_de_lectura_titular_antes_que_texto(self):
+        """En cada estilo con titular y texto, el titular queda arriba del texto (se lee primero)."""
+        import io
+        from reportlab.pdfgen import canvas
+        tarjetas._registrar_fuentes()
+        d = {"titular": "ALFATITULAR completo aquí.", "texto": "OMEGATEXTO sigue después.", "nota": "x", "variante": 0}
+        for estilo, fn in tarjetas.ESTILOS.items():
+            if estilo == 7:
+                continue
+            buf = io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=(tarjetas.W, tarjetas.H))
+            fn(tarjetas.Lienzo(c, tarjetas._colores()), d)
+            c.showPage()
+            c.save()
+            pagina = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0]
+            y = {}
+            for clave in ("ALFATITULAR", "OMEGATEXTO"):
+                y[clave] = pagina.search_for(clave)[0].y0
+            self.assertLess(y["ALFATITULAR"], y["OMEGATEXTO"], f"estilo {estilo}: el texto aparece antes que el titular")
+
+    def test_contenido_viejo_no_parte_frases_a_la_mitad(self):
+        tit, texto = tarjetas._separar("El 78% admite que al menos el 10% de su presupuesto se desperdicia por medición débil.")
+        self.assertEqual((tit.startswith("El 78%"), texto), (True, ""))
+        tit, texto = tarjetas._separar("Menos presupuesto perdido: medir cada activación cambia la conversación con finanzas.")
+        self.assertEqual(tit, "Menos presupuesto perdido")
+        self.assertTrue(texto.startswith("medir"))
+
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),
                          "tarjetas-2026-11-retail-media-ya.pdf")

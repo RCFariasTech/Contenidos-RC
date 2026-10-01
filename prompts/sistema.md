@@ -42,3 +42,6 @@ FORMATO CARRUSEL:
   titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).
   Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre; su ilustracion puede ir vacía.
   Si una tarjeta gira en torno a una cifra, ponla en el titular.
+  ORDEN DE LECTURA: el titular se lee primero y el texto después, y juntos deben leerse de corrido. El titular es una oración o idea
+  COMPLETA con sentido propio (nunca termina en una preposición o artículo como "de", "que", "al"), y el texto empieza una idea nueva
+  con mayúscula, sin continuar la oración del titular. Si no hay un corte natural, pon todo en el titular y deja el texto vacío.
