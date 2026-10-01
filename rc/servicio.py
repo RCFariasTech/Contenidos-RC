@@ -3,7 +3,7 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from rc import correos, db, fuentes, generador, planificador, validador
+from rc import correos, db, fuentes, generador, planificador, teams, validador
 from rc.config import ajustes, pilares
 from rc.errores import ErrorNegocio  # noqa: F401 (se reexporta: servicio.ErrorNegocio)
 
@@ -151,12 +151,16 @@ def _guardar_version(pieza: dict, contenido: dict, informe: dict, urls: list[str
 
 def _actualizar_estado_mes(mes_id: int) -> None:
     piezas = db.seleccionar("piezas", select="estado,contenido", mes_id=f"eq.{mes_id}")
-    mes = db.seleccionar("meses", select="estado", id=f"eq.{mes_id}")[0]
+    mes = db.seleccionar("meses", select="estado,mes_objetivo", id=f"eq.{mes_id}")[0]
     if piezas and all(p["estado"] == "aprobada" for p in piezas):
         if mes["estado"] not in ("aprobado", "entregado"):  # re-aprobar tras un cambio vuelve a "aprobado"
             db.actualizar("meses", {"estado": "aprobado", "aprobado_en": _ahora()}, id=f"eq.{mes_id}")
     elif piezas and all(p["contenido"] for p in piezas):
-        if mes["estado"] != "en_revision":
+        if mes["estado"] == "generando":
+            # Condicional: si dos piezas terminan a la vez, solo una pasa el mes a revisión y avisa a Teams.
+            if db.actualizar("meses", {"estado": "en_revision"}, id=f"eq.{mes_id}", estado="eq.generando"):
+                teams.avisar_revision(mes["mes_objetivo"], len(piezas))
+        elif mes["estado"] != "en_revision":
             db.actualizar("meses", {"estado": "en_revision"}, id=f"eq.{mes_id}")
 
 

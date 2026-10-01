@@ -48,6 +48,18 @@ El botón "Enviar por correo" usa SMTP con la librería estándar de Python (sin
 En Gmail, la contraseña de aplicación se crea en la cuenta de Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones (los nombres de los menús de Google pueden cambiar).
 Mientras falten `SMTP_USER` y `SMTP_PASSWORD`, la app avisa que el envío no está activado y el resto funciona igual.
 
+### Aviso a Microsoft Teams (opcional)
+
+Cuando las 4 propuestas del mes quedan generadas (el cron desde el día 15 o el botón manual), la app publica un mensaje en un canal de Teams con un botón para abrir la app. Se avisa una sola vez por mes; un fallo de Teams nunca interrumpe la generación.
+
+Teams ya no permite crear conectores de webhook entrantes nuevos; se usa un flujo de **Workflows** (Power Automate):
+1. En el canal de Teams → ⋯ → **Workflows** → plantilla **Publicar en un canal cuando se reciba una solicitud de webhook** (disparador «Cuando se recibe una solicitud de webhook de Teams»; los nombres de los menús pueden cambiar).
+2. Elige el equipo y el canal y crea el flujo; copia la **URL del webhook** que muestra.
+3. En Vercel agrega `TEAMS_WEBHOOK_URL` con esa URL (tipo **Sensitive**) y, opcional, `APP_URL` (por defecto `https://contenidos-rc.vercel.app`). Vuelve a desplegar.
+4. En la app → Configuración → **Enviar mensaje de prueba**.
+
+El mensaje es una Adaptive Card dentro de `{"type": "message", "attachments": [...]}`, el formato que espera ese disparador.
+
 Después de agregar o cambiar variables hay que **volver a desplegar** (Deployments → ⋯ → Redeploy).
 
 ## Tarjetas de carrusel

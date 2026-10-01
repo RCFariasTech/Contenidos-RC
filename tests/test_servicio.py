@@ -10,7 +10,7 @@ import unittest
 from datetime import date
 from unittest import mock
 
-from rc import correos, fuentes
+from rc import correos, fuentes, teams
 from rc import db as db_real
 from rc import servicio
 from rc.config import ajustes
@@ -294,6 +294,39 @@ class TestFlujo(unittest.TestCase):
             with self.assertRaises(servicio.ErrorNegocio):
                 servicio.enviar_pptx(mes, ["a@x.co"])
         self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "aprobado")
+
+    def test_teams_avisa_una_sola_vez_cuando_el_mes_queda_en_revision(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        ids = [p["id"] for p in servicio.estado_mes(mes)["piezas"]]
+        with mock.patch.dict("os.environ", {"TEAMS_WEBHOOK_URL": "https://example.webhook.office.com/x"}), \
+                mock.patch.object(teams, "_publicar") as publicar:
+            for i in ids[:3]:
+                servicio.generar_pieza(i)
+            publicar.assert_not_called()  # faltan piezas
+            servicio.generar_pieza(ids[3])
+            publicar.assert_called_once()
+            tarjeta = publicar.call_args.args[0]["attachments"][0]["content"]
+            self.assertIn("Noviembre 2026", tarjeta["body"][0]["text"])
+            self.assertEqual(tarjeta["actions"][0]["url"], teams.APP_URL_POR_DEFECTO)
+            servicio.comentar(ids[0], "ajusta")
+            servicio.ajustar_pieza(ids[0])  # ajustar no vuelve a avisar
+            publicar.assert_called_once()
+
+    def test_teams_caido_no_rompe_la_generacion(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        with mock.patch.dict("os.environ", {"TEAMS_WEBHOOK_URL": "https://example.webhook.office.com/x"}), \
+                mock.patch.object(teams, "_publicar", side_effect=servicio.ErrorNegocio("Teams caído")):
+            for p in servicio.estado_mes(mes)["piezas"]:
+                servicio.generar_pieza(p["id"])
+        self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "en_revision")
+
+    def test_teams_sin_configurar_no_hace_nada(self):
+        with mock.patch.dict("os.environ", {"TEAMS_WEBHOOK_URL": ""}):
+            self.assertFalse(teams.avisar_revision("2026-11-01", 4))
+            with self.assertRaises(servicio.ErrorNegocio):
+                teams.enviar_prueba()
 
     def test_smtp_no_configurado(self):
         with mock.patch.dict("os.environ", {"SMTP_USER": "", "SMTP_PASSWORD": ""}):

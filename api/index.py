@@ -138,9 +138,10 @@ def ruta_versiones(req):
 
 def ruta_configuracion(req):
     _dueno(req)
-    from rc import correos, fuentes
+    from rc import correos, fuentes, teams
     return 200, {"fuentes": fuentes.listar(), "recomendadas": fuentes.recomendadas(),
-                 "favoritos": correos.listar_favoritos(), "correo_configurado": correos.configurado()}
+                 "favoritos": correos.listar_favoritos(), "correo_configurado": correos.configurado(),
+                 "teams_configurado": teams.configurado()}
 
 
 def ruta_fuente_agregar(req):
@@ -223,6 +224,13 @@ def ruta_tarjetas_vista(req):
     return 200, {"imagenes": _servicio().vista_tarjetas(pieza_id)}
 
 
+def ruta_probar_teams(req):
+    _dueno(req)
+    from rc import teams
+    teams.enviar_prueba()
+    return 200, {"ok": True}
+
+
 def ruta_diario(req):
     """Cron diario: mantiene activo Supabase y, desde el día 15, prepara y genera el mes siguiente."""
     if not auth.es_cron_valido(req["authorization"]):
@@ -279,6 +287,7 @@ RUTAS = {
     ("GET", "tarjetas-pdf"): ruta_tarjetas_pdf,
     ("GET", "tarjetas-vista"): ruta_tarjetas_vista,
     ("GET", "configuracion"): ruta_configuracion,
+    ("POST", "probar-teams"): ruta_probar_teams,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,

@@ -710,7 +710,7 @@ $("tab-configuracion").addEventListener("click", () => mostrarSeccion("configura
 
 // ---------- configuración: fuentes y correos favoritos ----------
 
-const cfg = { fuentes: [], recomendadas: [], favoritos: [], correoConfigurado: false, cargada: false };
+const cfg = { fuentes: [], recomendadas: [], favoritos: [], correoConfigurado: false, teamsConfigurado: false, cargada: false };
 
 function msgConfig(texto, error = false) {
   const nodo = $("mensaje-config");
@@ -735,13 +735,27 @@ function renderConfig() {
   const aviso = $("estado-correo");
   aviso.hidden = cfg.correoConfigurado;
   aviso.textContent = "El envío por correo aún no está activado: falta configurar SMTP_USER y SMTP_PASSWORD en Vercel (ver README).";
+  $("estado-teams").hidden = cfg.teamsConfigurado;
+  $("estado-teams").textContent = "El aviso a Teams aún no está activado: falta configurar TEAMS_WEBHOOK_URL en Vercel (ver README).";
 }
+
+$("btn-probar-teams").addEventListener("click", async (ev) => {
+  ev.currentTarget.disabled = true;
+  try {
+    await api("probar-teams", { metodo: "POST", cuerpo: {} });
+    msgConfig("Mensaje de prueba enviado: revisa el canal de Teams.");
+  } catch (e) {
+    msgConfig(e.message, true);
+  } finally {
+    ev.currentTarget.disabled = false;
+  }
+});
 
 async function cargarConfiguracion() {
   try {
     const d = await api("configuracion");
     Object.assign(cfg, { fuentes: d.fuentes, recomendadas: d.recomendadas, favoritos: d.favoritos,
-      correoConfigurado: d.correo_configurado, cargada: true });
+      correoConfigurado: d.correo_configurado, teamsConfigurado: d.teams_configurado, cargada: true });
     renderConfig();
   } catch (e) {
     msgConfig(`No se pudo cargar la configuración: ${e.message}`, true);
