@@ -136,6 +136,67 @@ def ruta_versiones(req):
     return 200, {"versiones": _servicio().versiones(_entero(req["query"], "pieza_id"))}
 
 
+def ruta_configuracion(req):
+    _dueno(req)
+    from rc import correos, fuentes
+    return 200, {"fuentes": fuentes.listar(), "recomendadas": fuentes.recomendadas(),
+                 "favoritos": correos.listar_favoritos(), "correo_configurado": correos.configurado()}
+
+
+def ruta_fuente_agregar(req):
+    _dueno(req)
+    from rc import fuentes
+    return 200, {"dominio": fuentes.agregar(req["cuerpo"].get("dominio", ""))}
+
+
+def ruta_fuente_quitar(req):
+    _dueno(req)
+    from rc import fuentes
+    fuentes.quitar(req["query"].get("dominio", ""))
+    return 200, {"ok": True}
+
+
+def ruta_fuentes_restaurar(req):
+    _dueno(req)
+    from rc import fuentes
+    return 200, {"agregadas": fuentes.restaurar()}
+
+
+def ruta_favorito_agregar(req):
+    _dueno(req)
+    from rc import correos
+    return 200, correos.agregar_favorito(req["cuerpo"].get("email", ""), req["cuerpo"].get("nombre"))
+
+
+def ruta_favorito_borrar(req):
+    _dueno(req)
+    from rc import correos
+    correos.borrar_favorito(_entero(req["query"], "id"))
+    return 200, {"ok": True}
+
+
+def ruta_borrar_piezas(req):
+    _dueno(req)
+    ids = req["cuerpo"].get("ids")
+    if not isinstance(ids, list) or len(ids) > 100:
+        raise ErrorCliente(400, "ids debe ser una lista de hasta 100 piezas")
+    try:
+        return 200, {"borradas": _servicio().borrar_piezas([int(i) for i in ids])}
+    except (TypeError, ValueError) as e:
+        raise ErrorCliente(400, "ids inválidos") from e
+
+
+def ruta_enviar_pptx(req):
+    _dueno(req)
+    from rc import correos
+    cuerpo = req["cuerpo"]
+    destinatarios = [*(cuerpo.get("favoritos") or []), *correos.separar_correos(cuerpo.get("otros", ""))]
+    enviados = _servicio().enviar_pptx(_mes_param(cuerpo.get("mes")), destinatarios,
+                                       str(cuerpo.get("mensaje") or "")[:1000],
+                                       bool(cuerpo.get("guardar_favoritos")))
+    return 200, {"enviados": enviados}
+
+
 def ruta_exportar_pptx(req):
     _dueno(req)
     nombre, contenido = _servicio().exportar_pptx(_mes_param(req["query"].get("mes")))
@@ -196,6 +257,14 @@ RUTAS = {
     ("POST", "aprobar"): ruta_aprobar,
     ("POST", "fecha"): ruta_fecha,
     ("GET", "exportar-pptx"): ruta_exportar_pptx,
+    ("GET", "configuracion"): ruta_configuracion,
+    ("POST", "fuentes"): ruta_fuente_agregar,
+    ("DELETE", "fuentes"): ruta_fuente_quitar,
+    ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,
+    ("POST", "favoritos"): ruta_favorito_agregar,
+    ("DELETE", "favoritos"): ruta_favorito_borrar,
+    ("POST", "borrar-piezas"): ruta_borrar_piezas,
+    ("POST", "enviar-pptx"): ruta_enviar_pptx,
     ("GET", "repositorio"): ruta_repositorio,
     ("GET", "versiones"): ruta_versiones,
     ("GET", "diario"): ruta_diario,

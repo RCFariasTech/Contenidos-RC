@@ -194,32 +194,27 @@ def _recortar(texto: str, maximo: int) -> str:
 
 
 def _ficha(slide, x, y, w, h, pieza, c):
-    specs = specs_instagram()[pieza["formato"]]
+    """Tarjeta azul: solo hashtags y fuente (formato, medidas y tipo ya van en las pastillas del encabezado)."""
     contenido = pieza["contenido"]
     inv = contenido.get("investigacion") or {}
-    _forma(slide, MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h, relleno=c["tinte"], radio=0.05)
     pad = Inches(0.22)
     url = inv.get("fuente_url", "")
     etiqueta = lambda t: (t.upper(), 10, c["azul_medio"], True, None, 3)  # noqa: E731
+    hashtags = "  ".join(contenido.get("hashtags") or [])
     items = [
-        etiqueta("Ficha técnica"),
-        (f"{pieza['formato']} · {specs['tamano_px']} px", 14, c["azul_marino"], True, None, 0),
-        (f"Relación {specs['relacion']}", 11, c["azul_marino"], False, None, 3),
-    ]
-    for nota in filter(None, [specs.get("notas"), specs.get("portada") and f"Portada: {specs['portada']}",
-                              specs.get("zona_segura") and f"Zona segura: {specs['zona_segura']}"]):
-        items.append((nota, 9.5, c["suave"], False, None, 3))
-    items += [
-        (f"{pieza['tipo']} · {pieza['pilar']}", 10.5, c["azul_marino"], False, None, 10),
         etiqueta("Hashtags"),
-        ("  ".join(contenido.get("hashtags") or []) or "Sin hashtags (ninguno aportaba alcance)", 12, c["azul_marino"], True, None, 10),
+        (hashtags or "Sin hashtags (ninguno aportaba alcance)", 12, c["azul_marino"], bool(hashtags), None, 14),
         etiqueta("Fuente"),
         (_recortar(inv.get("tendencia", ""), 220), 10.5, c["azul_marino"], True, None, 3),
         (_recortar(inv.get("fuente_titulo") or url, 120), 10, c["azul_medio"], False,
          url if url.startswith("https://") else None, 2),
         (f"Fecha: {_recortar(inv.get('fuente_fecha') or 'sin fecha visible', 60)}", 9.5, c["suave"], False, None, 0),
     ]
-    _bloque(slide, x + pad, y + pad, w - 2 * pad, h - 2 * pad, items)
+    # La tarjeta mide lo que su contenido necesita (con margen), sin pasarse del alto disponible
+    necesario = _alto_estimado(items, (w - 2 * pad) / 914400, 1.0) * 1.12 * 914400 + 2 * pad
+    alto = int(min(h, necesario))
+    _forma(slide, MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, alto, relleno=c["tinte"], radio=0.05)
+    _bloque(slide, x + pad, y + pad, w - 2 * pad, alto - 2 * pad, items)
 
 
 def _textos(slide, x, y, w, h, pieza, c):

@@ -175,3 +175,36 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .version-btn { font: inherit; font-size: .85rem; border: 1px solid var(--gris-claro); background: var(--blanco); color: var(--azul-marino);
   border-radius: 999px; padding: 4px 12px; cursor: pointer; }
 .version-btn[aria-pressed="true"] { background: var(--azul-marino); color: var(--blanco); border-color: var(--azul-marino); }
+
+/* Configuración, envío y borrado */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.btn--peligro { background: var(--blanco); color: var(--error-texto); border: 1px solid var(--error-texto); }
+.btn--peligro:not(:disabled):hover { background: var(--error-fondo); }
+.acciones-repo { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+.col-check { width: 36px; }
+.tabla-repo input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--azul-medio); }
+.config-bloque { margin-bottom: 20px; display: grid; gap: 12px; }
+.config-bloque h2 { font-size: 1.15rem; }
+.form-linea { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-linea input { flex: 1 1 200px; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: var(--celeste-suave); border: 1px solid var(--celeste);
+  border-radius: 999px; padding: 4px 4px 4px 12px; font-size: .9rem; color: var(--azul-marino); }
+.chip button { font: inherit; line-height: 1; border: 0; background: transparent; color: var(--azul-marino); cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; }
+.chip button:hover { background: var(--error-fondo); color: var(--error-texto); }
+.lista-favoritos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.favorito { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px;
+  background: var(--fondo); border-radius: 8px; }
+.favorito small { color: var(--texto-suave); display: block; }
+.dialogo { border: 0; border-radius: var(--radio); padding: 24px; width: min(520px, calc(100vw - 32px)); color: var(--texto); }
+.dialogo::backdrop { background: rgba(31, 56, 100, .55); }
+.dialogo form { display: grid; gap: 10px; }
+.dialogo input[type="text"], .dialogo textarea { width: 100%; }
+.dialogo h2 { font-family: "Arial Black", Arial, sans-serif; font-size: 1.2rem; }
+.dialogo__acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.envio-favoritos { border: 1px solid var(--borde); border-radius: 8px; padding: 8px 12px; margin: 0; }
+.envio-favoritos legend { font-weight: bold; padding: 0 6px; }
+.check-linea { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+.check-linea input, .opcion-favorito input { width: 18px; height: 18px; accent-color: var(--azul-medio); margin: 0; }
+.opcion-favorito { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-weight: normal; }

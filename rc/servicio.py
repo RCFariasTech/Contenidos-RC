@@ -3,16 +3,13 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from rc import db, generador, planificador, validador
-from rc.config import ajustes, dominios_confiables, pilares
+from rc import correos, db, fuentes, generador, planificador, validador
+from rc.config import ajustes, pilares
+from rc.errores import ErrorNegocio  # noqa: F401 (se reexporta: servicio.ErrorNegocio)
 
 log = logging.getLogger(__name__)
 
 MINUTOS_BLOQUEO = 10  # una pieza "generando/ajustando" más tiempo que esto se considera caída
-
-
-class ErrorNegocio(Exception):
-    """Error esperable que se muestra tal cual al usuario (HTTP 409)."""
 
 
 def _ahora() -> str:
@@ -121,7 +118,7 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
     previas = [h["contenido"] for h in historial]
     otras = [h["contenido"] for h in hermanas]
     hoy = planificador.hoy_bogota()
-    informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, dominios_confiables())
+    informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, fuentes.dominios())
     for _ in range(a["max_reparaciones"]):
         if not informe["reparables"]:
             break
@@ -131,7 +128,7 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
         uso["duracion_s"] = uso.get("duracion_s", 0) + reparado.get("duracion_s", 0)
         uso["reparaciones"] = uso.get("reparaciones", 0) + 1
         contenido = reparado["pieza"]
-        informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, dominios_confiables())
+        informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, fuentes.dominios())
     return contenido, informe, uso
 
 
@@ -265,8 +262,7 @@ def cambiar_fecha(pieza_id: int, fecha: str) -> dict:
 
 # ---------- exportación ----------
 
-def exportar_pptx(mes: date) -> tuple[str, bytes]:
-    """PowerPoint del mes aprobado. La primera descarga marca el mes como entregado."""
+def _construir_pptx(mes: date) -> tuple[dict, list[dict], str, bytes]:
     from rc import pptx_export  # import diferido: python-pptx solo se carga al exportar
     fila_mes = obtener_mes(mes)
     if not fila_mes:
@@ -275,10 +271,43 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
         raise ErrorNegocio("El PowerPoint se habilita cuando las 4 piezas están aprobadas.")
     piezas = db.seleccionar("piezas", select="*", mes_id=f"eq.{fila_mes['id']}", order="semana")
     contenido = pptx_export.generar_pptx(fila_mes["mes_objetivo"], piezas, fila_mes.get("aprobado_en"))
+    return fila_mes, piezas, pptx_export.nombre_archivo(fila_mes["mes_objetivo"]), contenido
+
+
+def _marcar_entregado(fila_mes: dict) -> None:
     if fila_mes["estado"] == "aprobado":
         db.actualizar("meses", {"estado": "entregado", "entregado_en": _ahora()},
                       id=f"eq.{fila_mes['id']}", estado="eq.aprobado")
-    return pptx_export.nombre_archivo(fila_mes["mes_objetivo"]), contenido
+
+
+def exportar_pptx(mes: date) -> tuple[str, bytes]:
+    """PowerPoint del mes aprobado. La primera descarga marca el mes como entregado."""
+    fila_mes, _piezas, nombre, contenido = _construir_pptx(mes)
+    _marcar_entregado(fila_mes)
+    return nombre, contenido
+
+
+def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:
+    """Envía el PowerPoint por correo; marca el mes como entregado solo si el envío salió bien."""
+    from rc import pptx_export
+    emails = list(dict.fromkeys(correos.validar_email(e) for e in destinatarios))
+    fila_mes, piezas, nombre, contenido = _construir_pptx(mes)
+    mes_texto = pptx_export.nombre_mes(fila_mes["mes_objetivo"])
+    lineas = [f"- Semana {p['semana']} · {p['formato']} · {pptx_export.fecha_larga(p.get('fecha_publicacion'))}: "
+              f"{(p.get('contenido') or {}).get('tema_especifico', '')}" for p in piezas]
+    cuerpo = (f"Hola,\n\nAdjunto el PowerPoint con el contenido de Instagram de {mes_texto}.\n\n"
+              + (f"{mensaje.strip()}\n\n" if mensaje.strip() else "")
+              + "Piezas incluidas:\n" + "\n".join(lineas)
+              + "\n\nCada slide trae formato, medidas, textos por tarjeta o escena, caption, hashtags y fuente.\n\n"
+              "RC Farías · Experiencias de marca")
+    correos.enviar(emails, f"Contenido Instagram RC Farías · {mes_texto}", cuerpo, contenido, nombre)
+    _marcar_entregado(fila_mes)
+    if guardar_favoritos:
+        existentes = {f["email"] for f in correos.listar_favoritos()}
+        for e in emails:
+            if e not in existentes:
+                correos.agregar_favorito(e)
+    return emails
 
 
 # ---------- repositorio ----------
@@ -312,3 +341,21 @@ def repositorio() -> list[dict]:
 def versiones(pieza_id: int) -> list[dict]:
     return db.seleccionar("versiones_pieza", select="version,motivo,contenido,creado_en",
                           pieza_id=f"eq.{int(pieza_id)}", order="version.desc")
+
+
+def borrar_piezas(ids: list[int]) -> int:
+    """Borra piezas del repositorio (con sus versiones y comentarios). Solo de meses ya aprobados,
+    entregados o históricos; si un mes se queda sin piezas, también se borra el mes."""
+    ids = sorted({int(i) for i in ids})
+    if not ids:
+        raise ErrorNegocio("No hay nada seleccionado.")
+    lista = ",".join(str(i) for i in ids)
+    filas = db.seleccionar("piezas", select="id,mes_id,meses!inner(estado)", id=f"in.({lista})",
+                           **{"meses.estado": "in.(aprobado,entregado,historico)"})
+    if len(filas) != len(ids):
+        raise ErrorNegocio("Solo se pueden borrar contenidos del repositorio (meses aprobados, entregados o históricos).")
+    db.borrar("piezas", id=f"in.({lista})")
+    for mes_id in {f["mes_id"] for f in filas}:
+        if not db.seleccionar("piezas", select="id", mes_id=f"eq.{mes_id}", limit="1"):
+            db.borrar("meses", id=f"eq.{mes_id}")
+    return len(ids)

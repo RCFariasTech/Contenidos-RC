@@ -97,8 +97,8 @@ class TestValidador(unittest.TestCase):
         self.assertEqual(self._validar(carrusel(caption=f"En RC Farías lo hacemos.\n\n{CTA}"))["errores"], [])
 
     def test_lista_de_fuentes_bien_formada(self):
-        from rc.config import dominios_confiables
-        lista = dominios_confiables()
+        from rc import fuentes
+        lista = fuentes.recomendadas()
         self.assertEqual(len(lista), len(set(lista)))
         for d in lista:
             self.assertRegex(d, r"^[a-z0-9.-]+\.[a-z]{2,}(/[\w./-]*)?$", d)

@@ -10,6 +10,7 @@ import unittest
 from datetime import date
 from unittest import mock
 
+from rc import correos, fuentes
 from rc import db as db_real
 from rc import servicio
 from rc.config import ajustes
@@ -22,7 +23,9 @@ class BDFalsa:
     ErrorDB = db_real.ErrorDB
 
     def __init__(self):
-        self.tablas = {"meses": [], "piezas": [], "comentarios": [], "versiones_pieza": []}
+        self.tablas = {"meses": [], "piezas": [], "comentarios": [], "versiones_pieza": [],
+                       "fuentes_confiables": [], "correos_favoritos": []}
+        self.unicos = {"fuentes_confiables": "dominio", "correos_favoritos": "email", "meses": "mes_objetivo"}
         self.ids = itertools.count(1)
 
     @staticmethod
@@ -47,6 +50,8 @@ class BDFalsa:
 
     def _filtrar(self, tabla, filtros):
         especiales = {"select", "order", "limit"}
+        if tabla == "piezas" and "mes_id" not in {"x"}:
+            pass
 
         def valor_fila(fila, campo):
             if campo.startswith("meses."):  # filtro sobre la tabla embebida (meses!inner)
@@ -74,7 +79,8 @@ class BDFalsa:
     def insertar(self, tabla, filas):
         nuevas = []
         for f in (filas if isinstance(filas, list) else [filas]):
-            if tabla == "meses" and any(m["mes_objetivo"] == f["mes_objetivo"] for m in self.tablas["meses"]):
+            clave = self.unicos.get(tabla)
+            if clave and any(x[clave] == f[clave] for x in self.tablas[tabla]):
                 raise db_real.ErrorDB(409, "duplicado")
             fila = {"id": next(self.ids), **f}
             if tabla == "piezas":
@@ -98,6 +104,10 @@ class BDFalsa:
     def borrar(self, tabla, **filtros):
         filas = self._filtrar(tabla, filtros)
         self.tablas[tabla] = [f for f in self.tablas[tabla] if f not in filas]
+        if tabla == "piezas":  # on delete cascade
+            ids = {f["id"] for f in filas}
+            for t in ("comentarios", "versiones_pieza"):
+                self.tablas[t] = [f for f in self.tablas[t] if f["pieza_id"] not in ids]
         return filas
 
 
@@ -132,7 +142,8 @@ class TestFlujo(unittest.TestCase):
             nueva = dict(pieza, slide_1_gancho="Nuevo gancho directo") if slot["formato"] == "Carrusel" else dict(pieza)
             return {"pieza": nueva, "urls": [], "uso": {"input_tokens": 10, "output_tokens": 5}}
 
-        parches = [mock.patch.object(servicio, "db", self.bd),
+        parches = [mock.patch.object(servicio, "db", self.bd), mock.patch.object(fuentes, "db", self.bd),
+                   mock.patch.object(correos, "db", self.bd),
                    mock.patch.object(servicio.generador, "generar", side_effect=generar),
                    mock.patch.object(servicio.generador, "ajustar", side_effect=ajustar)]
         for p in parches:
@@ -211,6 +222,89 @@ class TestFlujo(unittest.TestCase):
         self.assertIsNone(repo[-1]["mes_objetivo"])
         primera = servicio.estado_mes(mes)["piezas"][0]["id"]
         self.assertEqual([v["version"] for v in servicio.versiones(primera)], [1])
+
+    def _mes_aprobado(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+            servicio.aprobar(p["id"], True)
+        return mes
+
+    def test_fuentes_agregar_quitar_y_respaldo(self):
+        self.assertEqual(fuentes.dominios(), fuentes.recomendadas())  # tabla vacía → lista recomendada
+        self.assertEqual(fuentes.agregar("https://www.Kantar.com/informe"), "kantar.com")
+        self.assertEqual(fuentes.agregar("warc.com"), "warc.com")
+        with self.assertRaises(servicio.ErrorNegocio):
+            fuentes.agregar("kantar.com")  # duplicada
+        for malo in ("", "no es un dominio", "localhost", "a.b"):
+            with self.assertRaises(servicio.ErrorNegocio):
+                fuentes.agregar(malo)
+        self.assertEqual(fuentes.dominios(), ["kantar.com", "warc.com"])
+        fuentes.quitar("kantar.com")
+        with self.assertRaises(servicio.ErrorNegocio):
+            fuentes.quitar("warc.com")  # no se puede quedar sin fuentes
+        self.assertEqual(fuentes.restaurar(), len(fuentes.recomendadas()) - 1)
+        self.assertIn("warc.com", fuentes.listar())
+
+    def test_favoritos(self):
+        f = correos.agregar_favorito(" Luis@RCFarias.com ", "Luis Alfonso")
+        self.assertEqual(f["email"], "luis@rcfarias.com")
+        with self.assertRaises(servicio.ErrorNegocio):
+            correos.agregar_favorito("luis@rcfarias.com")
+        with self.assertRaises(servicio.ErrorNegocio):
+            correos.agregar_favorito("sin-arroba")
+        self.assertEqual(correos.separar_correos("a@x.co, b@y.com;  c@z.org"), ["a@x.co", "b@y.com", "c@z.org"])
+        correos.borrar_favorito(f["id"])
+        self.assertEqual(correos.listar_favoritos(), [])
+
+    def test_enviar_pptx(self):
+        mes = self._mes_aprobado()
+        enviados = []
+        with mock.patch.object(correos, "enviar", side_effect=lambda *a: enviados.append(a)):
+            r = servicio.enviar_pptx(mes, ["Luis@rcfarias.com", "luis@rcfarias.com", "otro@x.co"], "Para publicar",
+                                     guardar_favoritos=True)
+        self.assertEqual(r, ["luis@rcfarias.com", "otro@x.co"])
+        destinatarios, asunto, cuerpo, adjunto, nombre = enviados[0]
+        self.assertIn("Noviembre 2026", asunto)
+        self.assertIn("Para publicar", cuerpo)
+        self.assertTrue(adjunto.startswith(b"PK"))
+        self.assertEqual(nombre, "RC_Farias_Instagram_2026-11.pptx")
+        self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "entregado")
+        self.assertEqual([f["email"] for f in correos.listar_favoritos()], ["luis@rcfarias.com", "otro@x.co"])
+
+    def test_enviar_fallido_no_marca_entregado(self):
+        mes = self._mes_aprobado()
+        with mock.patch.object(correos, "enviar", side_effect=servicio.ErrorNegocio("SMTP caído")):
+            with self.assertRaises(servicio.ErrorNegocio):
+                servicio.enviar_pptx(mes, ["a@x.co"])
+        self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "aprobado")
+
+    def test_smtp_no_configurado(self):
+        with mock.patch.dict("os.environ", {"SMTP_USER": "", "SMTP_PASSWORD": ""}):
+            with self.assertRaises(servicio.ErrorNegocio) as ctx:
+                correos.enviar(["a@x.co"], "a", "b", b"x", "f.pptx")
+        self.assertIn("SMTP_USER", str(ctx.exception))
+
+    def test_borrar_piezas_del_repositorio(self):
+        mes = self._mes_aprobado()
+        ids = [p["id"] for p in servicio.estado_mes(mes)["piezas"]]
+        servicio.comentar  # (los comentarios/versiones se borran en cascada)
+        self.assertEqual(servicio.borrar_piezas(ids[:2]), 2)
+        self.assertEqual(len(servicio.estado_mes(mes)["piezas"]), 2)
+        self.assertEqual(len([v for v in self.bd.tablas["versiones_pieza"] if v["pieza_id"] in ids[:2]]), 0)
+        servicio.borrar_piezas(ids[2:])
+        self.assertIsNone(servicio.obtener_mes(mes))  # mes vacío → se borra
+        with self.assertRaises(servicio.ErrorNegocio):
+            servicio.borrar_piezas([])
+
+    def test_no_se_borra_un_mes_en_revision(self):
+        mes = date(2026, 12, 1)
+        servicio.iniciar_mes(mes)
+        pieza = servicio.estado_mes(mes)["piezas"][0]["id"]
+        servicio.generar_pieza(pieza)
+        with self.assertRaises(servicio.ErrorNegocio):
+            servicio.borrar_piezas([pieza])
 
     def test_fecha_y_comentarios(self):
         mes = date(2026, 11, 1)

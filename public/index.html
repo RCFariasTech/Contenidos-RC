@@ -30,6 +30,7 @@
       <nav class="pestanas" aria-label="Secciones">
         <button id="tab-propuestas" class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
         <button id="tab-repositorio" class="pestana" type="button">Repositorio</button>
+        <button id="tab-configuracion" class="pestana" type="button">Configuración</button>
       </nav>
       <p id="aviso-global" class="aviso" role="status" hidden></p>
 
@@ -45,6 +46,8 @@
           <button id="btn-ajustes" class="btn btn--primario" type="button" disabled>Aplicar ajustes</button>
           <button id="btn-pptx" class="btn btn--secundario" type="button" disabled
                   title="Se habilita cuando las 4 piezas están aprobadas">Descargar PowerPoint</button>
+          <button id="btn-enviar" class="btn btn--secundario" type="button" disabled
+                  title="Se habilita cuando las 4 piezas están aprobadas">Enviar por correo</button>
         </div>
       </div>
 
@@ -72,10 +75,15 @@
             <input id="filtro-texto" type="search" placeholder="Tema o tendencia">
           </label>
         </form>
+        <div class="acciones-repo">
+          <button id="btn-borrar-repo" class="btn btn--peligro" type="button" disabled>Borrar seleccionados</button>
+          <span class="ayuda">Marca los contenidos que quieras borrar. Un tema borrado se puede volver a proponer.</span>
+        </div>
         <div class="tabla-contenedor">
           <table class="tabla-repo">
             <thead>
               <tr>
+                <th scope="col" class="col-check"><input id="repo-todos" type="checkbox" aria-label="Seleccionar todos"></th>
                 <th scope="col">Mes</th><th scope="col">Publicación</th><th scope="col">Formato</th>
                 <th scope="col">Tema</th><th scope="col">Tipo · Pilar</th>
                 <th scope="col">Creada</th><th scope="col">Aprobada</th><th scope="col">Entregada</th>
@@ -86,7 +94,67 @@
         </div>
         <div id="detalle-repo" class="detalle-repo" hidden></div>
       </div>
+
+      <div id="seccion-configuracion" hidden>
+        <div class="barra-mes"><div><h1>Configuración</h1>
+          <p class="barra-mes__resumen">Fuentes de investigación y correos para el envío del PowerPoint.</p></div></div>
+
+        <section class="tarjeta config-bloque" aria-labelledby="h-fuentes">
+          <h2 id="h-fuentes">Fuentes confiables</h2>
+          <p class="ayuda">La búsqueda web solo consulta estos sitios, y el sistema rechaza cualquier fuente que no esté aquí.
+            Los cambios aplican a las piezas que generes o ajustes desde ahora.</p>
+          <form id="form-fuente" class="form-linea">
+            <label for="nueva-fuente" class="sr-only">Dominio</label>
+            <input id="nueva-fuente" type="text" placeholder="Ej.: kantar.com o https://www.kantar.com" autocomplete="off" required>
+            <button class="btn btn--primario" type="submit">Agregar</button>
+          </form>
+          <div class="form-linea form-linea--filtro">
+            <label for="buscar-fuente" class="sr-only">Buscar fuente</label>
+            <input id="buscar-fuente" type="search" placeholder="Buscar en la lista">
+            <button id="btn-restaurar" class="btn btn--secundario" type="button"
+                    title="Agrega las fuentes recomendadas que hayas quitado">Restaurar recomendadas</button>
+          </div>
+          <p id="resumen-fuentes" class="ayuda" role="status"></p>
+          <ul id="lista-fuentes" class="chips"></ul>
+        </section>
+
+        <section class="tarjeta config-bloque" aria-labelledby="h-favoritos">
+          <h2 id="h-favoritos">Correos favoritos</h2>
+          <p class="ayuda">Aparecen para seleccionarlos al enviar el PowerPoint.</p>
+          <p id="estado-correo" class="alerta alerta--aviso" hidden></p>
+          <form id="form-favorito" class="form-linea">
+            <label for="nuevo-correo" class="sr-only">Correo</label>
+            <input id="nuevo-correo" type="email" placeholder="correo@empresa.com" autocomplete="off" required>
+            <label for="nuevo-nombre" class="sr-only">Nombre</label>
+            <input id="nuevo-nombre" type="text" placeholder="Nombre (opcional)" maxlength="100" autocomplete="off">
+            <button class="btn btn--primario" type="submit">Agregar</button>
+          </form>
+          <ul id="lista-favoritos" class="lista-favoritos"></ul>
+        </section>
+        <p id="mensaje-config" class="mensaje" role="status"></p>
+      </div>
     </section>
+
+    <dialog id="dialogo-envio" class="dialogo" aria-labelledby="titulo-envio">
+      <form id="form-envio" method="dialog">
+        <h2 id="titulo-envio">Enviar PowerPoint por correo</h2>
+        <p id="resumen-envio" class="ayuda"></p>
+        <fieldset class="envio-favoritos">
+          <legend>Favoritos</legend>
+          <div id="envio-favoritos"></div>
+        </fieldset>
+        <label for="envio-otros">Otros correos <span class="ayuda">(separados por coma)</span></label>
+        <input id="envio-otros" type="text" placeholder="nombre@empresa.com, otro@empresa.com" autocomplete="off">
+        <label class="check-linea"><input id="envio-guardar" type="checkbox"> Guardar los correos nuevos como favoritos</label>
+        <label for="envio-mensaje">Mensaje <span class="ayuda">(opcional)</span></label>
+        <textarea id="envio-mensaje" rows="3" maxlength="1000"></textarea>
+        <p id="error-envio" class="mensaje mensaje--error" role="alert"></p>
+        <div class="dialogo__acciones">
+          <button id="envio-cancelar" class="btn btn--secundario" type="button">Cancelar</button>
+          <button id="envio-enviar" class="btn btn--primario" type="submit">Enviar</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 
   <script src="/app.js"></script>

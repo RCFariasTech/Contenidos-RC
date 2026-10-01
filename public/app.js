@@ -142,6 +142,7 @@ function renderBarra() {
   botonPptx.disabled = !listo;
   botonPptx.classList.toggle("btn--primario", Boolean(listo));
   botonPptx.classList.toggle("btn--secundario", !listo);
+  $("btn-enviar").disabled = !listo;
   botonPptx.title = listo ? "Descarga el PowerPoint para el equipo de publicación" : "Se habilita cuando las 4 piezas están aprobadas";
 }
 
@@ -443,7 +444,7 @@ $("btn-pptx").addEventListener("click", () => descargarPptx());
 
 // ---------- repositorio ----------
 
-const repo = { piezas: [], cargado: false, seleccion: null, versiones: [], version: null };
+const repo = { piezas: [], cargado: false, seleccion: null, versiones: [], version: null, marcadas: new Set() };
 const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 function fechaCorta(iso) {
@@ -484,8 +485,13 @@ function renderRepo() {
     + (filas.length !== repo.piezas.length ? ` · mostrando ${filas.length}` : "");
 
   const cuerpo = $("cuerpo-repo");
+  repo.marcadas = new Set([...repo.marcadas].filter((id) => repo.piezas.some((p) => p.id === id)));
+  $("btn-borrar-repo").disabled = repo.marcadas.size === 0;
+  $("btn-borrar-repo").textContent = repo.marcadas.size ? `Borrar seleccionados (${repo.marcadas.size})` : "Borrar seleccionados";
+  const todos = $("repo-todos");
+  todos.checked = filas.length > 0 && filas.every((p) => repo.marcadas.has(p.id));
   if (!filas.length) {
-    cuerpo.replaceChildren(el("tr", {}, el("td", { colspan: "8", clase: "vacio" }, "No hay contenidos con esos filtros.")));
+    cuerpo.replaceChildren(el("tr", {}, el("td", { colspan: "9", clase: "vacio" }, "No hay contenidos con esos filtros.")));
     return;
   }
   cuerpo.replaceChildren(...filas.map((p) => {
@@ -494,6 +500,11 @@ function renderRepo() {
       tabindex: "0", "aria-selected": repo.seleccion === p.id ? "true" : "false",
       onclick: abrir, onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); abrir(); } },
     },
+    el("td", { clase: "col-check", onclick: (ev) => ev.stopPropagation(), onkeydown: (ev) => ev.stopPropagation() },
+      el("input", {
+        type: "checkbox", checked: repo.marcadas.has(p.id), "aria-label": `Seleccionar ${p.tema}`,
+        onchange: (ev) => { if (ev.target.checked) repo.marcadas.add(p.id); else repo.marcadas.delete(p.id); renderRepo(); },
+      })),
     el("td", { clase: "tenue" }, p.historico ? "Histórico" : nombreMes(p.mes_objetivo)),
     el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.fecha_publicacion)),
     el("td", {}, p.historico ? "—" : el("span", { clase: `etiqueta etiqueta--${p.formato.toLowerCase()}` }, p.formato)),
@@ -544,6 +555,10 @@ function renderDetalle() {
       clase: "btn btn--primario", type: "button",
       onclick: () => descargarPptx(p.mes_objetivo),
     }, `Descargar PowerPoint de ${nombreMes(p.mes_objetivo)}`) : null,
+    !p.historico && ["aprobado", "entregado"].includes(p.estado_mes) ? el("button", {
+      clase: "btn btn--secundario", type: "button", onclick: () => abrirEnvio(p.mes_objetivo),
+    }, "Enviar por correo") : null,
+    el("button", { clase: "btn btn--peligro", type: "button", onclick: () => borrarPiezas([p.id]) }, "Borrar"),
     el("button", { clase: "btn btn--secundario", type: "button", onclick: () => { repo.seleccion = null; renderDetalle(); renderRepo(); } }, "Cerrar"));
   nodo.replaceChildren(el("article", { clase: "pieza" },
     el("header", { clase: "pieza__cabecera" },
@@ -573,22 +588,173 @@ async function abrirDetalle(id) {
   }
 }
 
+async function borrarPiezas(ids) {
+  const temas = ids.map((id) => repo.piezas.find((p) => p.id === id)?.tema).filter(Boolean);
+  const detalle = temas.length <= 3 ? `\n\n• ${temas.join("\n• ")}` : `\n\n(${temas.length} contenidos)`;
+  if (!window.confirm(`¿Borrar ${ids.length === 1 ? "este contenido" : `estos ${ids.length} contenidos`} del repositorio?`
+    + `${detalle}\n\nSe borran también sus versiones y comentarios, y el tema podrá volver a proponerse. No se puede deshacer.`)) return;
+  try {
+    await api("borrar-piezas", { metodo: "POST", cuerpo: { ids } });
+    repo.marcadas.clear();
+    if (ids.includes(repo.seleccion)) repo.seleccion = null;
+    await cargarRepositorio();
+    renderDetalle();
+    aviso(`Se borró ${ids.length === 1 ? "1 contenido" : `${ids.length} contenidos`} del repositorio.`);
+  } catch (e) {
+    aviso(`No se pudo borrar: ${e.message}`);
+  }
+}
+
+$("btn-borrar-repo").addEventListener("click", () => borrarPiezas([...repo.marcadas]));
+$("repo-todos").addEventListener("change", (ev) => {
+  for (const p of filtrarRepo()) { if (ev.target.checked) repo.marcadas.add(p.id); else repo.marcadas.delete(p.id); }
+  renderRepo();
+});
+
 ["filtro-mes", "filtro-formato", "filtro-pilar", "filtro-texto"].forEach((id) => $(id).addEventListener("input", renderRepo));
 $("filtros-repo").addEventListener("submit", (ev) => ev.preventDefault());
 
 function mostrarSeccion(nombre) {
-  const esRepo = nombre === "repositorio";
-  $("seccion-propuestas").hidden = esRepo;
+  const esRepo = nombre === "repositorio", esConfig = nombre === "configuracion";
+  $("seccion-propuestas").hidden = esRepo || esConfig;
   $("seccion-repositorio").hidden = !esRepo;
-  for (const [id, activa] of [["tab-propuestas", !esRepo], ["tab-repositorio", esRepo]]) {
+  $("seccion-configuracion").hidden = !esConfig;
+  for (const [id, activa] of [["tab-propuestas", nombre === "propuestas"], ["tab-repositorio", esRepo], ["tab-configuracion", esConfig]]) {
     $(id).classList.toggle("pestana--activa", activa);
     if (activa) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
   }
   if (esRepo) cargarRepositorio();
+  if (esConfig) cargarConfiguracion();
 }
 
 $("tab-propuestas").addEventListener("click", () => mostrarSeccion("propuestas"));
 $("tab-repositorio").addEventListener("click", () => mostrarSeccion("repositorio"));
+$("tab-configuracion").addEventListener("click", () => mostrarSeccion("configuracion"));
+
+// ---------- configuración: fuentes y correos favoritos ----------
+
+const cfg = { fuentes: [], recomendadas: [], favoritos: [], correoConfigurado: false, cargada: false };
+
+function msgConfig(texto, error = false) {
+  const nodo = $("mensaje-config");
+  nodo.textContent = texto || "";
+  nodo.className = `mensaje${error ? " mensaje--error" : ""}`;
+}
+
+function renderConfig() {
+  const filtro = $("buscar-fuente").value.trim().toLowerCase();
+  const visibles = cfg.fuentes.filter((d) => d.includes(filtro));
+  $("resumen-fuentes").textContent = `${cfg.fuentes.length} fuentes`
+    + (filtro ? ` · mostrando ${visibles.length}` : "")
+    + (cfg.fuentes.length <= 1 ? " · debe quedar al menos una" : "");
+  $("lista-fuentes").replaceChildren(...visibles.map((d) => el("li", { clase: "chip" }, d,
+    el("button", { type: "button", "aria-label": `Quitar ${d}`, title: "Quitar", disabled: cfg.fuentes.length <= 1,
+      onclick: () => cambiarConfig(() => api(`fuentes?dominio=${encodeURIComponent(d)}`, { metodo: "DELETE" }), `Se quitó ${d}.`) }, "×"))));
+  $("lista-favoritos").replaceChildren(...(cfg.favoritos.length ? cfg.favoritos.map((f) => el("li", { clase: "favorito" },
+    el("div", {}, f.nombre ? el("strong", {}, f.nombre) : null, el("small", {}, f.email)),
+    el("button", { clase: "btn btn--peligro", type: "button", "aria-label": `Quitar ${f.email}`,
+      onclick: () => cambiarConfig(() => api(`favoritos?id=${f.id}`, { metodo: "DELETE" }), `Se quitó ${f.email}.`) }, "Quitar")))
+    : [el("li", { clase: "ayuda" }, "Aún no tienes correos favoritos.")]));
+  const aviso = $("estado-correo");
+  aviso.hidden = cfg.correoConfigurado;
+  aviso.textContent = "El envío por correo aún no está activado: falta configurar SMTP_USER y SMTP_PASSWORD en Vercel (ver README).";
+}
+
+async function cargarConfiguracion() {
+  try {
+    const d = await api("configuracion");
+    Object.assign(cfg, { fuentes: d.fuentes, recomendadas: d.recomendadas, favoritos: d.favoritos,
+      correoConfigurado: d.correo_configurado, cargada: true });
+    renderConfig();
+  } catch (e) {
+    msgConfig(`No se pudo cargar la configuración: ${e.message}`, true);
+  }
+}
+
+async function cambiarConfig(accion, exito) {
+  msgConfig("");
+  try {
+    await accion();
+    await cargarConfiguracion();
+    msgConfig(exito);
+  } catch (e) {
+    msgConfig(e.message, true);
+  }
+}
+
+$("form-fuente").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const dominio = $("nueva-fuente").value;
+  cambiarConfig(async () => {
+    await api("fuentes", { metodo: "POST", cuerpo: { dominio } });
+    $("nueva-fuente").value = "";
+  }, "Fuente agregada.");
+});
+$("buscar-fuente").addEventListener("input", renderConfig);
+$("btn-restaurar").addEventListener("click", async () => {
+  msgConfig("");
+  try {
+    const r = await api("fuentes-restaurar", { metodo: "POST", cuerpo: {} });
+    await cargarConfiguracion();
+    msgConfig(r.agregadas ? `Se restauraron ${r.agregadas} fuentes recomendadas.` : "Ya tienes todas las recomendadas.");
+  } catch (e) { msgConfig(e.message, true); }
+});
+$("form-favorito").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const email = $("nuevo-correo").value, nombre = $("nuevo-nombre").value;
+  cambiarConfig(async () => {
+    await api("favoritos", { metodo: "POST", cuerpo: { email, nombre } });
+    $("nuevo-correo").value = "";
+    $("nuevo-nombre").value = "";
+  }, "Correo agregado a favoritos.");
+});
+
+// ---------- envío del PowerPoint por correo ----------
+
+let mesEnvio = null;
+
+async function abrirEnvio(mesIso) {
+  mesEnvio = (mesIso || estado.mesObjetivo).slice(0, 7);
+  if (!cfg.cargada) await cargarConfiguracion();
+  $("resumen-envio").textContent = `Se enviará el PowerPoint de ${nombreMes(`${mesEnvio}-01`)} como adjunto.`
+    + (cfg.correoConfigurado ? "" : " Atención: el envío aún no está activado en el servidor.");
+  $("envio-favoritos").replaceChildren(...(cfg.favoritos.length ? cfg.favoritos.map((f, i) => el("label", { clase: "opcion-favorito" },
+    el("input", { type: "checkbox", name: "favorito", value: f.email }),
+    f.nombre ? `${f.nombre} · ${f.email}` : f.email))
+    : [el("p", { clase: "ayuda" }, "Aún no tienes favoritos: agrégalos en Configuración o escribe los correos abajo.")]));
+  $("envio-otros").value = "";
+  $("envio-mensaje").value = "";
+  $("envio-guardar").checked = false;
+  $("error-envio").textContent = "";
+  $("envio-enviar").disabled = false;
+  $("dialogo-envio").showModal();
+}
+
+$("form-envio").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const favoritos = [...document.querySelectorAll('#envio-favoritos input[name="favorito"]:checked')].map((i) => i.value);
+  const otros = $("envio-otros").value.trim();
+  if (!favoritos.length && !otros) { $("error-envio").textContent = "Elige al menos un destinatario."; return; }
+  $("envio-enviar").disabled = true;
+  $("error-envio").textContent = "";
+  $("envio-enviar").textContent = "Enviando…";
+  try {
+    const r = await api("enviar-pptx", { metodo: "POST", cuerpo: {
+      mes: mesEnvio, favoritos, otros, mensaje: $("envio-mensaje").value, guardar_favoritos: $("envio-guardar").checked } });
+    $("dialogo-envio").close();
+    aviso(`PowerPoint enviado a ${r.enviados.join(", ")}.`);
+    cfg.cargada = false;
+    await cargarMes();
+    if (!$("seccion-repositorio").hidden) await cargarRepositorio();
+  } catch (e) {
+    $("error-envio").textContent = e.message;
+  } finally {
+    $("envio-enviar").disabled = false;
+    $("envio-enviar").textContent = "Enviar";
+  }
+});
+$("envio-cancelar").addEventListener("click", () => $("dialogo-envio").close());
+$("btn-enviar").addEventListener("click", () => abrirEnvio());
 
 // ---------- login ----------
 
