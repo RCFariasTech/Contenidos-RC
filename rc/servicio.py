@@ -156,7 +156,7 @@ def _actualizar_estado_mes(mes_id: int) -> None:
     piezas = db.seleccionar("piezas", select="estado,contenido", mes_id=f"eq.{mes_id}")
     mes = db.seleccionar("meses", select="estado", id=f"eq.{mes_id}")[0]
     if piezas and all(p["estado"] == "aprobada" for p in piezas):
-        if mes["estado"] not in ("aprobado", "entregado"):
+        if mes["estado"] not in ("aprobado", "entregado"):  # re-aprobar tras un cambio vuelve a "aprobado"
             db.actualizar("meses", {"estado": "aprobado", "aprobado_en": _ahora()}, id=f"eq.{mes_id}")
     elif piezas and all(p["contenido"] for p in piezas):
         if mes["estado"] != "en_revision":
@@ -261,3 +261,21 @@ def cambiar_fecha(pieza_id: int, fecha: str) -> dict:
     if not filas:
         raise ErrorNegocio("No se puede cambiar la fecha mientras la pieza se procesa.")
     return filas[0]
+
+
+# ---------- exportación ----------
+
+def exportar_pptx(mes: date) -> tuple[str, bytes]:
+    """PowerPoint del mes aprobado. La primera descarga marca el mes como entregado."""
+    from rc import pptx_export  # import diferido: python-pptx solo se carga al exportar
+    fila_mes = obtener_mes(mes)
+    if not fila_mes:
+        raise ErrorNegocio("Ese mes no tiene propuestas.")
+    if fila_mes["estado"] not in ("aprobado", "entregado"):
+        raise ErrorNegocio("El PowerPoint se habilita cuando las 4 piezas están aprobadas.")
+    piezas = db.seleccionar("piezas", select="*", mes_id=f"eq.{fila_mes['id']}", order="semana")
+    contenido = pptx_export.generar_pptx(fila_mes["mes_objetivo"], piezas, fila_mes.get("aprobado_en"))
+    if fila_mes["estado"] == "aprobado":
+        db.actualizar("meses", {"estado": "entregado", "entregado_en": _ahora()},
+                      id=f"eq.{fila_mes['id']}", estado="eq.aprobado")
+    return pptx_export.nombre_archivo(fila_mes["mes_objetivo"]), contenido

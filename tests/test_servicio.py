@@ -169,6 +169,22 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(estado["mes"]["estado"], "en_revision")
         self.assertEqual(estado["piezas"][0]["estado"], "generada")
 
+    def test_exportar_marca_entregado(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        with self.assertRaises(servicio.ErrorNegocio):
+            servicio.exportar_pptx(mes)  # aún no aprobado
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+            servicio.aprobar(p["id"], True)
+        nombre, contenido = servicio.exportar_pptx(mes)
+        self.assertEqual(nombre, "RC_Farias_Instagram_2026-11.pptx")
+        self.assertTrue(contenido.startswith(b"PK"))
+        fila = servicio.estado_mes(mes)["mes"]
+        self.assertEqual(fila["estado"], "entregado")
+        self.assertIsNotNone(fila["entregado_en"])
+        servicio.exportar_pptx(mes)  # se puede volver a descargar
+
     def test_fecha_y_comentarios(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

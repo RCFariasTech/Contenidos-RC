@@ -26,6 +26,13 @@ MAX_CUERPO = 64 * 1024
 PRESUPUESTO_CRON_S = 100  # el cron solo arranca otra pieza si lleva menos de esto (maxDuration = 300)
 
 
+class Archivo:
+    """Respuesta binaria (descarga) en lugar de JSON."""
+
+    def __init__(self, nombre: str, contenido: bytes, tipo: str):
+        self.nombre, self.contenido, self.tipo = nombre, contenido, tipo
+
+
 class ErrorCliente(Exception):
     def __init__(self, estado: int, mensaje: str):
         super().__init__(mensaje)
@@ -119,6 +126,13 @@ def ruta_fecha(req):
     return 200, _servicio().cambiar_fecha(_entero(req["cuerpo"], "pieza_id"), req["cuerpo"].get("fecha"))
 
 
+def ruta_exportar_pptx(req):
+    _dueno(req)
+    nombre, contenido = _servicio().exportar_pptx(_mes_param(req["query"].get("mes")))
+    return 200, Archivo(nombre, contenido,
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
+
 def ruta_diario(req):
     """Cron diario: mantiene activo Supabase y, desde el día 15, prepara y genera el mes siguiente."""
     if not auth.es_cron_valido(req["authorization"]):
@@ -171,6 +185,7 @@ RUTAS = {
     ("DELETE", "comentarios"): ruta_borrar_comentario,
     ("POST", "aprobar"): ruta_aprobar,
     ("POST", "fecha"): ruta_fecha,
+    ("GET", "exportar-pptx"): ruta_exportar_pptx,
     ("GET", "diario"): ruta_diario,
     ("GET", "diagnostico"): ruta_diagnostico,
 }
@@ -216,7 +231,19 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 (nombre exigido por Vercel)
             if estado is None:
                 log.error("Error en /api/%s: %s\n%s", ruta, e, traceback.format_exc())
                 estado, datos = 500, {"error": f"{type(e).__name__}: {e}"}
-        self._responder_json(estado, datos)
+        if isinstance(datos, Archivo):
+            self._responder_archivo(datos)
+        else:
+            self._responder_json(estado, datos)
+
+    def _responder_archivo(self, archivo: "Archivo"):
+        self.send_response(200)
+        self.send_header("Content-Type", archivo.tipo)
+        self.send_header("Content-Disposition", f'attachment; filename="{archivo.nombre}"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(archivo.contenido)))
+        self.end_headers()
+        self.wfile.write(archivo.contenido)
 
     def _responder_json(self, estado: int, datos):
         cuerpo = json.dumps(datos, ensure_ascii=False, default=str).encode("utf-8")

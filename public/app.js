@@ -137,6 +137,12 @@ function renderBarra() {
   const botonAjustes = $("btn-ajustes");
   botonAjustes.textContent = conComentarios ? `Aplicar ajustes (${conComentarios})` : "Aplicar ajustes";
   botonAjustes.disabled = !conComentarios || estado.ocupadas.size > 0;
+  const listo = mes && ["aprobado", "entregado"].includes(mes.estado);
+  const botonPptx = $("btn-pptx");
+  botonPptx.disabled = !listo;
+  botonPptx.classList.toggle("btn--primario", Boolean(listo));
+  botonPptx.classList.toggle("btn--secundario", !listo);
+  botonPptx.title = listo ? "Descarga el PowerPoint para el equipo de publicación" : "Se habilita cuando las 4 piezas están aprobadas";
 }
 
 function renderInvestigacion(inv) {
@@ -395,6 +401,42 @@ $("btn-ajustes").addEventListener("click", async () => {
   }
   aviso("");
 });
+
+async function descargarPptx() {
+  const boton = $("btn-pptx");
+  boton.disabled = true;
+  aviso("Generando el PowerPoint…");
+  try {
+    let r = await fetch(`/api/exportar-pptx?mes=${estado.mesObjetivo.slice(0, 7)}`, {
+      headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
+    });
+    if (r.status === 401 && Sesion.leer()?.refresh_token) {
+      await authSupabase("refresh_token", { refresh_token: Sesion.leer().refresh_token });
+      r = await fetch(`/api/exportar-pptx?mes=${estado.mesObjetivo.slice(0, 7)}`, {
+        headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
+      });
+    }
+    if (!r.ok) {
+      const datos = await r.json().catch(() => ({}));
+      throw new Error(datos.error || `Error ${r.status}`);
+    }
+    const nombre = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "contenido.pptx";
+    const url = URL.createObjectURL(await r.blob());
+    const enlace = el("a", { href: url, download: nombre });
+    document.body.append(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    aviso("");
+    await cargarMes();
+  } catch (e) {
+    aviso(`No se pudo generar el PowerPoint: ${e.message}`);
+  } finally {
+    renderBarra();
+  }
+}
+
+$("btn-pptx").addEventListener("click", descargarPptx);
 
 // ---------- login ----------
 
