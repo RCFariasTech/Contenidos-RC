@@ -113,6 +113,12 @@ class TestValidador(unittest.TestCase):
         self.assertEqual(len(r["advertencias"]), 2)
         self.assertEqual(r["errores"], [])
 
+    def test_fechas_de_fuente_en_espanol(self):
+        for texto in ("24 de octubre de 2025", "Octubre de 2025", "2025-10", "sin fecha visible (nota)"):
+            inv = dict(carrusel()["investigacion"], fuente_fecha=texto)
+            r = self._validar(carrusel(investigacion=inv))
+            self.assertFalse(any("formato reconocible" in a for a in r["advertencias"]), texto)
+
     def test_reel_limites_y_hashtags(self):
         reel = {k: v for k, v in carrusel().items() if not k.startswith("slide_")}
         reel.update(formato="Reel", escena_1_gancho="Tu góndola ya es medio",

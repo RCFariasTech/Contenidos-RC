@@ -115,6 +115,9 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
                        historial: list[dict], hermanas: list[dict]) -> tuple[dict, dict, dict]:
     a = ajustes()
     contenido, uso = resultado["pieza"], dict(resultado["uso"])
+    # Métricas de la llamada principal (se acumulan en uso_tokens para medir costo y tiempos)
+    uso["duracion_s"] = resultado.get("duracion_s", 0)
+    uso["llamadas_sin_formato_estructurado"] = 0 if resultado.get("formato_estructurado", True) else 1
     previas = [h["contenido"] for h in historial]
     otras = [h["contenido"] for h in hermanas]
     hoy = planificador.hoy_bogota()
@@ -125,6 +128,8 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
         reparado = generador.reparar(_slot(pieza_fila), contenido, informe["reparables"])
         for k, v in reparado["uso"].items():
             uso[k] = uso.get(k, 0) + v
+        uso["duracion_s"] = uso.get("duracion_s", 0) + reparado.get("duracion_s", 0)
+        uso["reparaciones"] = uso.get("reparaciones", 0) + 1
         contenido = reparado["pieza"]
         informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy)
     return contenido, informe, uso

@@ -21,7 +21,8 @@ INVESTIGACIÓN (obligatoria):
 - Usa la herramienta de búsqueda web. No respondas de memoria.
 - Identifica 1 tendencia o estrategia ACTUAL y REAL sobre el pilar indicado.
 - Resúmela en 2-3 líneas con datos verificables (cifra, estudio o caso concreto).
-- Reporta la fuente exacta: título, URL y fecha de publicación (o "sin fecha visible").
+- Reporta la fuente exacta: título, URL y fecha de publicación.
+  fuente_fecha va SOLO en formato AAAA-MM-DD (o AAAA-MM si no hay día), o exactamente "sin fecha visible". Sin notas adicionales.
 - Prefiere fuentes primarias o de industria reconocidas y publicadas en los últimos 18 meses.
 - Si no hay evidencia sólida, elige otra tendencia. Nunca inventes datos ni URLs.
 

@@ -55,14 +55,24 @@ def _url_normalizada(url: str) -> str:
     return (url or "").split("?")[0].split("#")[0].rstrip("/").lower()
 
 
+MESES_ES = {m: i for i, m in enumerate(
+    "enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre".split(), 1)}
+MESES_ES["setiembre"] = 9
+
+
 def _fecha_fuente(texto: str) -> date | None:
-    m = re.match(r"^\s*(\d{4})-(\d{2})(?:-(\d{2}))?", texto or "")
-    if not m:
-        return None
+    """Acepta AAAA-MM-DD, AAAA-MM y fechas en español ("24 de octubre de 2025", "octubre de 2025")."""
+    texto = _normalizar(texto or "")
     try:
-        return date(int(m.group(1)), int(m.group(2)), int(m.group(3) or 1))
+        m = re.search(r"(\d{4})-(\d{1,2})(?:-(\d{1,2}))?", texto)
+        if m:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3) or 1))
+        m = re.search(r"(?:(\d{1,2}) de )?([a-z]+) (?:de |del )?(\d{4})", texto)
+        if m and m.group(2) in MESES_ES:
+            return date(int(m.group(3)), MESES_ES[m.group(2)], int(m.group(1) or 1))
     except ValueError:
         return None
+    return None
 
 
 def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[dict],
@@ -150,7 +160,7 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
     # V11 / V12: advertencias
     fecha = _fecha_fuente(inv.get("fuente_fecha", ""))
     if fecha is None:
-        if (inv.get("fuente_fecha") or "").strip().lower() != "sin fecha visible":
+        if not _normalizar(inv.get("fuente_fecha", "")).strip().startswith("sin fecha visible"):
             advertencias.append("La fecha de la fuente no tiene un formato reconocible.")
         else:
             advertencias.append("La fuente no tiene fecha visible.")

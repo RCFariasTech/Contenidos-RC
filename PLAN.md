@@ -782,6 +782,8 @@ Cada fase se cierra con su criterio cumplido **antes** de pasar a la siguiente.
 
 ## 13. Costos y riesgos de plataforma (estimación; verificar antes de producción)
 
+> **Medición real (01/10/2026, mes de noviembre):** 4 piezas generadas y 3 ajustes con `claude-opus-5` (effort `medium`) consumieron 204.874 tokens de entrada, 14.525 de salida y 10 búsquedas web, es decir **≈ USD 1,49** a precios de lista. Las 4 piezas pasaron todas las reglas (V1-V10) y sus 4 fuentes estaban entre los resultados de búsqueda. La entrada la dominan los resultados de búsqueda (38-64 mil tokens por pieza). Las palancas para bajar costo, si hiciera falta, son `web_search_max_uses_generar` 3 → 2 o `claude-sonnet-5`; esa decisión es de RC.
+
 | Concepto | Estimación mensual |
 |---|---|
 | Claude, 4 generaciones (~15 mil tokens de entrada y ~3 mil de salida cada una, con `claude-opus-5` a USD 5 y 25 por millón) | ~USD 0,6 |
