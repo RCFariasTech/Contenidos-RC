@@ -95,12 +95,15 @@ class TestTarjetas(unittest.TestCase):
                 y[clave] = pagina.search_for(clave)[0].y0
             self.assertLess(y["ALFATITULAR"], y["OMEGATEXTO"], f"estilo {estilo}: el texto aparece antes que el titular")
 
-    def test_contenido_viejo_no_parte_frases_a_la_mitad(self):
-        tit, texto = tarjetas._separar("El 78% admite que al menos el 10% de su presupuesto se desperdicia por medición débil.")
-        self.assertEqual((tit.startswith("El 78%"), texto), (True, ""))
+    def test_contenido_viejo_usa_la_primera_oracion_como_titular(self):
+        tit, texto = tarjetas._separar("El 78% admite que al menos el 10% de su presupuesto se desperdicia por medición débil. "
+                                       "En BTL, impactos y muestras no responden al comité financiero.")
+        self.assertEqual(tit, "El 78% admite que al menos el 10% de su presupuesto se desperdicia por medición débil")
+        self.assertTrue(texto.startswith("En BTL"))
         tit, texto = tarjetas._separar("Menos presupuesto perdido: medir cada activación cambia la conversación con finanzas.")
-        self.assertEqual(tit, "Menos presupuesto perdido")
-        self.assertTrue(texto.startswith("medir"))
+        self.assertEqual((tit, texto.startswith("medir")), ("Menos presupuesto perdido", True))
+        tit, texto = tarjetas._separar("Una sola oración sin corte natural que sigue y sigue")
+        self.assertEqual(texto, "")
 
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),

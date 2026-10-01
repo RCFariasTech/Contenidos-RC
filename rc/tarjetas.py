@@ -193,18 +193,13 @@ def estilo4_blanco_lateral(L, d):
 
 
 def estilo5_gris_pildora(L, d):
-    """Gris · píldora coral con el titular (dato) arriba · '+' coral y texto azul marino debajo."""
+    """Gris · titular en negrita arriba · '+' coral y texto azul marino debajo (sin píldora)."""
     c = L.c
     L.fondo("gris_claro")
-    ancho, alto, y0 = W - 2 * M, 300, 190
-    c.setFillColor(L.col["coral"])
-    c.roundRect(M, H - y0 - alto, ancho, alto, 150, stroke=0, fill=1)
-    tam, lineas = ajustar(d["titular"], NEGRITA, ancho - 140, 210, 74, 40, 1.15)
-    L.bloque(d["titular"], NEGRITA, "blanco", M + 70, y0 + (alto - len(lineas) * tam * 1.15) / 2 - 4,
-             ancho - 140, 210, 74, alinear="centro", inter=1.15)
-    y_texto = y0 + alto + 90
-    c.setFillColor(L.col["coral"])
+    u = L.bloque(d["titular"], NEGRITA, "azul_marino", M, 150, W - 2 * M, 520, 84, inter=1.15)
+    y_texto = 150 + u + 90
     cx, cy = M + 115, H - y_texto - 70  # centro del "+"
+    c.setFillColor(L.col["coral"])
     c.rect(cx - 95, cy - 17, 190, 34, stroke=0, fill=1)
     c.rect(cx - 17, cy - 95, 34, 190, stroke=0, fill=1)
     L.bloque(d["texto"], NORMAL, "azul_marino", 330, y_texto, W - 330 - M, H - 90 - y_texto, 60)
@@ -240,7 +235,7 @@ def estilo7_cierre(L, d):
 ESTILOS = {1: estilo1_portada, 2: estilo2_navy_centro, 3: estilo3_coral_partido, 4: estilo4_blanco_lateral,
            5: estilo5_gris_pildora, 6: estilo6_celeste, 7: estilo7_cierre}
 NOMBRES = {1: "Portada", 2: "Azul marino", 3: "Coral partido", 4: "Blanco lateral",
-           5: "Gris con píldora", 6: "Celeste", 7: "Cierre"}
+           5: "Gris con titular", 6: "Celeste", 7: "Cierre"}
 
 
 # ---------- datos de cada tarjeta ----------
@@ -249,14 +244,14 @@ CAMPOS_SLIDE = ("slide_1_gancho", "slide_2", "slide_3", "slide_4", "slide_5_cier
 
 
 def _separar(texto: str) -> tuple[str, str]:
-    """Titular + resto para contenidos viejos sin `diseno`.
+    """Titular + resto para contenidos viejos sin `diseno`: la primera oración (o hasta los dos puntos).
 
-    Solo parte en un límite natural (fin de oración o dos puntos); si no lo hay, todo va como titular,
-    porque partir una frase a la mitad deja un titular sin sentido.
+    Solo corta en un límite natural; si el texto es una sola oración, todo va como titular, porque
+    partir una frase a la mitad deja un titular sin sentido.
     """
     texto = (texto or "").strip()
     partes = re.split(r"(?<=[:.?!])\s+", texto, maxsplit=1)
-    if len(partes) == 2 and 0 < len(partes[0].split()) <= 12:
+    if len(partes) == 2 and 0 < len(partes[0].split()) <= 30:
         return partes[0].rstrip(":."), partes[1]
     return texto, ""
 
