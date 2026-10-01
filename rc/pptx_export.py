@@ -212,7 +212,7 @@ def _ficha(slide, x, y, w, h, pieza, c):
     items += [
         (f"{pieza['tipo']} · {pieza['pilar']}", 10.5, c["azul_marino"], False, None, 10),
         etiqueta("Hashtags"),
-        ("  ".join(contenido.get("hashtags") or []), 12, c["azul_marino"], True, None, 10),
+        ("  ".join(contenido.get("hashtags") or []) or "Sin hashtags (ninguno aportaba alcance)", 12, c["azul_marino"], True, None, 10),
         etiqueta("Fuente"),
         (_recortar(inv.get("tendencia", ""), 220), 10.5, c["azul_marino"], True, None, 3),
         (_recortar(inv.get("fuente_titulo") or url, 120), 10, c["azul_medio"], False,

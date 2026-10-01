@@ -1,0 +1,12 @@
+{
+  "descripcion": "Dominios confiables para la investigación. La búsqueda web solo consulta estos sitios y el validador rechaza fuentes fuera de la lista. Edita este archivo para agregar o quitar dominios (sin https:// ni rutas).",
+  "dominios": [
+    "kantar.com", "nielsen.com", "ipsos.com", "mintel.com", "euromonitor.com", "statista.com", "emarketer.com",
+    "warc.com", "mckinsey.com", "deloitte.com", "gartner.com", "forrester.com", "bcg.com", "bain.com",
+    "pwc.com", "accenture.com", "hbr.org",
+    "thinkwithgoogle.com", "business.google.com", "meta.com", "business.linkedin.com",
+    "iab.com", "iabeurope.eu", "wfanet.org", "ama.org",
+    "adweek.com", "adage.com", "marketingweek.com", "thedrum.com", "campaignlive.com",
+    "canneslions.com", "eventmarketer.com"
+  ]
+}

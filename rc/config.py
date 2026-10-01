@@ -26,6 +26,10 @@ def specs_instagram() -> dict:
     return cargar_json("instagram_specs")
 
 
+def dominios_confiables() -> list[str]:
+    return cargar_json("fuentes")["dominios"]
+
+
 def marca() -> dict:
     return cargar_json("marca")
 

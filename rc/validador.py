@@ -3,6 +3,7 @@
 import re
 import unicodedata
 from datetime import date
+from urllib.parse import urlparse
 
 from rc.esquema import CAMPOS_TEXTO
 
@@ -19,6 +20,7 @@ ETIQUETAS = {
 }
 RE_ANIO = re.compile(r"\b(19|20)\d{2}\b")
 RE_HASHTAG = re.compile(r"^#\w+$")
+RE_RC_SIN_TILDE = re.compile(r"\bRC\s+Farias\b", re.IGNORECASE)
 
 STOPWORDS = set("""
 a al algo ante antes como con contra cual cuando de del desde donde dos el ella ellas ellos en entre era es esa
@@ -75,8 +77,13 @@ def _fecha_fuente(texto: str) -> date | None:
     return None
 
 
+def dominio_permitido(url: str, dominios: list[str]) -> bool:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    return any(host == d or host.endswith("." + d) for d in (x.split("/")[0].lower() for x in dominios))
+
+
 def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[dict],
-            hermanas: list[dict], ajustes: dict, hoy: date) -> dict:
+            hermanas: list[dict], ajustes: dict, hoy: date, dominios: list[str] | None = None) -> dict:
     """Devuelve {"errores": [...], "advertencias": [...], "reparables": [...]}.
 
     "reparables" son los errores que una llamada sin búsqueda web puede corregir.
@@ -101,11 +108,16 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
     # V3
     if formato == "Carrusel":
         cierre = (pieza.get("slide_5_cierre") or "").lower()
-        if "rc farias" not in _normalizar(cierre) or "constellation" not in cierre:
-            errores.append('La tarjeta 5 debe mencionar "RC Farias" y "Constellation".')
+        if "rc farías" not in cierre or "constellation" not in cierre:
+            errores.append('La tarjeta 5 debe mencionar "RC Farías" (con tilde) y "Constellation".')
+
+    textos = [pieza.get(c, "") for c in CAMPOS_TEXTO[formato]] + [pieza.get("caption", "")]
+
+    # Nombre de la agencia siempre con tilde: "RC Farias" sin tilde es un error en cualquier texto
+    if any(RE_RC_SIN_TILDE.search(t or "") for t in textos):
+        errores.append('El nombre debe escribirse "RC Farías" con tilde.')
 
     # V5: años
-    textos = [pieza.get(c, "") for c in CAMPOS_TEXTO[formato]] + [pieza.get("caption", "")]
     if any(RE_ANIO.search(t or "") for t in textos):
         errores.append("Hay años específicos en las tarjetas/escenas o en el caption.")
 
@@ -118,12 +130,9 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
 
     # V7 / V8: hashtags y caption
     hashtags = pieza.get("hashtags") or []
-    minimo, maximo = (3, 3) if formato == "Carrusel" else (3, 5)
-    if not minimo <= len(hashtags) <= maximo:
-        rango = "exactamente 3" if minimo == maximo else f"entre {minimo} y {maximo}"
-        errores.append(f"Debe tener {rango} hashtags (tiene {len(hashtags)}).")
-    if hashtags and hashtags[0] != "#RCFarias":
-        errores.append("El primer hashtag debe ser #RCFarias.")
+    maximo = ajustes.get("hashtags_max", 3)
+    if len(hashtags) > maximo:
+        errores.append(f"Máximo {maximo} hashtags (tiene {len(hashtags)}); solo los que aporten alcance.")
     if len({_normalizar(h) for h in hashtags}) != len(hashtags):
         errores.append("Hay hashtags duplicados.")
     if any(not RE_HASHTAG.match(h) for h in hashtags):
@@ -141,6 +150,8 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
     url = inv.get("fuente_url") or ""
     if not url.startswith("https://"):
         no_reparables.append("La fuente debe ser una URL https.")
+    elif dominios is not None and not dominio_permitido(url, dominios):
+        no_reparables.append("La fuente no es de un dominio confiable de la lista aprobada.")
     elif _url_normalizada(url) not in {_url_normalizada(u) for u in urls_busqueda}:
         no_reparables.append("La fuente no aparece entre los resultados de la búsqueda web (posible URL inventada).")
 

@@ -804,6 +804,11 @@ Los precios de Claude salen de la documentación de Anthropic (caché del 24/06/
 
 ## 14. Decisiones confirmadas y supuestos pendientes
 
+**Reglas generales actualizadas (01/10/2026):**
+- El nombre se escribe siempre **"RC Farías"** con tilde en tarjetas, escenas y caption. Sin tilde es un error que el sistema corrige solo. Esto reemplaza la forma "RC Farias" de las reglas V3 y V5 de la sección 8.5.
+- **Hashtags opcionales, de 0 a 3, y solo si aportan alcance** (nicho concreto o conversación activa). Ya no hay `#RCFarias` obligatorio ni estructura nicho/comunidad. Esto reemplaza V7 de la sección 8.5 y la regla de hashtags de los prompts.
+- **Fuentes solo de dominios confiables**, definidos en `config/fuentes.json`: la búsqueda web se limita a esa lista (`allowed_domains`) y el validador rechaza cualquier fuente fuera de ella. Reemplaza la preferencia "fuentes reconocidas" del prompt.
+
 **Confirmado por RC (25/09/2026):**
 - Carrusel en **4:5 (1080 × 1350)**.
 - **Fecha de publicación elegida por el usuario para cada post**, con una propuesta inicial.

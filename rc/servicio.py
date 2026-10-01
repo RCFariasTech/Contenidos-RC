@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from rc import db, generador, planificador, validador
-from rc.config import ajustes, pilares
+from rc.config import ajustes, dominios_confiables, pilares
 
 log = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
     previas = [h["contenido"] for h in historial]
     otras = [h["contenido"] for h in hermanas]
     hoy = planificador.hoy_bogota()
-    informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy)
+    informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, dominios_confiables())
     for _ in range(a["max_reparaciones"]):
         if not informe["reparables"]:
             break
@@ -131,7 +131,7 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
         uso["duracion_s"] = uso.get("duracion_s", 0) + reparado.get("duracion_s", 0)
         uso["reparaciones"] = uso.get("reparaciones", 0) + 1
         contenido = reparado["pieza"]
-        informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy)
+        informe = validador.validar(pieza_fila["formato"], contenido, urls_validas, previas, otras, a, hoy, dominios_confiables())
     return contenido, informe, uso
 
 

@@ -29,6 +29,8 @@ class TestPrompts(unittest.TestCase):
         self.assertIn("📲 Síguenos para más ideas que conectan data, experiencia y negocio.", texto)
         self.assertIn("Marketing sensorial", texto)
         self.assertNotIn("$", texto)
+        self.assertIn("RC Farías", texto)
+        self.assertNotIn("RC Farias", texto)
 
     def test_generar_sin_historial(self):
         slot = {"semana": 2, "formato": "Reel", "tipo": "Tendencia", "pilar": "Tendencias de marketing BTL"}

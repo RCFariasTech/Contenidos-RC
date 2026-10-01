@@ -184,7 +184,9 @@ function renderCaption(c) {
     el("h3", {}, `Caption · ${contarPalabras(c.caption)} palabras`),
     parrafos,
     cta ? el("p", { clase: "caption__cta" }, cta) : null,
-    el("div", { clase: "hashtags", "aria-label": "Hashtags" }, (c.hashtags || []).map((h) => el("span", { clase: "hashtag" }, h))));
+    (c.hashtags || []).length
+      ? el("div", { clase: "hashtags", "aria-label": "Hashtags" }, c.hashtags.map((h) => el("span", { clase: "hashtag" }, h)))
+      : el("p", { clase: "ayuda" }, "Sin hashtags: ninguno aportaba alcance."));
 }
 
 function renderAlertas(pieza) {

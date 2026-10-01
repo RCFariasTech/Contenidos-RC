@@ -7,7 +7,7 @@ import time
 import anthropic
 
 from rc import prompts
-from rc.config import ajustes
+from rc.config import ajustes, dominios_confiables
 from rc.esquema import ESQUEMA_PIEZA
 
 log = logging.getLogger(__name__)
@@ -71,7 +71,8 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     esquema = ESQUEMA_PIEZA[formato]
     sistema = prompts.sistema()
     herramientas = ([{"type": "web_search_20260209", "name": "web_search",
-                      "max_uses": max_busquedas}] if max_busquedas else [])
+                      "max_uses": max_busquedas,
+                      "allowed_domains": dominios_confiables()}] if max_busquedas else [])
     usar_formato = a.get("formato_estructurado", True)
     max_tokens = a["max_tokens"]
     mensajes = [{"role": "user", "content": usuario}]

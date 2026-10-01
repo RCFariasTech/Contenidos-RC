@@ -15,7 +15,7 @@ from rc import servicio
 from rc.config import ajustes
 
 CTA = ajustes()["cta"]
-URL = "https://ejemplo.com/estudio"
+URL = "https://www.warc.com/estudio"
 
 
 class BDFalsa:
@@ -111,7 +111,7 @@ def pieza_generada(formato, tema):
     }
     if formato == "Carrusel":
         base.update(slide_1_gancho="Gancho corto", slide_2="a", slide_3="b", slide_4="c",
-                    slide_5_cierre="Desde RC Farias, miembro de Constellation.")
+                    slide_5_cierre="Desde RC Farías, miembro de Constellation.")
     else:
         base.update(escena_1_gancho="Gancho corto", escena_2_desarrollo_a="a", escena_3_desarrollo_b="b",
                     escena_4_desarrollo_c="c", escena_5_cta="Síguenos ya")

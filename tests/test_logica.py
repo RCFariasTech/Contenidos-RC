@@ -9,7 +9,7 @@ from rc.validador import contar_palabras, validar
 
 CTA = ajustes()["cta"]
 HOY = date(2026, 10, 1)
-URL = "https://ejemplo.com/estudio"
+URL = "https://www.warc.com/estudio"
 
 
 def carrusel(**cambios):
@@ -21,7 +21,7 @@ def carrusel(**cambios):
                           "fuente_titulo": "Estudio", "fuente_url": URL, "fuente_fecha": "2026-05-10"},
         "slide_1_gancho": "Tu góndola ya es un medio",
         "slide_2": "Texto corto.", "slide_3": "Texto corto.", "slide_4": "Texto corto.",
-        "slide_5_cierre": "En RC Farias, miembro de Constellation, lo ejecutamos.",
+        "slide_5_cierre": "En RC Farías, miembro de Constellation, lo ejecutamos.",
         "caption": f"Un caption atemporal.\n\n{CTA}", "cta": CTA,
         "hashtags": ["#RCFarias", "#BTL", "#Marketing"],
     }
@@ -78,12 +78,36 @@ class TestValidador(unittest.TestCase):
         self.assertTrue(any("años" in e for e in r["errores"]))
 
     def test_cta_y_hashtags(self):
-        r = self._validar(carrusel(caption="Sin cta", hashtags=["#Marketing", "#viral"]))
+        r = self._validar(carrusel(caption="Sin cta", hashtags=["#Marketing", "#viral", "#a", "#b"]))
         textos = " ".join(r["errores"])
         self.assertIn("CTA", textos)
-        self.assertIn("#RCFarias", textos)
         self.assertIn("prohibidos", textos)
-        self.assertIn("exactamente 3", textos)
+        self.assertIn("Máximo 3", textos)
+
+    def test_hashtags_son_opcionales(self):
+        self.assertEqual(self._validar(carrusel(hashtags=[]))["errores"], [])
+        self.assertEqual(self._validar(carrusel(hashtags=["#TradeMarketing"]))["errores"], [])
+
+    def test_rc_farias_siempre_con_tilde(self):
+        r = self._validar(carrusel(caption=f"En RC Farias lo hacemos.\n\n{CTA}"))
+        self.assertTrue(any("con tilde" in e for e in r["errores"]))
+        self.assertTrue(r["reparables"])
+        r = self._validar(carrusel(slide_2="Así lo ve rc farias hoy."))
+        self.assertTrue(any("con tilde" in e for e in r["errores"]))
+        self.assertEqual(self._validar(carrusel(caption=f"En RC Farías lo hacemos.\n\n{CTA}"))["errores"], [])
+
+    def test_fuente_solo_de_dominios_confiables(self):
+        dominios = ["warc.com", "business.google.com/think"]
+        def validar_con(url):
+            inv = dict(carrusel()["investigacion"], fuente_url=url)
+            return validar("Carrusel", carrusel(investigacion=inv), [url], [], [], ajustes(), HOY, dominios)
+        self.assertEqual(validar_con("https://www.warc.com/estudio")["errores"], [])
+        self.assertEqual(validar_con("https://blog.warc.com/x")["errores"], [])
+        self.assertEqual(validar_con("https://business.google.com/en-all/think/a")["errores"], [])
+        r = validar_con("https://twelveandtwentyeight.com/blog")
+        self.assertTrue(any("dominio confiable" in e for e in r["errores"]))
+        self.assertEqual(r["reparables"], [])
+        self.assertTrue(validar_con("https://notwarc.com/x")["errores"])  # no basta con terminar igual
 
     def test_cierre_sin_constellation(self):
         r = self._validar(carrusel(slide_5_cierre="Lo hacemos en RC Farias."))
@@ -123,11 +147,11 @@ class TestValidador(unittest.TestCase):
         reel = {k: v for k, v in carrusel().items() if not k.startswith("slide_")}
         reel.update(formato="Reel", escena_1_gancho="Tu góndola ya es medio",
                     escena_2_desarrollo_a="uno", escena_3_desarrollo_b="dos", escena_4_desarrollo_c="tres",
-                    escena_5_cta="Escríbenos hoy mismo y te contamos cómo", hashtags=["#RCFarias", "#BTL", "#A", "#B", "#C", "#D"])
+                    escena_5_cta="Escríbenos hoy mismo y te contamos cómo", hashtags=["#A", "#B", "#C", "#D"])
         r = self._validar(reel, formato="Reel")
         textos = " ".join(r["errores"])
         self.assertIn("Escena 5", textos)
-        self.assertIn("entre 3 y 5", textos)
+        self.assertIn("Máximo 3", textos)
 
 
 if __name__ == "__main__":

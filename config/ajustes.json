@@ -14,6 +14,7 @@
   "antiguedad_max_fuente_meses": 18,
   "max_palabras_caption": 150,
   "cta": "📲 Síguenos para más ideas que conectan data, experiencia y negocio.",
+  "hashtags_max": 3,
   "hashtags_prohibidos": ["#viral", "#explore", "#trending", "#fyp", "#instagood", "#love", "#follow", "#like4like"],
   "calendario": [
     {"semana": 1, "formato": "Carrusel", "pilar": "Tendencias de marketing estratégico"},
