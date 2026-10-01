@@ -64,7 +64,7 @@ Después de agregar o cambiar variables hay que **volver a desplegar** (Deployme
 
 ## Tarjetas de carrusel
 
-Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo carrusel (flechas, teclado o deslizar) con opción de descargar el PDF: 5 páginas 3:4 con Montserrat, colores de `config/marca.json` y los logos de `plantilla/`. La portada y el cierre usan siempre sus estilos; las 3 intermedias rotan entre los demás (distinto en cada carrusel). Las ilustraciones 3D (Krea) quedan como espacios con la nota de qué ilustrar. La generación ahora devuelve también `diseno` (titular + texto + nota por tarjeta); los carruseles generados antes no lo tienen y usan una división automática del texto hasta que se ajusten. Fuentes en `plantilla/fuentes/`.
+Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo carrusel (flechas, teclado o deslizar) con opción de descargar el PDF: 5 páginas 3:4 con Montserrat, colores de `config/marca.json` y los logos de `plantilla/`. Solo las tarjetas 1 y 2 llevan ilustración 3D; las tarjetas 3 y 4 son solo texto y la 5 es el cierre. Los estilos rotan (distinto en cada carrusel). Las ilustraciones 3D (Krea) quedan como espacios con la nota de qué ilustrar. La generación ahora devuelve también `diseno` (titular + texto + nota por tarjeta); los carruseles generados antes no lo tienen y usan una división automática del texto hasta que se ajusten. Fuentes en `plantilla/fuentes/`.
 
 ## Protección de despliegues
 

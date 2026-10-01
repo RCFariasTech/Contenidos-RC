@@ -109,7 +109,7 @@ def _validar_diseno(pieza: dict) -> list[str]:
             if ultima in PALABRAS_ENLACE or texto[0].islower():
                 errores.append(f"En diseno, la tarjeta {i} parte una frase a la mitad: el titular debe ser una "
                                "oración completa con sentido propio y el texto debe comenzar una idea nueva (con mayúscula).")
-        if not (d.get("ilustracion") or "").strip() and 1 <= i <= 4:
+        if not (d.get("ilustracion") or "").strip() and i <= 2:
             errores.append(f"Falta la nota de ilustración de la tarjeta {i}.")
     return errores
 

@@ -21,8 +21,11 @@ from rc.config import RAIZ, marca
 W, H, M = 1080, 1440, 84
 NEGRITA, MUY_NEGRITA, NORMAL = "Mont-Bold", "Mont-Black", "Mont-Regular"
 
-# Estilos 1 (portada) y 7 (cierre) son fijos; las tarjetas intermedias rotan entre estos.
-ESTILOS_INTERMEDIOS = (2, 3, 4, 5, 6)
+# Solo las tarjetas 1 y 2 llevan ilustración 3D. Portada (1) y cierre (7) son fijos; la tarjeta 2 rota entre los
+# estilos con ilustración y las tarjetas 3 y 4 entre los estilos solo de texto.
+ESTILOS_TARJETA_2 = (2, 3, 4)
+ESTILOS_SOLO_TEXTO = (5, 6, 8, 9)
+ESTILOS_CON_ILUSTRACION = frozenset({1, 2, 3, 4})
 
 
 @lru_cache(maxsize=1)
@@ -214,6 +217,27 @@ def estilo6_celeste(L, d):
     L.bloque(d["texto"], NORMAL, "azul_marino", M, y, W - 2 * M, 1340 - y, 58, tam_min=34, inter=1.25)
 
 
+def estilo8_marino_texto(L, d):
+    """Azul marino · flecha coral · titular blanco en negrita · texto celeste (sin ilustración)."""
+    L.fondo("azul_marino")
+    L.flecha(M, 230, 0.9)
+    u = L.bloque(d["titular"], MUY_NEGRITA, "blanco", M, 300, W - 2 * M, 520, 88, tam_min=44, inter=1.12)
+    L.c.setFillColor(L.col["coral"])
+    L.c.rect(M, H - (300 + u + 50) - 8, 220, 8, stroke=0, fill=1)
+    y = 300 + u + 90
+    L.bloque(d["texto"], NORMAL, "celeste", M, y, W - 2 * M, H - 90 - y, 58, inter=1.25)
+
+
+def estilo9_blanco_texto(L, d):
+    """Blanco · titular coral en negrita · texto azul marino · barra celeste (sin ilustración)."""
+    L.fondo("blanco")
+    L.c.setFillColor(L.col["celeste"])
+    L.c.rect(0, H - 40, W, 40, stroke=0, fill=1)
+    u = L.bloque(d["titular"], MUY_NEGRITA, "coral", M, 200, W - 2 * M, 560, 92, tam_min=44, inter=1.12)
+    y = 200 + u + 70
+    L.bloque(d["texto"], NORMAL, "azul_marino", M, y, W - 2 * M, H - 90 - y, 58, inter=1.25)
+
+
 def estilo7_cierre(L, d):
     """Blanco · marco con Constellation arriba · cita centrada · logo RC / FARÍAS abajo."""
     c = L.c
@@ -233,9 +257,10 @@ def estilo7_cierre(L, d):
 
 
 ESTILOS = {1: estilo1_portada, 2: estilo2_navy_centro, 3: estilo3_coral_partido, 4: estilo4_blanco_lateral,
-           5: estilo5_gris_pildora, 6: estilo6_celeste, 7: estilo7_cierre}
+           5: estilo5_gris_pildora, 6: estilo6_celeste, 7: estilo7_cierre,
+           8: estilo8_marino_texto, 9: estilo9_blanco_texto}
 NOMBRES = {1: "Portada", 2: "Azul marino", 3: "Coral partido", 4: "Blanco lateral",
-           5: "Gris con titular", 6: "Celeste", 7: "Cierre"}
+           5: "Gris con titular", 6: "Celeste", 7: "Cierre", 8: "Azul marino texto", 9: "Blanco texto"}
 
 
 # ---------- datos de cada tarjeta ----------
@@ -277,9 +302,10 @@ def datos_tarjetas(contenido: dict) -> list[dict]:
 
 
 def estilos_sugeridos(variante: int = 0) -> list[int]:
-    """Portada, 3 estilos intermedios que rotan según la variante (0, 1, …) y cierre."""
-    n = len(ESTILOS_INTERMEDIOS)
-    return [1, *(ESTILOS_INTERMEDIOS[(variante * 3 + i) % n] for i in range(3)), 7]
+    """Portada · tarjeta 2 con ilustración · tarjetas 3 y 4 solo texto · cierre. Rotan según la variante."""
+    n = len(ESTILOS_SOLO_TEXTO)
+    return [1, ESTILOS_TARJETA_2[variante % len(ESTILOS_TARJETA_2)],
+            ESTILOS_SOLO_TEXTO[(variante * 2) % n], ESTILOS_SOLO_TEXTO[(variante * 2 + 1) % n], 7]
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0) -> bytes:

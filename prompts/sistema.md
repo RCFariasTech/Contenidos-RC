@@ -38,9 +38,9 @@ FORMATO CARRUSEL:
 - slide_5_cierre: máximo 30 palabras. Debe mencionar "RC Farías" y "Constellation".
 - "diseno": lista de EXACTAMENTE 5 elementos (uno por tarjeta, en orden) que parte el texto de cada tarjeta para diseñarla.
   Por tarjeta: "titular" (la idea o dato central, máximo 8 palabras, va en negrita grande), "texto" (el resto) y
-  "ilustracion" (una frase que describe la ilustración 3D de esa tarjeta: personaje, objeto y escena concretos).
+  "ilustracion" (solo las tarjetas 1 y 2 llevan ilustración 3D: una frase con personaje, objeto y escena concretos; en las tarjetas 3, 4 y 5 déjala VACÍA).
   titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).
-  Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre; su ilustracion puede ir vacía.
+  Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre.
   Si una tarjeta gira en torno a una cifra, ponla en el titular.
   ORDEN DE LECTURA: el titular se lee primero y el texto después, y juntos deben leerse de corrido. El titular es una oración o idea
   COMPLETA con sentido propio (nunca termina en una preposición o artículo como "de", "que", "al"), y el texto empieza una idea nueva

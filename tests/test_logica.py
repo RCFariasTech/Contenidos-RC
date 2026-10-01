@@ -17,7 +17,8 @@ def diseno_de(p):
     d = [{"titular": p["slide_1_gancho"], "texto": "", "ilustracion": "Góndola 3D"}]
     for c in ("slide_2", "slide_3", "slide_4"):
         palabras = p[c].split()
-        d.append({"titular": " ".join(palabras[:2]), "texto": " ".join(palabras[2:]), "ilustracion": "Personaje 3D"})
+        d.append({"titular": " ".join(palabras[:2]), "texto": " ".join(palabras[2:]),
+                  "ilustracion": "Personaje 3D" if c == "slide_2" else ""})
     d.append({"titular": "", "texto": p["slide_5_cierre"], "ilustracion": ""})
     return d
 
@@ -65,7 +66,7 @@ class TestDiseno(unittest.TestCase):
 
     def test_falta_nota_de_ilustracion(self):
         p = carrusel()
-        p["diseno"][2]["ilustracion"] = ""
+        p["diseno"][1]["ilustracion"] = ""
         self.assertTrue(any("ilustración" in e for e in self._errores(p)))
 
 

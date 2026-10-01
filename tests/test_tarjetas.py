@@ -35,6 +35,15 @@ class TestTarjetas(unittest.TestCase):
         self.assertEqual((a[0], a[-1], b[0], b[-1]), (1, 7, 1, 7))
         self.assertNotEqual(a[1:4], b[1:4])
 
+    def test_solo_las_tarjetas_1_y_2_llevan_ilustracion(self):
+        for v in range(12):
+            est = tarjetas.estilos_sugeridos(v)
+            self.assertIn(est[1], tarjetas.ESTILOS_CON_ILUSTRACION)
+            self.assertTrue(all(e not in tarjetas.ESTILOS_CON_ILUSTRACION for e in est[2:]), est)
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=3), filetype="pdf")
+        con = [i + 1 for i, p in enumerate(doc) if "ILUSTRACIÓN 3D" in p.get_text()]
+        self.assertEqual(con, [1, 2])
+
     def test_portadas_rotan_de_color(self):
         fondos = [tarjetas.PORTADAS[v % len(tarjetas.PORTADAS)][0] for v in range(5)]
         self.assertEqual(len(set(fondos)), 5)
@@ -53,7 +62,7 @@ class TestTarjetas(unittest.TestCase):
 
         for _ in range(12):
             tarjs = [{"titular": frase(rnd.randint(1, 14)), "texto": frase(rnd.randint(0, 55)),
-                      "nota": frase(rnd.randint(3, 40)), "variante": rnd.randint(0, 9)} for _ in range(7)]
+                      "nota": frase(rnd.randint(3, 40)), "variante": rnd.randint(0, 9)} for _ in range(9)]
             for estilo, fn in tarjetas.ESTILOS.items():
                 import io
                 from reportlab.pdfgen import canvas
