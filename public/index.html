@@ -21,22 +21,32 @@
         <input id="email" type="email" autocomplete="username" required>
         <label for="clave">Contraseña</label>
         <input id="clave" type="password" autocomplete="current-password" required>
-        <button type="submit" class="btn btn--primario">Ingresar</button>
+        <button type="submit" class="btn btn--primario btn--bloque">Ingresar</button>
         <p id="login-error" class="mensaje mensaje--error" role="alert"></p>
       </form>
     </section>
 
-    <section id="vista-app" class="tarjeta" hidden>
-      <h1>Conexión verificada</h1>
-      <p id="estado-app" class="mensaje"></p>
-      <h2>Prueba de generación</h2>
-      <p>Genera una pieza de prueba con búsqueda web real (no se guarda). Tarda 1-3 minutos y consume la API de Anthropic.</p>
-      <div class="acciones">
-        <button id="btn-probar-carrusel" class="btn btn--primario btn--auto" type="button">Probar carrusel</button>
-        <button id="btn-probar-reel" class="btn btn--primario btn--auto" type="button">Probar reel</button>
+    <section id="vista-app" hidden>
+      <nav class="pestanas" aria-label="Secciones">
+        <button class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
+        <button class="pestana" type="button" disabled title="Disponible en la siguiente fase">Repositorio</button>
+      </nav>
+
+      <div class="barra-mes">
+        <div>
+          <h1 id="titulo-mes">Propuestas</h1>
+          <p id="resumen-mes" class="barra-mes__resumen"></p>
+        </div>
+        <div class="barra-mes__acciones">
+          <button id="btn-generar" class="btn btn--primario" type="button" hidden>Generar propuestas</button>
+          <button id="btn-ajustes" class="btn btn--primario" type="button" disabled>Aplicar ajustes</button>
+          <button id="btn-pptx" class="btn btn--secundario" type="button" disabled
+                  title="La exportación a PowerPoint llega en la siguiente fase">Descargar PowerPoint</button>
+        </div>
       </div>
-      <p id="estado-prueba" class="mensaje" role="status"></p>
-      <pre id="resultado-prueba" class="resultado" hidden></pre>
+      <p id="aviso-global" class="aviso" role="status" hidden></p>
+
+      <div id="lista-piezas" class="lista-piezas"></div>
     </section>
   </main>
 
