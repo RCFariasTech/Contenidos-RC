@@ -28,9 +28,8 @@
     text-align: center; color: var(--muted); cursor: pointer; }
   .drop.over { border-color: var(--text); color: var(--text); }
   .drop strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
-  #mk { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; pointer-events: none;
-    background: transparent; border-radius: 6px; opacity: 0; transition: opacity .15s; }
-  #mk.on { opacity: .38; }
+  #mk { display: none; position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; pointer-events: none;
+    background: transparent; border-radius: 6px; opacity: 0; }
   #ring { position: absolute; left: 0; top: 0; border: 1.5px solid rgba(255,255,255,.85); border-radius: 50%;
     box-shadow: 0 0 0 1px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; display: none; }
   canvas#cv.brush { cursor: none; touch-action: none; }
@@ -52,15 +51,14 @@
   .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
   .sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
   .err { color: #b3261e; font-size: 13px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .grid3 .ctl { margin: 0; min-width: 0; }
+  .grid3 label { font-size: 12px; }
+  select { width: 100%; padding: 6px 4px; border: 1px solid var(--line); border-radius: 8px; background: transparent;
+    color: var(--text); font: inherit; font-size: 13px; }
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; }
-    #mk { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; pointer-events: none;
-    background: transparent; border-radius: 6px; opacity: 0; transition: opacity .15s; }
-  #mk.on { opacity: .38; }
-  #ring { position: absolute; left: 0; top: 0; border: 1.5px solid rgba(255,255,255,.85); border-radius: 50%;
-    box-shadow: 0 0 0 1px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; display: none; }
-  canvas#cv.brush { cursor: none; touch-action: none; }
-  aside { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+    aside { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
     .canvas-wrap, canvas { max-height: 60vh; }
   }
 </style>
@@ -78,6 +76,7 @@
 
   <aside>
     <h1>Refracción líquida</h1>
+    <button class="btn" id="seed">Nuevo patrón (semilla)</button>
     <button class="btn" id="open">Cambiar imagen</button>
 
     <div class="ctl"><label>Intensidad <span id="vInt"></span></label>
@@ -85,30 +84,27 @@
     <div class="ctl"><label>Cobertura <span id="vCov"></span></label>
       <input type="range" id="cov" min="0" max="1" step="0.01" value="0.7"></div>
 
-    <div class="ctl"><label>Tamaño de pliegue</label>
-      <div class="seg" data-key="size"><button data-v="0">Amplio</button><button data-v="1">Fino</button><button data-v="2" class="on">Mixto</button></div></div>
-    <div class="ctl"><label>Dirección</label>
-      <div class="seg" data-key="dir"><button data-v="0">Horizontal</button><button data-v="1" class="on">Diagonal</button><button data-v="2">Libre</button></div></div>
-    <div class="ctl"><label>Duplicación</label>
-      <div class="seg" data-key="dup"><button data-v="0">Ninguna</button><button data-v="1" class="on">Sutil</button><button data-v="2">Marcada</button></div></div>
-    <div class="ctl"><label>Microgotas</label>
-      <div class="seg" data-key="drops"><button data-v="0">Ninguna</button><button data-v="1" class="on">Escasas</button><button data-v="2">Abundantes</button></div></div>
+    <div class="grid3">
+      <div class="ctl"><label for="selSize">Pliegue</label>
+        <select id="selSize" data-key="size"><option value="0">Amplio</option><option value="1">Fino</option><option value="2" selected>Mixto</option></select></div>
+      <div class="ctl"><label for="selDir">Dirección</label>
+        <select id="selDir" data-key="dir"><option value="0">Horizontal</option><option value="1" selected>Diagonal</option><option value="2">Libre</option></select></div>
+      <div class="ctl"><label for="selDup">Duplicación</label>
+        <select id="selDup" data-key="dup"><option value="0">Ninguna</option><option value="1" selected>Sutil</option><option value="2">Marcada</option></select></div>
+    </div>
 
     <hr class="sep">
     <div class="ctl"><label>Herramienta de pincel</label>
       <div class="seg" data-key="tool"><button data-v="0" class="on">Ninguna</button><button data-v="1">Proteger</button><button data-v="2">Mover gel</button></div></div>
 
-    <div class="ctl"><label>Diámetro · zona protegida <span id="vRad"></span></label>
-      <p class="hint">Pinta sobre ojos, texto o producto: ahí se reduce la distorsión.</p>
-      <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.12"></div>
-
-    <div class="ctl"><label>Diámetro · dedo (mover gel) <span id="vGrad"></span></label>
-      <p class="hint">Arrastra sobre la imagen para empujar la distorsión, como si movieras el gel con el dedo.</p>
-      <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
-
-    <div class="ctl"><label>Fuerza del dedo <span id="vStr"></span></label>
-      <p class="hint">Menos de 1: el gel sigue al dedo solo en parte. Más de 1: lo arrastra más lejos de lo que mueves.</p>
-      <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
+    <div class="grid3">
+      <div class="ctl" title="Diámetro del dedo al mover el gel (arrastra sobre la imagen)"><label>Dedo <span id="vGrad"></span></label>
+        <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
+      <div class="ctl" title="Diámetro del pincel de zona protegida (pinta sobre ojos, texto o producto)"><label>Zona <span id="vRad"></span></label>
+        <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.12"></div>
+      <div class="ctl" title="Menos de 1: el gel sigue al dedo solo en parte. Más de 1: lo arrastra más lejos"><label>Fuerza <span id="vStr"></span></label>
+        <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
+    </div>
 
     <div class="row"><button class="btn" id="undo" disabled>Deshacer (Ctrl/Cmd+Z)</button></div>
     <div class="row">
@@ -117,7 +113,6 @@
     </div>
 
     <hr class="sep">
-    <button class="btn" id="seed">Nuevo patrón (semilla)</button>
     <button class="btn" id="cmp">Mantén pulsado: ver original</button>
     <button class="btn primary" id="dl" disabled>Descargar PNG</button>
     <p class="hint" id="info"></p>
@@ -226,7 +221,7 @@ void main(){
 
 const FRAG = COMMON + `
 uniform sampler2D tex;
-uniform float dropAmt, showOrig, hasGel;
+uniform float showOrig, hasGel;
 
 // campo de desplazamiento (en uv) + diagnóstico para bordes
 void field(vec2 p, float prot, out vec2 d, out float edge){
@@ -243,33 +238,6 @@ void field(vec2 p, float prot, out vec2 d, out float edge){
   edge = clamp(lap*.00055*amp*(.4+intensity), -1., 1.);
 }
 
-// microgotas: lente circular con borde refractivo
-vec2 droplets(vec2 p, out float rim, out float spec){
-  rim = 0.; spec = 0.;
-  if(dropAmt < .5) return vec2(0.);
-  float dens = dropAmt < 1.5 ? .22 : .55;
-  vec2 off = vec2(0.);
-  for(int k=0;k<2;k++){
-    float sc = k==0 ? 34. : 70.;
-    vec2 g = p*sc + float(k)*31.7 + seed*5.;
-    vec2 id = floor(g), f = fract(g);
-    vec2 r = hash2(id);
-    float exists = step(hash(id+3.3), dens*(k==0?1.:.8));
-    vec2 c = .25 + .5*r;
-    float rad = (.07 + .13*hash(id+9.1)) * (k==0 ? 1. : .8);
-    vec2 v = f - c;
-    float ell = 1. + .5*(hash(id+5.5)-.5);
-    v.x *= ell;
-    float l = length(v);
-    float inside = exists * (1. - smoothstep(rad*.9, rad, l));
-    off += inside * (-v/rad) * .0045 * (k==0?1.:.7);
-    rim += exists * smoothstep(rad*.62, rad*.95, l) * (1.-smoothstep(rad*.95, rad*1.08, l));
-    vec2 hv = v - vec2(-.35,-.35)*rad;
-    spec += exists * (1.-smoothstep(0., rad*.28, length(hv)));
-  }
-  return off;
-}
-
 void main(){
   vec2 uv = vUv;
   if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
@@ -280,28 +248,19 @@ void main(){
   vec2 d; float edge;
   field(p, pm, d, edge);
 
-  float rim, spec;
-  vec2 dr = droplets(p, rim, spec);
-  dr *= pm; rim *= pm; spec *= pm;
-  dr.x /= aspect;
-
-  vec3 col = texture2D(tex, mirror(M + d + dr)).rgb;
+  vec3 col = texture2D(tex, mirror(M + d)).rgb;
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
   float hi = max(edge, 0.), lo = max(-edge, 0.);
   col = mix(col, col + (1.-col)*.55, clamp(hi,0.,1.));
   col *= 1. - .45*clamp(lo,0.,1.);
 
-  // anillo oscuro y brillo contenido de las gotas (adaptado a la imagen)
-  col *= 1. - .35*rim*dropAmt/ max(dropAmt,1.);
-  col += (1.-col) * .35 * clamp(spec,0.,1.) * pm;
-
   gl_FragColor = vec4(clamp(col,0.,1.), 1.);
 }`;
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, tool: 0, hasGel: false, loaded: false, showOrig: 0 };
+const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, hasGel: false, loaded: false, showOrig: 0 };
 
 let gl, prog, pushProg, tex, maskTex, U = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
@@ -334,7 +293,7 @@ function initGL() {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  U = locs(prog, [...COMMON_U, "tex", "dropAmt", "showOrig", "hasGel"]);
+  U = locs(prog, [...COMMON_U, "tex", "showOrig", "hasGel"]);
   PL = locs(pushProg, [...COMMON_U, "pc", "pv", "pr"]);
   tex = gl.createTexture();
   maskTex = gl.createTexture();
@@ -478,7 +437,6 @@ function render() {
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(U.tex, 0);
     setCommon(U);
-    gl.uniform1f(U.dropAmt, state.drops);
     gl.uniform1f(U.showOrig, state.showOrig);
     gl.uniform1f(U.hasGel, state.hasGel ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -505,6 +463,8 @@ document.querySelectorAll(".seg").forEach(seg => {
     render();
   });
 });
+document.querySelectorAll("select[data-key]").forEach(sel =>
+  sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
 $("seed").addEventListener("click", () => { state.seed = Math.round(Math.random() * 900) / 10 + 1; render(); });
 
 const cmp = $("cmp");
@@ -587,7 +547,6 @@ $("grad").addEventListener("input", refreshRing);
 
 document.querySelector('.seg[data-key="tool"]').addEventListener("click", () => {
   cv.classList.toggle("brush", state.tool > 0);
-  mk.classList.toggle("on", state.tool === 1);
   if (!state.tool) ring.style.display = "none"; else refreshRing();
 });
 cv.addEventListener("pointerdown", e => {
