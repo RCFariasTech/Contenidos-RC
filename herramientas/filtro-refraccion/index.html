@@ -106,6 +106,10 @@
       <p class="hint">Arrastra sobre la imagen para empujar la distorsión, como si movieras el gel con el dedo.</p>
       <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
 
+    <div class="ctl"><label>Fuerza del dedo <span id="vStr"></span></label>
+      <p class="hint">Menos de 1: el gel sigue al dedo solo en parte. Más de 1: lo arrastra más lejos de lo que mueves.</p>
+      <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
+
     <div class="row"><button class="btn" id="undo" disabled>Deshacer (Ctrl/Cmd+Z)</button></div>
     <div class="row">
       <button class="btn" id="clearP" disabled>Borrar zona protegida</button>
@@ -190,7 +194,7 @@ float coverMask(vec2 p){
 float protect(vec2 uv){ return 1. - texture2D(mask, uv).a; }
 
 // campo del gel movido: dos canales de 8 bits por eje (RGBA8 sirve en cualquier GPU)
-const float UR = .5;
+const float UR = 1.;
 vec2 decodeU(vec4 t){ t = floor(t*255. + .5); return ((vec2(t.x,t.z)*256. + vec2(t.y,t.w)) - 32768.)/32768.*UR; }
 vec2 fetchU(vec2 tc){ return decodeU(texture2D(ufield, tc)); }
 vec2 getU(vec2 uv){                // bilineal manual (la textura es NEAREST)
@@ -199,24 +203,11 @@ vec2 getU(vec2 uv){                // bilineal manual (la textura es NEAREST)
   vec2 a = fetchU((i+vec2(.5,.5))*uTexel), b = fetchU((i+vec2(1.5,.5))*uTexel);
   vec2 c = fetchU((i+vec2(.5,1.5))*uTexel), d = fetchU((i+vec2(1.5,1.5))*uTexel);
   return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
-}
-
-// desplazamiento procedural (en uv); misma fórmula que field()
-vec2 disp(vec2 uv){
-  vec2 p = uv * vec2(aspect, 1.);
-  float e = .0025;
-  float hx = height(p+vec2(e,0.)), hxm = height(p-vec2(e,0.));
-  float hy = height(p+vec2(0.,e)), hym = height(p-vec2(0.,e));
-  vec2 g = vec2(hx-hxm, hy-hym)/(2.*e);
-  float amp = intensity * coverMask(p) * protect(uv);
-  vec2 d = -g * (.034*amp);
-  d /= 1. + length(d)/.06;
-  d.x /= aspect;
-  return d;
 }`;
 
-// Empuje del dedo: U' (x) = P(x - v·w) - x - disp(x), con P = x + disp + U.
-// Así el gel completo (pliegues + lo ya empujado) se arrastra con el dedo.
+// Empuje del dedo. El campo guarda O(x) = M(x) - x, donde M(x) es el punto del gel ORIGINAL
+// que ahora está en x. Empujar es M'(x) = M(x - v·w): se mueve el gel entero (pliegues,
+// brillos, gotas y colores) y todo se evalúa luego en M(x).
 const PUSH = COMMON + `
 uniform vec2 pc, pv;
 uniform float pr;
@@ -227,8 +218,7 @@ void main(){
   if(t >= 1.){ gl_FragColor = texture2D(ufield, tc); return; }   // copia exacta fuera del pincel
   float w = 1. - t*t; w *= w;
   vec2 q = uv - pv*w;
-  vec2 P = q + disp(q) + getU(q);
-  vec2 nu = clamp(P - uv - disp(uv), -UR, UR);
+  vec2 nu = clamp(q + getU(q) - uv, -UR, UR);
   vec2 n = clamp(floor(nu/UR*32768. + 32768. + .5), 0., 65535.);
   vec2 hi = floor(n/256.), lo = n - hi*256.;
   gl_FragColor = vec4(hi.x, lo.x, hi.y, lo.y) / 255.;
@@ -239,14 +229,14 @@ uniform sampler2D tex;
 uniform float dropAmt, showOrig, hasGel;
 
 // campo de desplazamiento (en uv) + diagnóstico para bordes
-void field(vec2 p, vec2 uv, out vec2 d, out float edge){
+void field(vec2 p, float prot, out vec2 d, out float edge){
   float e = .0025;
   float h  = height(p);
   float hx = height(p+vec2(e,0.)), hxm = height(p-vec2(e,0.));
   float hy = height(p+vec2(0.,e)), hym = height(p-vec2(0.,e));
   vec2 g = vec2(hx-hxm, hy-hym)/(2.*e);
   float lap = (hx+hxm+hy+hym-4.*h)/(e*e);
-  float amp = intensity * coverMask(p) * protect(uv);
+  float amp = intensity * coverMask(p) * prot;
   d = -g * (.034*amp);
   d /= 1. + length(d)/.06;          // límite suave: evita zonas ilegibles
   d.x /= aspect;
@@ -283,25 +273,19 @@ vec2 droplets(vec2 p, out float rim, out float spec){
 void main(){
   vec2 uv = vUv;
   if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
-  vec2 p = uv * vec2(aspect, 1.);
+  vec2 M = hasGel > .5 ? uv + getU(uv) : uv;      // posición de este punto en el gel original
+  vec2 p = M * vec2(aspect, 1.);
+  float pm = protect(uv);
 
   vec2 d; float edge;
-  field(p, uv, d, edge);
-  vec2 gel = vec2(0.);
-  if(hasGel > .5){
-    gel = getU(uv);
-    vec2 ex = vec2(uTexel.x*1.5, 0.), ey = vec2(0., uTexel.y*1.5);
-    float divU = (getU(uv+ex).x - getU(uv-ex).x)/(2.*ex.x) + (getU(uv+ey).y - getU(uv-ey).y)/(2.*ey.y);
-    edge = clamp(edge - divU*.0162*(.4+intensity), -1., 1.);   // los brillos siguen al gel movido
-  }
+  field(p, pm, d, edge);
 
   float rim, spec;
   vec2 dr = droplets(p, rim, spec);
-  float pm = protect(uv);
   dr *= pm; rim *= pm; spec *= pm;
   dr.x /= aspect;
 
-  vec3 col = texture2D(tex, mirror(uv + d + gel + dr)).rgb;
+  vec3 col = texture2D(tex, mirror(M + d + dr)).rgb;
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
   float hi = max(edge, 0.), lo = max(-edge, 0.);
@@ -506,9 +490,10 @@ $("vInt").textContent = (+$("int").value).toFixed(2);
 $("vCov").textContent = (+$("cov").value).toFixed(2);
 $("vRad").textContent = (+$("rad").value).toFixed(2);
 $("vGrad").textContent = (+$("grad").value).toFixed(2);
-for (const id of ["int", "cov", "rad", "grad"]) {
+$("vStr").textContent = (+$("gstr").value).toFixed(2);
+for (const id of ["int", "cov", "rad", "grad", "gstr"]) {
   $(id).addEventListener("input", () => {
-    $({int:"vInt", cov:"vCov", rad:"vRad", grad:"vGrad"}[id]).textContent = (+$(id).value).toFixed(2);
+    $({int:"vInt", cov:"vCov", rad:"vRad", grad:"vGrad", gstr:"vStr"}[id]).textContent = (+$(id).value).toFixed(2);
     render();
   });
 }
@@ -582,10 +567,10 @@ function paintTo(p) {                // p en uv; la máscara tiene su propia res
   uploadMask(); render();
 }
 function dragGel(p) {                // empuja el gel a lo largo del trazo, en pasos pequeños
-  const dx = p.x - last.x, dy = p.y - last.y, r = gelR();
+  const dx = p.x - last.x, dy = p.y - last.y, r = gelR(), str = +$("gstr").value;
   const n = Math.min(40, Math.max(1, Math.ceil(Math.hypot(dx * imgW / imgH, dy) / (r * .2))));
   for (let i = 1; i <= n; i++)
-    pushStep(last.x + dx * (i - .5) / n, last.y + dy * (i - .5) / n, dx / n, dy / n, r);
+    pushStep(last.x + dx * (i - .5) / n, last.y + dy * (i - .5) / n, dx / n * str, dy / n * str, r);
   state.hasGel = true;
   last = p;
   render();
