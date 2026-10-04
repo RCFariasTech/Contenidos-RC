@@ -101,21 +101,21 @@
 
     <div id="fxMineral" hidden>
       <div class="grid2">
-        <div class="ctl" title="Cuánto sobreviven y se acumulan los restos anteriores"><label>Retención <span id="vmRet"></span></label>
+        <div class="ctl" title="Cuántas piezas y grietas: pocas piezas grandes o muchas pequeñas"><label>Fractura <span id="vmRet"></span></label>
           <input type="range" id="mRet" min="0" max="1" step="0.01" value="0.6"></div>
-        <div class="ctl" title="Diferencia entre la fase actual y las retenidas"><label>Desfase de pose <span id="vmPose"></span></label>
+        <div class="ctl" title="Cuánto se desplaza cada pieza respecto a las vecinas"><label>Desplazamiento <span id="vmPose"></span></label>
           <input type="range" id="mPose" min="0" max="1" step="0.01" value="0.5"></div>
-        <div class="ctl" title="Extensión del estiramiento a lo largo de la trayectoria"><label>Arrastre local <span id="vmDrag"></span></label>
+        <div class="ctl" title="Cuánto se estiran los colores de la foto en las zonas minerales"><label>Estiramiento <span id="vmDrag"></span></label>
           <input type="range" id="mDrag" min="0" max="1" step="0.01" value="0.55"></div>
-        <div class="ctl" title="Cuánto se curvan, estrechan y giran las zonas"><label>Torsión <span id="vmTwist"></span></label>
+        <div class="ctl" title="Cuánto se curvan y retuercen las grietas y las bandas"><label>Flujo <span id="vmTwist"></span></label>
           <input type="range" id="mTwist" min="0" max="1" step="0.01" value="0.5"></div>
-        <div class="ctl" title="Cantidad de huecos, desgarros y conexiones frágiles"><label>Erosión <span id="vmEro"></span></label>
+        <div class="ctl" title="Cuántas ramificaciones finas salen de las grietas"><label>Ramificación <span id="vmEro"></span></label>
           <input type="range" id="mEro" min="0" max="1" step="0.01" value="0.35"></div>
-        <div class="ctl" title="Extensión espacial del efecto"><label>Cobertura <span id="vmCov"></span></label>
+        <div class="ctl" title="Cantidad y grosor de las vetas de color"><label>Vetas <span id="vmCov"></span></label>
           <input type="range" id="mCov" min="0" max="1" step="0.01" value="0.6"></div>
-        <div class="ctl" title="Cuánta información permite reconocer la fuente"><label>Legibilidad <span id="vmLeg"></span></label>
+        <div class="ctl" title="Cuántas piezas conservan la foto reconocible"><label>Legibilidad <span id="vmLeg"></span></label>
           <input type="range" id="mLeg" min="0" max="1" step="0.01" value="0.35"></div>
-        <div class="ctl" title="Balance entre masas grandes y restos pequeños"><label>Escala heterog. <span id="vmScale"></span></label>
+        <div class="ctl" title="Cuántas bandas de color/vetas de nivel aparecen"><label>Bandas <span id="vmScale"></span></label>
           <input type="range" id="mScale" min="0" max="1" step="0.01" value="0.5"></div>
       </div>
     </div>
@@ -290,60 +290,45 @@ void main(){
 }`;
 
 
-// ===== Memoria mineral: persistencia temporal selectiva simulada =====
-// Cada "fase" es la misma foto muestreada en un punto anterior de una trayectoria local curva
-// (con un desfase de pose). Solo sobreviven masas irregulares de cada fase, con huecos y desgarros.
+// ===== Memoria mineral: la foto se fractura como un mármol hecho de sus propios colores =====
+// Red de grietas curvas (Worley sobre un espacio doblado y alargado por el flujo) -> piezas.
+// Cada pieza muestra la foto desplazada o una versión estirada de sus colores. Las grietas y las
+// líneas de nivel del flujo se rellenan con vetas pintadas con la paleta dominante de la foto.
 const FRAG2 = COMMON + `
 uniform sampler2D tex;
 uniform float showOrig, hasGel;
 uniform float mRet, mPose, mDrag, mTwist, mEro, mCov, mLeg, mScale;
+uniform vec3 palD, palL, pal0, pal1, pal2;       // oscuro, claro y 3 dominantes de la foto
 
-float a0(){ return seed*1.7 + .6; }                 // dirección general del movimiento
+float a0(){ return seed*1.7 + .6; }              // dirección general del flujo
 vec2 rot(vec2 v, float a){ float c = cos(a), s = sin(a); return vec2(c*v.x - s*v.y, s*v.x + c*v.y); }
 
-// un paso atrás por la trayectoria local: dirección curva coherente y paso variable
-// (estira donde el paso crece, comprime donde decrece, tuerce donde la dirección cambia)
-vec2 stepBack(vec2 p, float drag){
-  float ang = a0() + (fbm(p*.85 + seed*2.3) - .5) * mix(1.4, 4.4, mTwist);
-  float h = drag * (.25 + 1.5*fbm(p*1.6 + seed + 9.));
-  return p - vec2(cos(ang), sin(ang)) * h;
+// espacio doblado: el flujo curva y alarga todo (grietas, bandas, vetas) en la misma dirección
+vec2 warpQ(vec2 p){
+  float warp = mix(.5, 2.6, mTwist);
+  vec2 q = rot(p, -a0()); q.x *= .6; q += seed*3.1;
+  q += (vec2(fbm(q*.9), fbm(q*.9 + 4.1)) - .5) * warp;
+  q += (vec2(fbm(q*1.7 + 9.), fbm(q*1.7 + 2.)) - .5) * warp * .5;
+  return q;
 }
-vec2 pose(vec2 x){                                  // desfase de pose: giro alrededor de un pivote
-  vec2 c = vec2(aspect*.5, .5);
-  return c + rot(x - c, -mPose*.2);
+float Fq(vec2 q){ return .6*fbm(q*1.1) + .4*fbm(q*2.7 + 3.); }   // campo de bandas del mármol
+
+// distancia a la grieta más cercana (F2-F1, en unidades de celda) y celda de la pieza
+float worley(vec2 x, out vec2 cell){
+  vec2 n = floor(x), f = fract(x);
+  float f1 = 8., f2 = 8.; cell = n;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g = vec2(float(i), float(j));
+    vec2 r = g + hash2(n + g) - f;
+    float d = dot(r, r);
+    if(d < f1){ f2 = f1; f1 = d; cell = n + g; } else if(d < f2) f2 = d;
+  }
+  return sqrt(f2) - sqrt(f1);
 }
 
-// campo de "masas" de una fase, evaluado en el espacio de origen de esa fase
-float massField(vec2 x, float ph){
-  vec2 q = rot(x, -a0()); q.x *= .55; q += ph*7.3 + seed*3.1;
-  vec2 w = vec2(fbm(q), fbm(q + 5.2)) - .5;
-  q += w*1.9;
-  float coarse = fbm(q*1.15);
-  float fine   = fbm(q*4. + 2.);
-  float rid    = 1. - abs(2.*fbm(q*2.2 + 8.) - 1.);
-  float v = mix(coarse, fine, .1 + .45*mScale);
-  v += mScale*.22*rid*rid;                          // puentes y ramificaciones finas
-  v += (fbm(x*13. + ph) - .5)*.09;                  // bordes recortados
-  return v;
-}
-
-vec4 residue(vec2 xk, vec2 p, float ph, float cover, float pm, float win, float drag){
-  float v = massField(xk, ph);
-  float t = mix(.68, .32, clamp(cover*1.7, 0., 1.));
-  float m = smoothstep(t, t + .02, v);
-  // erosión: desgarros alargados a lo largo de la trayectoria
-  vec2 q = rot(mix(p, xk, .6), -a0()); q.x *= .35; q.y *= 1.6; q += ph*3.7 + seed;
-  float e = fbm(q*2.3)*.75 + fbm(q*9.)*.25;
-  float thr = mix(.9, .46, mEro);
-  m *= 1. - smoothstep(thr, thr + .03, e);
-  m *= (1. - win) * pm;
-  // el interior se estira a lo largo de la trayectoria (barrido corto), sin perder el detalle de la foto
-  vec2 dd = (stepBack(xk, drag) - xk) * .9;
-  vec3 col = vec3(0.);
-  for(int i=0;i<12;i++) col += texture2D(tex, mirror((xk + dd*float(i)/11.) / vec2(aspect, 1.))).rgb;
-  col /= 12.;
-  col *= 1. - .18*4.*m*(1.-m);                       // borde fino que separa la fase de lo que hay debajo
-  return vec4(col, m);
+vec3 veinColor(vec2 p, vec2 q){
+  vec3 c = mix(pal0, pal1, smoothstep(.3, .7, fbm(q*.8 + 5.)));
+  return mix(c, pal2, smoothstep(.55, .8, fbm(q*1.4 + 13.)) * .8);
 }
 
 void main(){
@@ -351,31 +336,81 @@ void main(){
   if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
   vec2 M = hasGel > .5 ? uv + getU(uv) : uv;
   vec2 p = M * vec2(aspect, 1.);
-  float pm = protect(uv);
+  float pm = protect(uv);                       // zona protegida: sin fractura, sin vetas
+  vec2 asp = vec2(aspect, 1.);
 
-  float drag = mDrag * .16 * (1. - .5*mLeg);
-  vec2 x1 = pose(stepBack(p,  drag));
-  vec2 x2 = pose(stepBack(x1, drag));
-  vec2 x3 = pose(stepBack(x2, drag));
-  vec2 x4 = pose(stepBack(x3, drag));
+  vec2 q = warpQ(p);
 
-  float wt = mix(.78, .38, mLeg);
-  float win = smoothstep(wt, wt + .12, fbm(p*.9 + seed*1.3 + 30.));   // ventanas poco alteradas
-  float r = mix(.5, 1., mRet);                      // cuánto sobrevive de cada fase a la siguiente
+  // ---- grietas: red grande + red fina intermitente (ramificaciones) ----
+  float cs  = mix(3., 9., mRet);
+  vec2 cell, cell2;
+  float dBig  = worley(q*cs, cell) / cs;
+  float dFine = worley(q*cs*2.6 + 7., cell2) / (cs*2.6);
+  float gate2 = smoothstep(mix(.82, .38, mEro), mix(.82, .38, mEro) + .12, fbm(q*1.5 + 11.));
+  float dCrack = min(dBig, dFine + (1. - gate2)*10.);
 
-  vec3 col = texture2D(tex, mirror(M)).rgb;
-  // las fases más antiguas quedan por encima: sobreviven menos, pero se ven completas donde sobreviven
-  vec4 l;
-  l = residue(x1, p, 1., mCov*.50,       pm, win, drag); col = mix(col, l.rgb, l.a);
-  l = residue(x2, p, 2., mCov*.45*r,     pm, win, drag); col = mix(col, l.rgb, l.a);
-  l = residue(x3, p, 3., mCov*.40*r*r,   pm, win, drag); col = mix(col, l.rgb, l.a);
-  l = residue(x4, p, 4., mCov*.35*r*r*r, pm, win, drag); col = mix(col, l.rgb, l.a);
+  // ---- pieza: desplazamiento propio y estado (foto / mineral) ----
+  vec2 hp = hash2(cell);
+  vec2 off = (hp - .5) * 2. * mPose * .08 * pm;
+  float h = mix(hash(cell + 3.7), fbm(q*.6 + 7.), .5);
+  float tL = mix(.34, .70, mLeg);
+  float mineral = smoothstep(tL - .04, tL + .04, h) * pm;
+
+  vec3 photo = texture2D(tex, mirror((p + off) / asp)).rgb;
+
+  // mineral: los colores de la foto estirados a lo largo del flujo
+  float fa = a0() + (fbm(q*.8 + 2.) - .5) * 2.2;
+  vec2 fdir = vec2(cos(fa), sin(fa));
+  float Ls = mDrag * .28;
+  vec3 smear = vec3(0.);
+  for(int i=0;i<14;i++){
+    float t = float(i)/13. - .5;
+    smear += texture2D(tex, mirror((p + off + fdir*Ls*t) / asp)).rgb;
+  }
+  smear /= 14.;
+  float lm = dot(smear, vec3(.33));
+  smear = clamp(mix(vec3(lm), smear, 1.35), 0., 1.);   // evita que el promedio se apague en gris
+  float K = mix(6., 16., mScale);
+  float F = Fq(q);
+  smear *= .88 + .24*sin(6.2832*F*K*.5);        // bandas sutiles de luz dentro de las zonas minerales
+  vec3 col = mix(photo, smear, mineral);
+
+  // ---- vetas ----
+  float wBase = mix(.0028, .014, mCov);
+  float wv = wBase * (.25 + 1.9*fbm(q*2.1 + 17.));
+  float pool = smoothstep(.58, .70, fbm(q*.9 + 19.));                 // charcos gruesos de veta
+  float gate = smoothstep(mix(.6, .22, mCov), mix(.6, .22, mCov) + .15, fbm(q*1.2 + 3.));
+  float crackVein = (1. - smoothstep(0., wv*(1. + 7.*pool), dCrack)) * gate;
+
+  // líneas de nivel del flujo: solo algunas son vetas, y solo por tramos
+  float c = F*K, ci = floor(c);
+  float e = .02;
+  vec2 gF = vec2(Fq(q + vec2(e, 0.)) - F, Fq(q + vec2(0., e)) - F) / e;
+  float dLine = abs(fract(c) - .5);
+  dLine = (.5 - dLine) / (K * max(length(gF), .05));                   // distancia a la línea, en espacio q
+  float vis = step(1. - mix(.12, .5, mCov), hash(vec2(ci, seed)));
+  float along = smoothstep(.45, .62, fbm(q*2. + ci*3.1));
+  float lineVein = (1. - smoothstep(0., wBase*.7, dLine)) * vis * along;
+
+  float va = clamp(max(crackVein, lineVein), 0., 1.) * pm;
+
+  // la grieta sin veta se lee como borde sombreado entre piezas
+  col *= 1. - .35*(1. - smoothstep(0., wBase*2.5, dCrack)) * pm * (1. - va);
+
+  vec3 vc = veinColor(p, q);
+  vec3 core = mix(vc, palL, .5);
+  float coreMask = 1. - smoothstep(0., .45, 1. - va);                   // núcleo más claro y fino
+  vec3 vcol = mix(vc, core, coreMask);
+  float glit = .9 + .2*hash(floor(p*1100.));                           // grano fino de la veta
+  col = mix(col, vcol*glit, va);
+  col *= 1. - .22*smoothstep(.0, .5, va)*(1.-smoothstep(.5, 1., va));    // halo oscuro de relieve
+
   gl_FragColor = vec4(clamp(col, 0., 1.), 1.);
 }`;
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, hasGel: false, loaded: false, showOrig: 0 };
+const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
 let gl, prog, prog2, pushProg, tex, maskTex, U = {}, U2 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
@@ -395,7 +430,8 @@ function makeProgram(fragSrc) {
 }
 const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
 const MIN_IDS = ["mRet", "mPose", "mDrag", "mTwist", "mEro", "mCov", "mLeg", "mScale"];
-const COMMON_U = ["aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const PAL_IDS = ["palD", "palL", "pal0", "pal1", "pal2"];
+const COMMON_U = [...PAL_IDS, "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -460,6 +496,7 @@ function setCommon(L) {
   gl.uniform1f(L.dirMode, state.dir);
   gl.uniform1f(L.dupAmt, state.dup);
   for (const id of MIN_IDS) gl.uniform1f(L[id], +$(id).value);
+  PAL_IDS.forEach((id, i) => gl.uniform3fv(L[id], state.pal[i]));
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
   gl.uniform2f(L.uTexel, 1 / uw, 1 / uh);
@@ -490,6 +527,35 @@ function restoreGel(b) {
   gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
   gl.activeTexture(gl.TEXTURE0);
+}
+
+// Paleta de la foto: oscuro y claro medios + 3 colores dominantes (favoreciendo los saturados)
+function extractPalette(cnv) {
+  const N = 48, c = document.createElement("canvas"); c.width = c.height = N;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(cnv, 0, 0, N, N);
+  const d = x.getImageData(0, 0, N, N).data, px = [];
+  for (let i = 0; i < d.length; i += 4) px.push([d[i] / 255, d[i+1] / 255, d[i+2] / 255]);
+  const lum = p => .2126 * p[0] + .7152 * p[1] + .0722 * p[2];
+  const sorted = px.slice().sort((a, b) => lum(a) - lum(b));
+  const avg = arr => arr.reduce((s, p) => [s[0] + p[0], s[1] + p[1], s[2] + p[2]], [0, 0, 0]).map(v => v / arr.length);
+  const k = Math.max(1, Math.round(px.length * .08));
+  const dark = avg(sorted.slice(0, k)), light = avg(sorted.slice(-k));
+  const bins = new Map();
+  for (const p of px) {
+    const key = p.map(v => Math.min(3, Math.floor(v * 4))).join();
+    const sat = Math.max(...p) - Math.min(...p);
+    const b = bins.get(key) || { w: 0, s: [0, 0, 0] };
+    b.w += .1 + 3.*sat; b.s = [b.s[0] + p[0], b.s[1] + p[1], b.s[2] + p[2]]; b.n = (b.n || 0) + 1;
+    bins.set(key, b);
+  }
+  const cand = [...bins.values()].sort((a, b) => b.w - a.w).map(b => b.s.map(v => v / b.n));
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const dom = [];
+  for (const cc of cand) { if (dom.every(o => dist(o, cc) > .25)) dom.push(cc); if (dom.length === 3) break; }
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  while (dom.length < 3) dom.push(mix(dark, light, dom.length === 1 ? .35 : .7));
+  return [dark, light, ...dom];
 }
 
 async function decode(file) {
@@ -535,6 +601,7 @@ async function loadImage(file) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    state.pal = extractPalette(tmp);
     resetMask(w, h); initGel(w, h);
     state.loaded = true;
     for (const id of ["clearP", "clearG"]) $(id).disabled = false;
