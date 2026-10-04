@@ -28,6 +28,12 @@
     text-align: center; color: var(--muted); cursor: pointer; }
   .drop.over { border-color: var(--text); color: var(--text); }
   .drop strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  #mk { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; pointer-events: none;
+    background: transparent; border-radius: 6px; opacity: 0; transition: opacity .15s; }
+  #mk.on { opacity: .38; }
+  #ring { position: absolute; left: 0; top: 0; border: 1.5px solid rgba(255,255,255,.85); border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; display: none; }
+  canvas#cv.brush { cursor: none; touch-action: none; }
   aside { background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow-y: auto; max-height: 100vh; }
   h1 { font-size: 17px; margin: 0 0 14px; }
   .ctl { margin-bottom: 14px; }
@@ -48,7 +54,13 @@
   .err { color: #b3261e; font-size: 13px; }
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; }
-    aside { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+    #mk { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; pointer-events: none;
+    background: transparent; border-radius: 6px; opacity: 0; transition: opacity .15s; }
+  #mk.on { opacity: .38; }
+  #ring { position: absolute; left: 0; top: 0; border: 1.5px solid rgba(255,255,255,.85); border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; display: none; }
+  canvas#cv.brush { cursor: none; touch-action: none; }
+  aside { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
     .canvas-wrap, canvas { max-height: 60vh; }
   }
 </style>
@@ -60,7 +72,7 @@
       <strong>Elige o arrastra una imagen</strong>
       JPG, PNG o WebP. Se procesa en tu navegador; la imagen no se sube a ningún servidor.
     </div>
-    <div class="canvas-wrap" id="wrap"><canvas id="cv"></canvas></div>
+    <div class="canvas-wrap" id="wrap"><canvas id="cv"></canvas><canvas id="mk"></canvas><div id="ring"></div></div>
     <input type="file" id="file" accept="image/*,.heic,.heif" hidden>
   </main>
 
@@ -83,12 +95,15 @@
       <div class="seg" data-key="drops"><button data-v="0">Ninguna</button><button data-v="1" class="on">Escasas</button><button data-v="2">Abundantes</button></div></div>
 
     <hr class="sep">
-    <div class="ctl"><label>Zona protegida <span id="vRad"></span></label>
-      <p class="hint">Activa el modo y haz clic en la imagen (ojos, texto, producto) para reducir ahí la distorsión.</p>
-      <input type="range" id="rad" min="0.04" max="0.4" step="0.01" value="0.15">
+    <div class="ctl"><label>Zona protegida · tamaño del pincel <span id="vRad"></span></label>
+      <p class="hint">Activa el pincel y pinta sobre ojos, texto o producto: ahí se reduce la distorsión. Ctrl/Cmd+Z deshace el último trazo.</p>
+      <input type="range" id="rad" min="0.01" max="0.3" step="0.005" value="0.06">
       <div class="row" style="margin-top:8px">
-        <button class="btn" id="protect">Marcar zonas: off</button>
-        <button class="btn" id="clearP">Borrar</button>
+        <button class="btn" id="protect">Pincel: off</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="undo" disabled>Deshacer</button>
+        <button class="btn" id="clearP" disabled>Borrar todo</button>
       </div></div>
 
     <hr class="sep">
@@ -102,7 +117,8 @@
 
 <script>
 "use strict";
-const MAX_ZONES = 6;
+const MASK_SIDE = 768;   // resolución de la máscara del pincel
+const MAX_UNDO = 40;
 const MAX_SIDE = 4096;
 
 const VERT = `
@@ -115,8 +131,7 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D tex;
 uniform float aspect, intensity, coverage, seed, sizeMix, dirMode, dupAmt, dropAmt, showOrig;
-uniform vec3 zones[${MAX_ZONES}];   // x, y (uv), radio (alto=1)
-uniform int zoneCount;
+uniform sampler2D mask;            // alfa = zona protegida (pincel)
 
 float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
 vec2 hash2(vec2 p){ return vec2(hash(p), hash(p+vec2(17.7,93.1))); }
@@ -164,16 +179,7 @@ float coverMask(vec2 p){
   return smoothstep(lo, lo+.22, n);
 }
 
-float protect(vec2 uv){
-  float m = 1.;
-  for(int i=0;i<${MAX_ZONES};i++){
-    if(i>=zoneCount) break;
-    vec2 d = (uv - zones[i].xy) * vec2(aspect,1.);
-    float r = zones[i].z;
-    m *= smoothstep(r*.55, r*1.15, length(d));
-  }
-  return m;
-}
+float protect(vec2 uv){ return 1. - texture2D(mask, uv).a; }
 
 // campo de desplazamiento (en uv) + diagnóstico para bordes
 void field(vec2 p, vec2 uv, out vec2 d, out float edge){
@@ -247,9 +253,9 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, zones: [], protect: false, loaded: false, showOrig: 0 };
+const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, protect: false, loaded: false, showOrig: 0 };
 
-let gl, prog, tex, U = {}, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, tex, maskTex, U = {}, imgW = 0, imgH = 0, raf = 0;
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -273,9 +279,16 @@ function initGL() {
   const loc = gl.getAttribLocation(prog, "a");
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  for (const n of ["tex","aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","dropAmt","showOrig","zones","zoneCount"])
+  for (const n of ["tex","aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","dropAmt","showOrig","mask"])
     U[n] = gl.getUniformLocation(prog, n);
   tex = gl.createTexture();
+  maskTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.activeTexture(gl.TEXTURE0);
   return true;
 }
 
@@ -322,7 +335,8 @@ async function loadImage(file) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    state.loaded = true; state.zones = [];
+    resetMask(w, h);
+    state.loaded = true;
     drop.style.display = "none"; wrap.classList.add("on");
     $("dl").disabled = false;
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
@@ -344,10 +358,7 @@ function render() {
     gl.uniform1f(U.dupAmt, state.dup);
     gl.uniform1f(U.dropAmt, state.drops);
     gl.uniform1f(U.showOrig, state.showOrig);
-    const z = new Float32Array(MAX_ZONES * 3);
-    state.zones.forEach((q, i) => { z[i*3] = q.x; z[i*3+1] = q.y; z[i*3+2] = q.r; });
-    gl.uniform3fv(U.zones, z);
-    gl.uniform1i(U.zoneCount, state.zones.length);
+    gl.uniform1i(U.mask, 1);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   });
 }
@@ -377,18 +388,98 @@ const setOrig = v => { state.showOrig = v; render(); };
 cmp.addEventListener("pointerdown", () => setOrig(1));
 for (const ev of ["pointerup", "pointerleave", "pointercancel"]) cmp.addEventListener(ev, () => setOrig(0));
 
+// ---- zona protegida: pincel con máscara + deshacer ----
+const mk = $("mk"), mctx = mk.getContext("2d", { willReadFrequently: true }), ring = $("ring");
+const undoStack = [];
+let stroking = false, last = null;
+
+function resetMask(w, h) {
+  const k = Math.min(1, MASK_SIDE / Math.max(w, h));
+  mk.width = Math.max(1, Math.round(w * k)); mk.height = Math.max(1, Math.round(h * k));
+  mctx.clearRect(0, 0, mk.width, mk.height);
+  undoStack.length = 0;
+  uploadMask(); syncUndo();
+}
+function uploadMask() {
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mk);
+  gl.activeTexture(gl.TEXTURE0);
+}
+function syncUndo() {
+  $("undo").disabled = undoStack.length === 0;
+  $("clearP").disabled = undoStack.length === 0;
+}
+function pushUndo() {
+  undoStack.push(mctx.getImageData(0, 0, mk.width, mk.height));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  syncUndo();
+}
+function undo() {
+  if (!undoStack.length || stroking) return;
+  mctx.putImageData(undoStack.pop(), 0, 0);
+  uploadMask(); syncUndo(); render();
+}
+function stamp(x, y) {
+  const r = +$("rad").value * mk.height;
+  const g = mctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, "rgba(255,50,50,1)"); g.addColorStop(.6, "rgba(255,50,50,1)"); g.addColorStop(1, "rgba(255,50,50,0)");
+  mctx.fillStyle = g;
+  mctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+}
+function maskPos(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * mk.width, y: (e.clientY - r.top) / r.height * mk.height };
+}
+function paintTo(p) {
+  const step = Math.max(1, +$("rad").value * mk.height * .25);
+  const dx = p.x - last.x, dy = p.y - last.y, n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / step));
+  for (let i = 1; i <= n; i++) stamp(last.x + dx * i / n, last.y + dy * i / n);
+  last = p;
+  uploadMask(); render();
+}
+function placeRing(e) {
+  const r = cv.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  const d = 2 * +$("rad").value * r.height;
+  ring.style.width = ring.style.height = d + "px";
+  ring.style.transform = `translate(${e.clientX - w.left - d / 2}px, ${e.clientY - w.top - d / 2}px)`;
+}
+let lastPtr = null;
+function refreshRing() { if (state.protect && lastPtr) placeRing(lastPtr); }
+$("rad").addEventListener("input", refreshRing);
+
 $("protect").addEventListener("click", () => {
   state.protect = !state.protect;
-  $("protect").textContent = "Marcar zonas: " + (state.protect ? "on" : "off");
-  cv.style.cursor = state.protect ? "crosshair" : "";
+  $("protect").textContent = "Pincel: " + (state.protect ? "on" : "off");
+  cv.classList.toggle("brush", state.protect);
+  mk.classList.toggle("on", state.protect);
+  if (!state.protect) ring.style.display = "none";
 });
-$("clearP").addEventListener("click", () => { state.zones = []; render(); });
-cv.addEventListener("click", e => {
-  if (!state.protect || !state.loaded) return;
-  const r = cv.getBoundingClientRect();
-  if (state.zones.length >= MAX_ZONES) state.zones.shift();
-  state.zones.push({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, r: +$("rad").value });
-  render();
+cv.addEventListener("pointerdown", e => {
+  if (!state.protect || !state.loaded || e.button > 0) return;
+  e.preventDefault();
+  cv.setPointerCapture(e.pointerId);
+  pushUndo(); stroking = true;
+  last = maskPos(e); stamp(last.x, last.y); uploadMask(); render();
+});
+cv.addEventListener("pointermove", e => {
+  lastPtr = e;
+  if (!state.protect) return;
+  ring.style.display = "block"; placeRing(e);
+  if (stroking) paintTo(maskPos(e));
+});
+const endStroke = () => { stroking = false; };
+cv.addEventListener("pointerup", endStroke);
+cv.addEventListener("pointercancel", endStroke);
+cv.addEventListener("pointerleave", () => { if (!stroking) ring.style.display = "none"; });
+$("undo").addEventListener("click", undo);
+$("clearP").addEventListener("click", () => {
+  if (!undoStack.length && !state.loaded) return;
+  pushUndo(); mctx.clearRect(0, 0, mk.width, mk.height); uploadMask(); render();
+});
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
 });
 
 $("dl").addEventListener("click", () => {
