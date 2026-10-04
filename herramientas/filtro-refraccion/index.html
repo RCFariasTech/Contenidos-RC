@@ -95,16 +95,22 @@
       <div class="seg" data-key="drops"><button data-v="0">Ninguna</button><button data-v="1" class="on">Escasas</button><button data-v="2">Abundantes</button></div></div>
 
     <hr class="sep">
-    <div class="ctl"><label>Zona protegida · tamaño del pincel <span id="vRad"></span></label>
-      <p class="hint">Activa el pincel y pinta sobre ojos, texto o producto: ahí se reduce la distorsión. Ctrl/Cmd+Z deshace el último trazo.</p>
-      <input type="range" id="rad" min="0.01" max="0.3" step="0.005" value="0.06">
-      <div class="row" style="margin-top:8px">
-        <button class="btn" id="protect">Pincel: off</button>
-      </div>
-      <div class="row">
-        <button class="btn" id="undo" disabled>Deshacer</button>
-        <button class="btn" id="clearP" disabled>Borrar todo</button>
-      </div></div>
+    <div class="ctl"><label>Herramienta de pincel</label>
+      <div class="seg" data-key="tool"><button data-v="0" class="on">Ninguna</button><button data-v="1">Proteger</button><button data-v="2">Mover gel</button></div></div>
+
+    <div class="ctl"><label>Diámetro · zona protegida <span id="vRad"></span></label>
+      <p class="hint">Pinta sobre ojos, texto o producto: ahí se reduce la distorsión.</p>
+      <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.12"></div>
+
+    <div class="ctl"><label>Diámetro · dedo (mover gel) <span id="vGrad"></span></label>
+      <p class="hint">Arrastra sobre la imagen para empujar la distorsión, como si movieras el gel con el dedo.</p>
+      <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
+
+    <div class="row"><button class="btn" id="undo" disabled>Deshacer (Ctrl/Cmd+Z)</button></div>
+    <div class="row">
+      <button class="btn" id="clearP" disabled>Borrar zona protegida</button>
+      <button class="btn" id="clearG" disabled>Restablecer gel</button>
+    </div>
 
     <hr class="sep">
     <button class="btn" id="seed">Nuevo patrón (semilla)</button>
@@ -120,18 +126,20 @@
 const MASK_SIDE = 768;   // resolución de la máscara del pincel
 const MAX_UNDO = 40;
 const MAX_SIDE = 4096;
+const GEL_SIDE = 512;    // resolución del campo del gel
 
 const VERT = `
 attribute vec2 a;
 varying vec2 vUv;
 void main(){ vUv = vec2(a.x*0.5+0.5, 0.5-a.y*0.5); gl_Position = vec4(a,0.,1.); }`;
 
-const FRAG = `
+const COMMON = `
 precision highp float;
 varying vec2 vUv;
-uniform sampler2D tex;
-uniform float aspect, intensity, coverage, seed, sizeMix, dirMode, dupAmt, dropAmt, showOrig;
+uniform float aspect, intensity, coverage, seed, sizeMix, dirMode, dupAmt;
 uniform sampler2D mask;            // alfa = zona protegida (pincel)
+uniform sampler2D ufield;          // desplazamiento extra del gel movido con el dedo (16 bits por eje)
+uniform vec2 uTexel;
 
 float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
 vec2 hash2(vec2 p){ return vec2(hash(p), hash(p+vec2(17.7,93.1))); }
@@ -180,6 +188,55 @@ float coverMask(vec2 p){
 }
 
 float protect(vec2 uv){ return 1. - texture2D(mask, uv).a; }
+
+// campo del gel movido: dos canales de 8 bits por eje (RGBA8 sirve en cualquier GPU)
+const float UR = .5;
+vec2 decodeU(vec4 t){ t = floor(t*255. + .5); return ((vec2(t.x,t.z)*256. + vec2(t.y,t.w)) - 32768.)/32768.*UR; }
+vec2 fetchU(vec2 tc){ return decodeU(texture2D(ufield, tc)); }
+vec2 getU(vec2 uv){                // bilineal manual (la textura es NEAREST)
+  vec2 tc = vec2(uv.x, 1.-uv.y);
+  vec2 st = tc/uTexel - .5; vec2 i = floor(st), f = fract(st);
+  vec2 a = fetchU((i+vec2(.5,.5))*uTexel), b = fetchU((i+vec2(1.5,.5))*uTexel);
+  vec2 c = fetchU((i+vec2(.5,1.5))*uTexel), d = fetchU((i+vec2(1.5,1.5))*uTexel);
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+
+// desplazamiento procedural (en uv); misma fórmula que field()
+vec2 disp(vec2 uv){
+  vec2 p = uv * vec2(aspect, 1.);
+  float e = .0025;
+  float hx = height(p+vec2(e,0.)), hxm = height(p-vec2(e,0.));
+  float hy = height(p+vec2(0.,e)), hym = height(p-vec2(0.,e));
+  vec2 g = vec2(hx-hxm, hy-hym)/(2.*e);
+  float amp = intensity * coverMask(p) * protect(uv);
+  vec2 d = -g * (.034*amp);
+  d /= 1. + length(d)/.06;
+  d.x /= aspect;
+  return d;
+}`;
+
+// Empuje del dedo: U' (x) = P(x - v·w) - x - disp(x), con P = x + disp + U.
+// Así el gel completo (pliegues + lo ya empujado) se arrastra con el dedo.
+const PUSH = COMMON + `
+uniform vec2 pc, pv;
+uniform float pr;
+void main(){
+  vec2 tc = gl_FragCoord.xy * uTexel;
+  vec2 uv = vec2(tc.x, 1.-tc.y);
+  float t = length((uv - pc) * vec2(aspect, 1.)) / pr;
+  if(t >= 1.){ gl_FragColor = texture2D(ufield, tc); return; }   // copia exacta fuera del pincel
+  float w = 1. - t*t; w *= w;
+  vec2 q = uv - pv*w;
+  vec2 P = q + disp(q) + getU(q);
+  vec2 nu = clamp(P - uv - disp(uv), -UR, UR);
+  vec2 n = clamp(floor(nu/UR*32768. + 32768. + .5), 0., 65535.);
+  vec2 hi = floor(n/256.), lo = n - hi*256.;
+  gl_FragColor = vec4(hi.x, lo.x, hi.y, lo.y) / 255.;
+}`;
+
+const FRAG = COMMON + `
+uniform sampler2D tex;
+uniform float dropAmt, showOrig, hasGel;
 
 // campo de desplazamiento (en uv) + diagnóstico para bordes
 void field(vec2 p, vec2 uv, out vec2 d, out float edge){
@@ -230,6 +287,13 @@ void main(){
 
   vec2 d; float edge;
   field(p, uv, d, edge);
+  vec2 gel = vec2(0.);
+  if(hasGel > .5){
+    gel = getU(uv);
+    vec2 ex = vec2(uTexel.x*1.5, 0.), ey = vec2(0., uTexel.y*1.5);
+    float divU = (getU(uv+ex).x - getU(uv-ex).x)/(2.*ex.x) + (getU(uv+ey).y - getU(uv-ey).y)/(2.*ey.y);
+    edge = clamp(edge - divU*.0162*(.4+intensity), -1., 1.);   // los brillos siguen al gel movido
+  }
 
   float rim, spec;
   vec2 dr = droplets(p, rim, spec);
@@ -237,7 +301,7 @@ void main(){
   dr *= pm; rim *= pm; spec *= pm;
   dr.x /= aspect;
 
-  vec3 col = texture2D(tex, mirror(uv + d + dr)).rgb;
+  vec3 col = texture2D(tex, mirror(uv + d + gel + dr)).rgb;
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
   float hi = max(edge, 0.), lo = max(-edge, 0.);
@@ -253,34 +317,41 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, protect: false, loaded: false, showOrig: 0 };
+const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, tool: 0, hasGel: false, loaded: false, showOrig: 0 };
 
-let gl, prog, tex, maskTex, U = {}, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, pushProg, tex, maskTex, U = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
+
+function makeProgram(fragSrc) {
+  const sh = (t, src) => {
+    const x = gl.createShader(t); gl.shaderSource(x, src); gl.compileShader(x);
+    if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x));
+    return x;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fragSrc));
+  gl.bindAttribLocation(p, 0, "a");
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
+const COMMON_U = ["aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel"];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
   if (!gl) { errEl.textContent = "Tu navegador no soporta WebGL."; return false; }
-  const sh = (t, src) => {
-    const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  };
   try {
-    prog = gl.createProgram();
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    prog = makeProgram(FRAG);
+    pushProg = makeProgram(PUSH);
   } catch (e) { errEl.textContent = "Error de shader: " + e.message; return false; }
-  gl.useProgram(prog);
   const buf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, "a");
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  for (const n of ["tex","aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","dropAmt","showOrig","mask"])
-    U[n] = gl.getUniformLocation(prog, n);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  U = locs(prog, [...COMMON_U, "tex", "dropAmt", "showOrig", "hasGel"]);
+  PL = locs(pushProg, [...COMMON_U, "pc", "pv", "pr"]);
   tex = gl.createTexture();
   maskTex = gl.createTexture();
   gl.activeTexture(gl.TEXTURE1);
@@ -290,6 +361,73 @@ function initGL() {
     gl.texParameteri(gl.TEXTURE_2D, k, v);
   gl.activeTexture(gl.TEXTURE0);
   return true;
+}
+
+// campo del gel: dos texturas RGBA8 (ping-pong), 0 = sin desplazamiento extra
+function zeroGelData() {
+  const d = new Uint8Array(uw * uh * 4);
+  for (let i = 0; i < uw * uh; i++) { d[i*4] = 128; d[i*4+2] = 128; }
+  return d;
+}
+function initGel(w, h) {
+  const k = GEL_SIDE / Math.max(w, h);
+  uw = Math.max(1, Math.round(w * k)); uh = Math.max(1, Math.round(h * k));
+  const zero = zeroGelData();
+  gl.activeTexture(gl.TEXTURE2);
+  for (let j = 0; j < 2; j++) {
+    if (gelTex[j]) { gl.deleteTexture(gelTex[j]); gl.deleteFramebuffer(gelFbo[j]); }
+    gelTex[j] = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, gelTex[j]);
+    for (const [kk, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST],
+                           [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_2D, kk, v);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, uw, uh, 0, gl.RGBA, gl.UNSIGNED_BYTE, zero);
+    gelFbo[j] = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[j]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, gelTex[j], 0);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.activeTexture(gl.TEXTURE0);
+  gelCur = 0; state.hasGel = false;
+}
+function setCommon(L) {
+  gl.uniform1f(L.aspect, imgW / imgH);
+  gl.uniform1f(L.intensity, +$("int").value);
+  gl.uniform1f(L.coverage, +$("cov").value);
+  gl.uniform1f(L.seed, state.seed);
+  gl.uniform1f(L.sizeMix, state.size);
+  gl.uniform1f(L.dirMode, state.dir);
+  gl.uniform1f(L.dupAmt, state.dup);
+  gl.uniform1i(L.mask, 1);
+  gl.uniform1i(L.ufield, 2);
+  gl.uniform2f(L.uTexel, 1 / uw, 1 / uh);
+}
+function pushStep(cx, cy, vx, vy, r) {
+  const dst = 1 - gelCur;
+  gl.useProgram(pushProg);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[dst]);
+  gl.viewport(0, 0, uw, uh);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+  setCommon(PL);
+  gl.uniform2f(PL.pc, cx, cy); gl.uniform2f(PL.pv, vx, vy); gl.uniform1f(PL.pr, r);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gelCur = dst;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, imgW, imgH);
+  gl.activeTexture(gl.TEXTURE0);
+}
+function snapGel() {
+  const b = new Uint8Array(uw * uh * 4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[gelCur]);
+  gl.readPixels(0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return b;
+}
+function restoreGel(b) {
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
+  gl.activeTexture(gl.TEXTURE0);
 }
 
 async function decode(file) {
@@ -335,8 +473,9 @@ async function loadImage(file) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    resetMask(w, h);
+    resetMask(w, h); initGel(w, h);
     state.loaded = true;
+    for (const id of ["clearP", "clearG"]) $(id).disabled = false;
     drop.style.display = "none"; wrap.classList.add("on");
     $("dl").disabled = false;
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
@@ -348,17 +487,16 @@ function render() {
   if (!state.loaded) return;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
+    gl.useProgram(prog);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, imgW, imgH);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(U.tex, 0);
-    gl.uniform1f(U.aspect, imgW / imgH);
-    gl.uniform1f(U.intensity, +$("int").value);
-    gl.uniform1f(U.coverage, +$("cov").value);
-    gl.uniform1f(U.seed, state.seed);
-    gl.uniform1f(U.sizeMix, state.size);
-    gl.uniform1f(U.dirMode, state.dir);
-    gl.uniform1f(U.dupAmt, state.dup);
+    setCommon(U);
     gl.uniform1f(U.dropAmt, state.drops);
     gl.uniform1f(U.showOrig, state.showOrig);
-    gl.uniform1i(U.mask, 1);
+    gl.uniform1f(U.hasGel, state.hasGel ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   });
 }
@@ -367,9 +505,10 @@ function render() {
 $("vInt").textContent = (+$("int").value).toFixed(2);
 $("vCov").textContent = (+$("cov").value).toFixed(2);
 $("vRad").textContent = (+$("rad").value).toFixed(2);
-for (const id of ["int", "cov", "rad"]) {
+$("vGrad").textContent = (+$("grad").value).toFixed(2);
+for (const id of ["int", "cov", "rad", "grad"]) {
   $(id).addEventListener("input", () => {
-    $({int:"vInt", cov:"vCov", rad:"vRad"}[id]).textContent = (+$(id).value).toFixed(2);
+    $({int:"vInt", cov:"vCov", rad:"vRad", grad:"vGrad"}[id]).textContent = (+$(id).value).toFixed(2);
     render();
   });
 }
@@ -388,16 +527,19 @@ const setOrig = v => { state.showOrig = v; render(); };
 cmp.addEventListener("pointerdown", () => setOrig(1));
 for (const ev of ["pointerup", "pointerleave", "pointercancel"]) cmp.addEventListener(ev, () => setOrig(0));
 
-// ---- zona protegida: pincel con máscara + deshacer ----
+// ---- pinceles (zona protegida y dedo sobre el gel) + deshacer unificado ----
 const mk = $("mk"), mctx = mk.getContext("2d", { willReadFrequently: true }), ring = $("ring");
-const undoStack = [];
-let stroking = false, last = null;
+const history = [];                 // { kind: "mask" | "gel", snap }
+let stroking = false, last = null, lastPtr = null;
+const protectR = () => +$("rad").value / 2;     // los deslizadores son diámetros (fracción del alto)
+const gelR = () => +$("grad").value / 2;
+const toolR = () => state.tool === 2 ? gelR() : protectR();
 
 function resetMask(w, h) {
   const k = Math.min(1, MASK_SIDE / Math.max(w, h));
   mk.width = Math.max(1, Math.round(w * k)); mk.height = Math.max(1, Math.round(h * k));
   mctx.clearRect(0, 0, mk.width, mk.height);
-  undoStack.length = 0;
+  history.length = 0;
   uploadMask(); syncUndo();
 }
 function uploadMask() {
@@ -407,67 +549,76 @@ function uploadMask() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mk);
   gl.activeTexture(gl.TEXTURE0);
 }
-function syncUndo() {
-  $("undo").disabled = undoStack.length === 0;
-  $("clearP").disabled = undoStack.length === 0;
-}
-function pushUndo() {
-  undoStack.push(mctx.getImageData(0, 0, mk.width, mk.height));
-  if (undoStack.length > MAX_UNDO) undoStack.shift();
+function syncUndo() { $("undo").disabled = history.length === 0; }
+function pushHistory(kind) {
+  history.push({ kind, snap: kind === "mask" ? mctx.getImageData(0, 0, mk.width, mk.height) : snapGel() });
+  if (history.length > MAX_UNDO) history.shift();
   syncUndo();
 }
 function undo() {
-  if (!undoStack.length || stroking) return;
-  mctx.putImageData(undoStack.pop(), 0, 0);
-  uploadMask(); syncUndo(); render();
+  if (!history.length || stroking) return;
+  const h = history.pop();
+  if (h.kind === "mask") { mctx.putImageData(h.snap, 0, 0); uploadMask(); }
+  else restoreGel(h.snap);
+  syncUndo(); render();
 }
 function stamp(x, y) {
-  const r = +$("rad").value * mk.height;
+  const r = protectR() * mk.height;
   const g = mctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, "rgba(255,50,50,1)"); g.addColorStop(.6, "rgba(255,50,50,1)"); g.addColorStop(1, "rgba(255,50,50,0)");
   mctx.fillStyle = g;
   mctx.fillRect(x - r, y - r, 2 * r, 2 * r);
 }
-function maskPos(e) {
+function uvPos(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / r.width * mk.width, y: (e.clientY - r.top) / r.height * mk.height };
+  return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
 }
-function paintTo(p) {
-  const step = Math.max(1, +$("rad").value * mk.height * .25);
-  const dx = p.x - last.x, dy = p.y - last.y, n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / step));
-  for (let i = 1; i <= n; i++) stamp(last.x + dx * i / n, last.y + dy * i / n);
+function paintTo(p) {                // p en uv; la máscara tiene su propia resolución
+  const step = Math.max(1, protectR() * mk.height * .25);
+  const a = { x: last.x * mk.width, y: last.y * mk.height }, b = { x: p.x * mk.width, y: p.y * mk.height };
+  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
+  for (let i = 1; i <= n; i++) stamp(a.x + (b.x - a.x) * i / n, a.y + (b.y - a.y) * i / n);
   last = p;
   uploadMask(); render();
 }
+function dragGel(p) {                // empuja el gel a lo largo del trazo, en pasos pequeños
+  const dx = p.x - last.x, dy = p.y - last.y, r = gelR();
+  const n = Math.min(40, Math.max(1, Math.ceil(Math.hypot(dx * imgW / imgH, dy) / (r * .2))));
+  for (let i = 1; i <= n; i++)
+    pushStep(last.x + dx * (i - .5) / n, last.y + dy * (i - .5) / n, dx / n, dy / n, r);
+  state.hasGel = true;
+  last = p;
+  render();
+}
 function placeRing(e) {
   const r = cv.getBoundingClientRect(), w = wrap.getBoundingClientRect();
-  const d = 2 * +$("rad").value * r.height;
+  const d = 2 * toolR() * r.height;
   ring.style.width = ring.style.height = d + "px";
   ring.style.transform = `translate(${e.clientX - w.left - d / 2}px, ${e.clientY - w.top - d / 2}px)`;
 }
-let lastPtr = null;
-function refreshRing() { if (state.protect && lastPtr) placeRing(lastPtr); }
+function refreshRing() { if (state.tool && lastPtr) placeRing(lastPtr); }
 $("rad").addEventListener("input", refreshRing);
+$("grad").addEventListener("input", refreshRing);
 
-$("protect").addEventListener("click", () => {
-  state.protect = !state.protect;
-  $("protect").textContent = "Pincel: " + (state.protect ? "on" : "off");
-  cv.classList.toggle("brush", state.protect);
-  mk.classList.toggle("on", state.protect);
-  if (!state.protect) ring.style.display = "none";
+document.querySelector('.seg[data-key="tool"]').addEventListener("click", () => {
+  cv.classList.toggle("brush", state.tool > 0);
+  mk.classList.toggle("on", state.tool === 1);
+  if (!state.tool) ring.style.display = "none"; else refreshRing();
 });
 cv.addEventListener("pointerdown", e => {
-  if (!state.protect || !state.loaded || e.button > 0) return;
+  if (!state.tool || !state.loaded || e.button > 0) return;
   e.preventDefault();
   cv.setPointerCapture(e.pointerId);
-  pushUndo(); stroking = true;
-  last = maskPos(e); stamp(last.x, last.y); uploadMask(); render();
+  last = uvPos(e); stroking = true;
+  if (state.tool === 1) { pushHistory("mask"); paintTo(last); }
+  else pushHistory("gel");
 });
 cv.addEventListener("pointermove", e => {
   lastPtr = e;
-  if (!state.protect) return;
+  if (!state.tool) return;
   ring.style.display = "block"; placeRing(e);
-  if (stroking) paintTo(maskPos(e));
+  if (!stroking) return;
+  if (state.tool === 1) paintTo(uvPos(e)); else dragGel(uvPos(e));
 });
 const endStroke = () => { stroking = false; };
 cv.addEventListener("pointerup", endStroke);
@@ -475,8 +626,12 @@ cv.addEventListener("pointercancel", endStroke);
 cv.addEventListener("pointerleave", () => { if (!stroking) ring.style.display = "none"; });
 $("undo").addEventListener("click", undo);
 $("clearP").addEventListener("click", () => {
-  if (!undoStack.length && !state.loaded) return;
-  pushUndo(); mctx.clearRect(0, 0, mk.width, mk.height); uploadMask(); render();
+  if (!state.loaded) return;
+  pushHistory("mask"); mctx.clearRect(0, 0, mk.width, mk.height); uploadMask(); render();
+});
+$("clearG").addEventListener("click", () => {
+  if (!state.loaded) return;
+  pushHistory("gel"); restoreGel(zeroGelData()); render();
 });
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
