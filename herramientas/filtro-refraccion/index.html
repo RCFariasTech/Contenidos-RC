@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filtro Refracción Líquida</title>
+<style>
+  :root {
+    --bg: #fafaf8; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #dcdcd6; --accent: #1d1d1b; --accent-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121212; --panel: #1b1b1a; --text: #ecece8; --muted: #9a9a94;
+      --line: #333330; --accent: #ecece8; --accent-text: #121212;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 320px; min-height: 100vh; }
+  .stage { display: flex; align-items: center; justify-content: center; padding: 16px; min-width: 0; }
+  .canvas-wrap { position: relative; max-width: 100%; max-height: calc(100vh - 32px); display: none; }
+  .canvas-wrap.on { display: block; }
+  canvas { display: block; max-width: 100%; max-height: calc(100vh - 32px); width: auto; height: auto;
+    border-radius: 6px; background: #000; touch-action: manipulation; }
+  .drop { width: min(520px, 100%); border: 2px dashed var(--line); border-radius: 12px; padding: 48px 24px;
+    text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--text); color: var(--text); }
+  .drop strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow-y: auto; max-height: 100vh; }
+  h1 { font-size: 17px; margin: 0 0 14px; }
+  .ctl { margin-bottom: 14px; }
+  .ctl label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=range] { width: 100%; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: transparent; color: var(--text); padding: 7px 4px; font: inherit; font-size: 13px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .btn { width: 100%; border: 1px solid var(--line); background: transparent; color: var(--text);
+    padding: 10px; border-radius: 8px; font: inherit; cursor: pointer; margin-bottom: 8px; }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .row { display: flex; gap: 8px; }
+  .row .btn { margin-bottom: 8px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+  .err { color: #b3261e; font-size: 13px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    aside { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+    .canvas-wrap, canvas { max-height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage">
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <strong>Elige o arrastra una imagen</strong>
+      JPG, PNG o WebP. Se procesa en tu navegador; la imagen no se sube a ningún servidor.
+    </div>
+    <div class="canvas-wrap" id="wrap"><canvas id="cv"></canvas></div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </main>
+
+  <aside>
+    <h1>Refracción líquida</h1>
+    <button class="btn" id="open">Cambiar imagen</button>
+
+    <div class="ctl"><label>Intensidad <span id="vInt"></span></label>
+      <input type="range" id="int" min="0" max="1" step="0.01" value="0.65"></div>
+    <div class="ctl"><label>Cobertura <span id="vCov"></span></label>
+      <input type="range" id="cov" min="0" max="1" step="0.01" value="0.7"></div>
+
+    <div class="ctl"><label>Tamaño de pliegue</label>
+      <div class="seg" data-key="size"><button data-v="0">Amplio</button><button data-v="1">Fino</button><button data-v="2" class="on">Mixto</button></div></div>
+    <div class="ctl"><label>Dirección</label>
+      <div class="seg" data-key="dir"><button data-v="0">Horizontal</button><button data-v="1" class="on">Diagonal</button><button data-v="2">Libre</button></div></div>
+    <div class="ctl"><label>Duplicación</label>
+      <div class="seg" data-key="dup"><button data-v="0">Ninguna</button><button data-v="1" class="on">Sutil</button><button data-v="2">Marcada</button></div></div>
+    <div class="ctl"><label>Microgotas</label>
+      <div class="seg" data-key="drops"><button data-v="0">Ninguna</button><button data-v="1" class="on">Escasas</button><button data-v="2">Abundantes</button></div></div>
+
+    <hr class="sep">
+    <div class="ctl"><label>Zona protegida <span id="vRad"></span></label>
+      <p class="hint">Activa el modo y haz clic en la imagen (ojos, texto, producto) para reducir ahí la distorsión.</p>
+      <input type="range" id="rad" min="0.04" max="0.4" step="0.01" value="0.15">
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="protect">Marcar zonas: off</button>
+        <button class="btn" id="clearP">Borrar</button>
+      </div></div>
+
+    <hr class="sep">
+    <button class="btn" id="seed">Nuevo patrón (semilla)</button>
+    <button class="btn" id="cmp">Mantén pulsado: ver original</button>
+    <button class="btn primary" id="dl" disabled>Descargar PNG</button>
+    <p class="hint" id="info"></p>
+    <p class="err" id="err"></p>
+  </aside>
+</div>
+
+<script>
+"use strict";
+const MAX_ZONES = 6;
+const MAX_SIDE = 4096;
+
+const VERT = `
+attribute vec2 a;
+varying vec2 vUv;
+void main(){ vUv = vec2(a.x*0.5+0.5, 0.5-a.y*0.5); gl_Position = vec4(a,0.,1.); }`;
+
+const FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D tex;
+uniform float aspect, intensity, coverage, seed, sizeMix, dirMode, dupAmt, dropAmt, showOrig;
+uniform vec3 zones[${MAX_ZONES}];   // x, y (uv), radio (alto=1)
+uniform int zoneCount;
+
+float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+vec2 hash2(vec2 p){ return vec2(hash(p), hash(p+vec2(17.7,93.1))); }
+
+// ruido de valor suave (C2)
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*f*(f*(f*6.-15.)+10.);
+  float a = hash(i), b = hash(i+vec2(1,0)), c = hash(i+vec2(0,1)), d = hash(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbm(vec2 p){
+  float s = 0., a = .5;
+  for(int i=0;i<4;i++){ s += a*vnoise(p); p = p*2.03 + 11.7; a *= .5; }
+  return s;
+}
+
+vec2 mirror(vec2 uv){ return 1. - abs(1. - mod(uv, 2.)); }
+
+// "grosor" de la lámina transparente en el punto p (espacio con alto = 1)
+float height(vec2 p){
+  // orientación de los pliegues
+  float ang = dirMode < .5 ? 0.0 : (dirMode < 1.5 ? -0.62 + 0.25*(vnoise(vec2(seed*.37,1.))-.5) : (fbm(p*.7+seed)-.5)*4.2);
+  float c = cos(ang), s = sin(ang);
+  vec2 q = vec2(c*p.x - s*p.y, s*p.x + c*p.y);
+  q.x *= .42;                       // alarga los pliegues a lo largo de la dirección
+  q += seed*3.1;
+  // domain warp: rompe cualquier regularidad (ni senoidal ni concéntrico)
+  vec2 w = vec2(fbm(q*1.1), fbm(q*1.1+7.3)) - .5;
+  q += w*2.2;
+  float coarse = fbm(q*1.5);
+  float fine   = fbm(q*4.6 + 3.0);
+  float rid    = 1. - abs(2.*fbm(q*2.7+9.1) - 1.);
+  float wc = sizeMix < .5 ? 1. : (sizeMix < 1.5 ? .12 : .55);
+  float wf = sizeMix < .5 ? .1 : (sizeMix < 1.5 ? 1. : .55);
+  float h = wc*coarse + wf*(.5*fine + .6*rid*rid) ;
+  // plegado: invierte localmente el desplazamiento => fragmentos duplicados
+  h += dupAmt * .05 * sin(h*38. + 5.*coarse);
+  return h;
+}
+
+float coverMask(vec2 p){
+  float n = fbm(p*1.15 + seed*1.7 + 40.);
+  float lo = mix(.6, -.12, coverage);
+  return smoothstep(lo, lo+.22, n);
+}
+
+float protect(vec2 uv){
+  float m = 1.;
+  for(int i=0;i<${MAX_ZONES};i++){
+    if(i>=zoneCount) break;
+    vec2 d = (uv - zones[i].xy) * vec2(aspect,1.);
+    float r = zones[i].z;
+    m *= smoothstep(r*.55, r*1.15, length(d));
+  }
+  return m;
+}
+
+// campo de desplazamiento (en uv) + diagnóstico para bordes
+void field(vec2 p, vec2 uv, out vec2 d, out float edge){
+  float e = .0025;
+  float h  = height(p);
+  float hx = height(p+vec2(e,0.)), hxm = height(p-vec2(e,0.));
+  float hy = height(p+vec2(0.,e)), hym = height(p-vec2(0.,e));
+  vec2 g = vec2(hx-hxm, hy-hym)/(2.*e);
+  float lap = (hx+hxm+hy+hym-4.*h)/(e*e);
+  float amp = intensity * coverMask(p) * protect(uv);
+  d = -g * (.034*amp);
+  d /= 1. + length(d)/.06;          // límite suave: evita zonas ilegibles
+  d.x /= aspect;
+  edge = clamp(lap*.00055*amp*(.4+intensity), -1., 1.);
+}
+
+// microgotas: lente circular con borde refractivo
+vec2 droplets(vec2 p, out float rim, out float spec){
+  rim = 0.; spec = 0.;
+  if(dropAmt < .5) return vec2(0.);
+  float dens = dropAmt < 1.5 ? .22 : .55;
+  vec2 off = vec2(0.);
+  for(int k=0;k<2;k++){
+    float sc = k==0 ? 34. : 70.;
+    vec2 g = p*sc + float(k)*31.7 + seed*5.;
+    vec2 id = floor(g), f = fract(g);
+    vec2 r = hash2(id);
+    float exists = step(hash(id+3.3), dens*(k==0?1.:.8));
+    vec2 c = .25 + .5*r;
+    float rad = (.07 + .13*hash(id+9.1)) * (k==0 ? 1. : .8);
+    vec2 v = f - c;
+    float ell = 1. + .5*(hash(id+5.5)-.5);
+    v.x *= ell;
+    float l = length(v);
+    float inside = exists * (1. - smoothstep(rad*.9, rad, l));
+    off += inside * (-v/rad) * .0045 * (k==0?1.:.7);
+    rim += exists * smoothstep(rad*.62, rad*.95, l) * (1.-smoothstep(rad*.95, rad*1.08, l));
+    vec2 hv = v - vec2(-.35,-.35)*rad;
+    spec += exists * (1.-smoothstep(0., rad*.28, length(hv)));
+  }
+  return off;
+}
+
+void main(){
+  vec2 uv = vUv;
+  if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
+  vec2 p = uv * vec2(aspect, 1.);
+
+  vec2 d; float edge;
+  field(p, uv, d, edge);
+
+  float rim, spec;
+  vec2 dr = droplets(p, rim, spec);
+  float pm = protect(uv);
+  dr *= pm; rim *= pm; spec *= pm;
+  dr.x /= aspect;
+
+  vec3 col = texture2D(tex, mirror(uv + d + dr)).rgb;
+
+  // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
+  float hi = max(edge, 0.), lo = max(-edge, 0.);
+  col = mix(col, col + (1.-col)*.55, clamp(hi,0.,1.));
+  col *= 1. - .45*clamp(lo,0.,1.);
+
+  // anillo oscuro y brillo contenido de las gotas (adaptado a la imagen)
+  col *= 1. - .35*rim*dropAmt/ max(dropAmt,1.);
+  col += (1.-col) * .35 * clamp(spec,0.,1.) * pm;
+
+  gl_FragColor = vec4(clamp(col,0.,1.), 1.);
+}`;
+
+const $ = id => document.getElementById(id);
+const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
+const state = { size: 2, dir: 1, dup: 1, drops: 1, seed: 1.0, zones: [], protect: false, loaded: false, showOrig: 0 };
+
+let gl, prog, tex, U = {}, imgW = 0, imgH = 0, raf = 0;
+
+function initGL() {
+  gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
+  if (!gl) { errEl.textContent = "Tu navegador no soporta WebGL."; return false; }
+  const sh = (t, src) => {
+    const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  };
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  } catch (e) { errEl.textContent = "Error de shader: " + e.message; return false; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "a");
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ["tex","aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","dropAmt","showOrig","zones","zoneCount"])
+    U[n] = gl.getUniformLocation(prog, n);
+  tex = gl.createTexture();
+  return true;
+}
+
+function loadImage(file) {
+  errEl.textContent = "";
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const lim = Math.min(MAX_SIDE, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+    const k = Math.min(1, lim / Math.max(w, h));
+    w = Math.round(w * k); h = Math.round(h * k);
+    // reescalar con canvas 2D (también cubre texturas no potencia de 2 en WebGL1)
+    const tmp = document.createElement("canvas"); tmp.width = w; tmp.height = h;
+    tmp.getContext("2d").drawImage(img, 0, 0, w, h);
+    imgW = w; imgH = h; cv.width = w; cv.height = h;
+    gl.viewport(0, 0, w, h);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, tmp);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    state.loaded = true; state.zones = [];
+    drop.style.display = "none"; wrap.classList.add("on");
+    $("dl").disabled = false;
+    $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
+    render();
+  };
+  img.onerror = () => { errEl.textContent = "No se pudo leer esa imagen."; };
+  img.src = url;
+}
+
+function render() {
+  if (!state.loaded) return;
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => {
+    gl.uniform1i(U.tex, 0);
+    gl.uniform1f(U.aspect, imgW / imgH);
+    gl.uniform1f(U.intensity, +$("int").value);
+    gl.uniform1f(U.coverage, +$("cov").value);
+    gl.uniform1f(U.seed, state.seed);
+    gl.uniform1f(U.sizeMix, state.size);
+    gl.uniform1f(U.dirMode, state.dir);
+    gl.uniform1f(U.dupAmt, state.dup);
+    gl.uniform1f(U.dropAmt, state.drops);
+    gl.uniform1f(U.showOrig, state.showOrig);
+    const z = new Float32Array(MAX_ZONES * 3);
+    state.zones.forEach((q, i) => { z[i*3] = q.x; z[i*3+1] = q.y; z[i*3+2] = q.r; });
+    gl.uniform3fv(U.zones, z);
+    gl.uniform1i(U.zoneCount, state.zones.length);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  });
+}
+
+// ---- UI ----
+$("vInt").textContent = (+$("int").value).toFixed(2);
+$("vCov").textContent = (+$("cov").value).toFixed(2);
+$("vRad").textContent = (+$("rad").value).toFixed(2);
+for (const id of ["int", "cov", "rad"]) {
+  $(id).addEventListener("input", () => {
+    $({int:"vInt", cov:"vCov", rad:"vRad"}[id]).textContent = (+$(id).value).toFixed(2);
+    render();
+  });
+}
+document.querySelectorAll(".seg").forEach(seg => {
+  seg.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    state[seg.dataset.key] = +b.dataset.v;
+    render();
+  });
+});
+$("seed").addEventListener("click", () => { state.seed = Math.round(Math.random() * 900) / 10 + 1; render(); });
+
+const cmp = $("cmp");
+const setOrig = v => { state.showOrig = v; render(); };
+cmp.addEventListener("pointerdown", () => setOrig(1));
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) cmp.addEventListener(ev, () => setOrig(0));
+
+$("protect").addEventListener("click", () => {
+  state.protect = !state.protect;
+  $("protect").textContent = "Marcar zonas: " + (state.protect ? "on" : "off");
+  cv.style.cursor = state.protect ? "crosshair" : "";
+});
+$("clearP").addEventListener("click", () => { state.zones = []; render(); });
+cv.addEventListener("click", e => {
+  if (!state.protect || !state.loaded) return;
+  const r = cv.getBoundingClientRect();
+  if (state.zones.length >= MAX_ZONES) state.zones.shift();
+  state.zones.push({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, r: +$("rad").value });
+  render();
+});
+
+$("dl").addEventListener("click", () => {
+  render();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    cv.toBlob(b => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b); a.download = "refraccion-liquida.png"; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, "image/png");
+  }));
+});
+
+const fileIn = $("file");
+const pick = () => fileIn.click();
+$("open").addEventListener("click", pick);
+drop.addEventListener("click", pick);
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") pick(); });
+fileIn.addEventListener("change", () => { if (fileIn.files[0]) loadImage(fileIn.files[0]); fileIn.value = ""; });
+for (const t of [document.body]) {
+  t.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  t.addEventListener("dragleave", () => drop.classList.remove("over"));
+  t.addEventListener("drop", e => {
+    e.preventDefault(); drop.classList.remove("over");
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith("image/")) loadImage(f);
+  });
+}
+
+initGL();
+</script>
+</body>
+</html>
