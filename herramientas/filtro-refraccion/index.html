@@ -61,7 +61,7 @@
       JPG, PNG o WebP. Se procesa en tu navegador; la imagen no se sube a ningún servidor.
     </div>
     <div class="canvas-wrap" id="wrap"><canvas id="cv"></canvas></div>
-    <input type="file" id="file" accept="image/*" hidden>
+    <input type="file" id="file" accept="image/*,.heic,.heif" hidden>
   </main>
 
   <aside>
@@ -279,24 +279,45 @@ function initGL() {
   return true;
 }
 
-function loadImage(file) {
-  errEl.textContent = "";
+async function decode(file) {
+  if (window.createImageBitmap) {
+    try { return await createImageBitmap(file, { imageOrientation: "from-image" }); } catch (e) {}
+  }
   const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    URL.revokeObjectURL(url);
-    let w = img.naturalWidth, h = img.naturalHeight;
+  try {
+    return await new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img); img.onerror = () => rej(new Error("decode"));
+      img.src = url;
+    });
+  } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
+}
+
+async function loadImage(file) {
+  errEl.textContent = "";
+  if (!gl) { errEl.textContent = errEl.textContent || "WebGL no está disponible."; return; }
+  try {
+    let src;
+    try { src = await decode(file); }
+    catch (e) {
+      const heic = /hei[cf]/i.test(file.type + file.name);
+      throw new Error(heic
+        ? "Este navegador no puede leer HEIC/HEIF. Abre la app en Safari o exporta la foto a JPG/PNG."
+        : "No se pudo leer esa imagen (formato no compatible o archivo dañado).");
+    }
+    let w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
     const lim = Math.min(MAX_SIDE, gl.getParameter(gl.MAX_TEXTURE_SIZE));
     const k = Math.min(1, lim / Math.max(w, h));
-    w = Math.round(w * k); h = Math.round(h * k);
-    // reescalar con canvas 2D (también cubre texturas no potencia de 2 en WebGL1)
+    w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
     const tmp = document.createElement("canvas"); tmp.width = w; tmp.height = h;
-    tmp.getContext("2d").drawImage(img, 0, 0, w, h);
+    tmp.getContext("2d").drawImage(src, 0, 0, w, h);
+    if (src.close) src.close();
     imgW = w; imgH = h; cv.width = w; cv.height = h;
     gl.viewport(0, 0, w, h);
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, tmp);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tmp);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -306,9 +327,7 @@ function loadImage(file) {
     $("dl").disabled = false;
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
     render();
-  };
-  img.onerror = () => { errEl.textContent = "No se pudo leer esa imagen."; };
-  img.src = url;
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 function render() {
@@ -388,14 +407,14 @@ const pick = () => fileIn.click();
 $("open").addEventListener("click", pick);
 drop.addEventListener("click", pick);
 drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") pick(); });
-fileIn.addEventListener("change", () => { if (fileIn.files[0]) loadImage(fileIn.files[0]); fileIn.value = ""; });
+fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (f) loadImage(f); });
 for (const t of [document.body]) {
   t.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
   t.addEventListener("dragleave", () => drop.classList.remove("over"));
   t.addEventListener("drop", e => {
     e.preventDefault(); drop.classList.remove("over");
     const f = e.dataTransfer.files[0];
-    if (f && f.type.startsWith("image/")) loadImage(f);
+    if (f) loadImage(f);
   });
 }
 
