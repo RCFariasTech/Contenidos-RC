@@ -111,12 +111,19 @@
           <input type="range" id="mEro" min="0" max="1" step="0.01" value="0.35"></div>
         <div class="ctl" title="Cantidad y grosor de las vetas de color"><label>Vetas <span id="vmCov"></span></label>
           <input type="range" id="mCov" min="0" max="1" step="0.01" value="0.6"></div>
-        <div class="ctl" title="Cuántas piezas conservan la foto reconocible"><label>Legibilidad <span id="vmLeg"></span></label>
-          <input type="range" id="mLeg" min="0" max="1" step="0.01" value="0.35"></div>
         <div class="ctl" title="Cuántas bandas de color/vetas de nivel aparecen"><label>Bandas <span id="vmScale"></span></label>
           <input type="range" id="mScale" min="0" max="1" step="0.01" value="0.5"></div>
         <div class="ctl" title="Gira el matiz (hue) de todos los colores del resultado"><label>Matiz <span id="vmHue"></span></label>
           <input type="range" id="mHue" min="-180" max="180" step="1" value="0"></div>
+      </div>
+      <div class="hint" style="margin:0 0 4px">Solo las vetas</div>
+      <div class="grid3">
+        <div class="ctl" title="Gira el matiz (hue) solo de las vetas"><label>Matiz <span id="vmVHue"></span></label>
+          <input type="range" id="mVHue" min="-180" max="180" step="1" value="0"></div>
+        <div class="ctl" title="Aclara u oscurece solo las vetas"><label>Tono <span id="vmVTone"></span></label>
+          <input type="range" id="mVTone" min="-1" max="1" step="0.01" value="0"></div>
+        <div class="ctl" title="Contraste solo de las vetas"><label>Contraste <span id="vmVCon"></span></label>
+          <input type="range" id="mVCon" min="-1" max="1" step="0.01" value="0"></div>
       </div>
     </div>
 
@@ -297,7 +304,7 @@ void main(){
 const FRAG2 = COMMON + `
 uniform sampler2D tex;
 uniform float showOrig, hasGel;
-uniform float mRet, mPose, mHue, mTwist, mEro, mCov, mLeg, mScale;
+uniform float mRet, mPose, mHue, mTwist, mEro, mCov, mScale, mVHue, mVTone, mVCon;
 uniform vec3 palD, palL, pal0, pal1, pal2;       // oscuro, claro y 3 dominantes de la foto
 
 float a0(){ return seed*1.7 + .6; }              // dirección general del flujo
@@ -352,28 +359,11 @@ void main(){
   // ---- pieza: desplazamiento propio y estado (foto / mineral) ----
   vec2 hp = hash2(cell);
   vec2 off = (hp - .5) * 2. * mPose * .08 * pm;
-  float h = mix(hash(cell + 3.7), fbm(q*.6 + 7.), .5);
-  float tL = mix(.34, .70, mLeg);
-  float mineral = smoothstep(tL - .04, tL + .04, h) * pm;
-
   vec3 photo = texture2D(tex, mirror((p + off) / asp)).rgb;
-
-  // mineral: los colores de la foto estirados a lo largo del flujo
-  float fa = a0() + (fbm(q*.8 + 2.) - .5) * 2.2;
-  vec2 fdir = vec2(cos(fa), sin(fa));
-  float Ls = .15;                               // largo fijo del estirado en zonas minerales
-  vec3 smear = vec3(0.);
-  for(int i=0;i<14;i++){
-    float t = float(i)/13. - .5;
-    smear += texture2D(tex, mirror((p + off + fdir*Ls*t) / asp)).rgb;
-  }
-  smear /= 14.;
-  float lm = dot(smear, vec3(.33));
-  smear = clamp(mix(vec3(lm), smear, 1.35), 0., 1.);   // evita que el promedio se apague en gris
   float K = mix(6., 16., mScale);
   float F = Fq(q);
-  smear *= .88 + .24*sin(6.2832*F*K*.5);        // bandas sutiles de luz dentro de las zonas minerales
-  vec3 col = mix(photo, smear, mineral);
+  vec3 col = photo;                              // la foto siempre es legible: solo se fractura y se desplaza
+
 
   // ---- vetas ----
   float wBase = mix(.0028, .014, mCov);
@@ -401,6 +391,11 @@ void main(){
   vec3 core = mix(vc, palL, .5);
   float coreMask = 1. - smoothstep(0., .45, 1. - va);                   // núcleo más claro y fino
   vec3 vcol = mix(vc, core, coreMask);
+  float vha = mVHue * .0174533;                                         // matiz solo de las vetas
+  const vec3 kv = vec3(.57735);
+  vcol = vcol*cos(vha) + cross(kv, vcol)*sin(vha) + kv*dot(kv, vcol)*(1. - cos(vha));
+  vcol = mix(vcol, mVTone > 0. ? vec3(1.) : vec3(0.), abs(mVTone)*.8);  // tono: hacia claro u oscuro
+  vcol = clamp((vcol - .5)*(mVCon > 0. ? 1. + mVCon*1.4 : 1. + mVCon*.8) + .5, 0., 1.);
   float glit = .9 + .2*hash(floor(p*1100.));                           // grano fino de la veta
   col = mix(col, vcol*glit, va);
   col *= 1. - .22*smoothstep(.0, .5, va)*(1.-smoothstep(.5, 1., va));    // halo oscuro de relieve
@@ -434,7 +429,7 @@ function makeProgram(fragSrc) {
   return p;
 }
 const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
-const MIN_IDS = ["mRet", "mPose", "mHue", "mTwist", "mEro", "mCov", "mLeg", "mScale"];
+const MIN_IDS = ["mRet", "mPose", "mHue", "mTwist", "mEro", "mCov", "mScale", "mVHue", "mVTone", "mVCon"];
 const PAL_IDS = ["palD", "palL", "pal0", "pal1", "pal2"];
 const COMMON_U = [...PAL_IDS, "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
@@ -656,7 +651,7 @@ $("vGrad").textContent = (+$("grad").value).toFixed(2);
 $("vStr").textContent = (+$("gstr").value).toFixed(2);
 for (const id of MIN_IDS) {
   const sp = $("v" + id), inp = $(id);
-  const show = () => { sp.textContent = id === "mHue" ? Math.round(+inp.value) + "°" : (+inp.value).toFixed(2); };
+  const show = () => { sp.textContent = (id === "mHue" || id === "mVHue") ? Math.round(+inp.value) + "°" : (+inp.value).toFixed(2); };
   show();
   inp.addEventListener("input", () => { show(); render(); });
 }
