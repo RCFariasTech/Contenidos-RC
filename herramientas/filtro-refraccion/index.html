@@ -105,8 +105,6 @@
           <input type="range" id="mRet" min="0" max="1" step="0.01" value="0.6"></div>
         <div class="ctl" title="Cuánto se desplaza cada pieza respecto a las vecinas"><label>Desplazamiento <span id="vmPose"></span></label>
           <input type="range" id="mPose" min="0" max="1" step="0.01" value="0.5"></div>
-        <div class="ctl" title="Cuánto se estiran los colores de la foto en las zonas minerales"><label>Estiramiento <span id="vmDrag"></span></label>
-          <input type="range" id="mDrag" min="0" max="1" step="0.01" value="0.55"></div>
         <div class="ctl" title="Cuánto se curvan y retuercen las grietas y las bandas"><label>Flujo <span id="vmTwist"></span></label>
           <input type="range" id="mTwist" min="0" max="1" step="0.01" value="0.5"></div>
         <div class="ctl" title="Cuántas ramificaciones finas salen de las grietas"><label>Ramificación <span id="vmEro"></span></label>
@@ -117,6 +115,8 @@
           <input type="range" id="mLeg" min="0" max="1" step="0.01" value="0.35"></div>
         <div class="ctl" title="Cuántas bandas de color/vetas de nivel aparecen"><label>Bandas <span id="vmScale"></span></label>
           <input type="range" id="mScale" min="0" max="1" step="0.01" value="0.5"></div>
+        <div class="ctl" title="Gira el matiz (hue) de todos los colores del resultado"><label>Matiz <span id="vmHue"></span></label>
+          <input type="range" id="mHue" min="-180" max="180" step="1" value="0"></div>
       </div>
     </div>
 
@@ -297,7 +297,7 @@ void main(){
 const FRAG2 = COMMON + `
 uniform sampler2D tex;
 uniform float showOrig, hasGel;
-uniform float mRet, mPose, mDrag, mTwist, mEro, mCov, mLeg, mScale;
+uniform float mRet, mPose, mHue, mTwist, mEro, mCov, mLeg, mScale;
 uniform vec3 palD, palL, pal0, pal1, pal2;       // oscuro, claro y 3 dominantes de la foto
 
 float a0(){ return seed*1.7 + .6; }              // dirección general del flujo
@@ -361,7 +361,7 @@ void main(){
   // mineral: los colores de la foto estirados a lo largo del flujo
   float fa = a0() + (fbm(q*.8 + 2.) - .5) * 2.2;
   vec2 fdir = vec2(cos(fa), sin(fa));
-  float Ls = mDrag * .28;
+  float Ls = .15;                               // largo fijo del estirado en zonas minerales
   vec3 smear = vec3(0.);
   for(int i=0;i<14;i++){
     float t = float(i)/13. - .5;
@@ -405,6 +405,11 @@ void main(){
   col = mix(col, vcol*glit, va);
   col *= 1. - .22*smoothstep(.0, .5, va)*(1.-smoothstep(.5, 1., va));    // halo oscuro de relieve
 
+  // matiz: giro de color alrededor del eje gris (preserva luminosidad aproximada)
+  float ha = mHue * .0174533, ca = cos(ha), sa = sin(ha);
+  const vec3 kk = vec3(.57735);
+  col = col*ca + cross(kk, col)*sa + kk*dot(kk, col)*(1. - ca);
+
   gl_FragColor = vec4(clamp(col, 0., 1.), 1.);
 }`;
 
@@ -429,7 +434,7 @@ function makeProgram(fragSrc) {
   return p;
 }
 const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
-const MIN_IDS = ["mRet", "mPose", "mDrag", "mTwist", "mEro", "mCov", "mLeg", "mScale"];
+const MIN_IDS = ["mRet", "mPose", "mHue", "mTwist", "mEro", "mCov", "mLeg", "mScale"];
 const PAL_IDS = ["palD", "palL", "pal0", "pal1", "pal2"];
 const COMMON_U = [...PAL_IDS, "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
@@ -651,8 +656,9 @@ $("vGrad").textContent = (+$("grad").value).toFixed(2);
 $("vStr").textContent = (+$("gstr").value).toFixed(2);
 for (const id of MIN_IDS) {
   const sp = $("v" + id), inp = $(id);
-  sp.textContent = (+inp.value).toFixed(2);
-  inp.addEventListener("input", () => { sp.textContent = (+inp.value).toFixed(2); render(); });
+  const show = () => { sp.textContent = id === "mHue" ? Math.round(+inp.value) + "°" : (+inp.value).toFixed(2); };
+  show();
+  inp.addEventListener("input", () => { show(); render(); });
 }
 document.querySelector('.seg[data-key="effect"]').addEventListener("click", e => {
   const bt = e.target.closest("button"); if (!bt) return;
