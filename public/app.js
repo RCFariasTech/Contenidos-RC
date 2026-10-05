@@ -163,7 +163,7 @@ function renderInvestigacion(inv) {
 
 // ---------- miniaturas de las propuestas gráficas (junto a cada texto) ----------
 
-const miniaturas = { cache: new Map(), pendientes: new Set(), semillas: new Map() };
+const miniaturas = { cache: new Map(), pendientes: new Set(), semillas: new Map(), piezas: new Map() };
 const semillaDe = (piezaId) => miniaturas.semillas.get(piezaId) || 0;
 const claveVista = (p) => `${p.id}:${p.version}:${semillaDe(p.id)}`;
 
@@ -171,15 +171,17 @@ function pintarMiniatura(caja, pieza) {
   const dato = miniaturas.cache.get(claveVista(pieza));
   const i = Number(caja.dataset.indice);
   caja.classList.toggle("miniatura--cargando", !dato);
-  if (dato?.imagenes?.[i]) {
+  if (!dato) {
+    caja.replaceChildren();
+  } else if (dato.imagenes?.[i]) {
     caja.replaceChildren(el("img", { src: dato.imagenes[i], alt: "", loading: "lazy" }));
-  } else if (dato) {
+  } else {
     caja.replaceChildren(el("span", {}, "Sin vista previa"));
   }
 }
 
 function repintarMiniaturas(piezaId) {
-  const pieza = estado.piezas.find((p) => p.id === piezaId);
+  const pieza = miniaturas.piezas.get(piezaId);
   if (!pieza) return;
   document.querySelectorAll(`.miniatura[data-pieza="${piezaId}"]`).forEach((caja) => pintarMiniatura(caja, pieza));
 }
@@ -203,6 +205,7 @@ function miniatura(pieza, i) {
     "aria-label": `Ver la propuesta gráfica de la ${reel ? "escena" : "tarjeta"} ${i + 1} en grande`,
     onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget, i),
   });
+  miniaturas.piezas.set(pieza.id, pieza);
   pintarMiniatura(caja, pieza);
   pedirMiniaturas(pieza);
   return caja;
@@ -227,7 +230,19 @@ function renderTextos(pieza, conMiniaturas = true) {
     title: pieza.formato === "Reel" ? "Vista previa del guion visual (9:16); desde ahí descargas el PDF para Adobe Express" : "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
     onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget),
   }, pieza.formato === "Reel" ? "Ver guion visual" : "Ver tarjetas") : null;
-  return el("section", { clase: "bloque" }, el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), boton), el("ol", { clase: "textos" }, items));
+  const reel = pieza.formato === "Reel";
+  const rehacer = conMiniaturas ? el("button", {
+    clase: "btn btn--secundario", type: "button",
+    title: `Muestra otra propuesta gráfica de colores y estilos para ${reel ? "las escenas" : "las tarjetas"} (el texto no cambia)`,
+    onclick: () => {
+      miniaturas.semillas.set(pieza.id, semillaDe(pieza.id) + 1);
+      repintarMiniaturas(pieza.id);  // vuelven a "cargando" y se piden con la nueva semilla
+      pedirMiniaturas(pieza);
+    },
+  }, reel ? "Rehacer escenas" : "Rehacer tarjetas") : null;
+  return el("section", { clase: "bloque" },
+    el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), el("div", { clase: "bloque__botones" }, rehacer, boton)),
+    el("ol", { clase: "textos" }, items));
 }
 
 function renderCaption(c) {
@@ -538,7 +553,7 @@ async function cargarVistaTarjetas(piezaId, indice = 0) {
   const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaDe(piezaId)}`);
   const posicion = $("dialogo-tarjetas").open ? tarjetaActual() : indice;
   piezaTarjetas = piezaId;
-  const pieza = estado.piezas.find((p) => p.id === piezaId);
+  const pieza = miniaturas.piezas.get(piezaId);
   if (pieza) {  // reutiliza estas imágenes en las miniaturas de la pieza
     miniaturas.cache.set(claveVista(pieza), { imagenes, relacion });
     repintarMiniaturas(piezaId);
