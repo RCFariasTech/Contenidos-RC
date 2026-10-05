@@ -45,3 +45,6 @@ FORMATO CARRUSEL:
   ORDEN DE LECTURA: el titular se lee primero y el texto después, y juntos deben leerse de corrido. El titular es una oración o idea
   COMPLETA con sentido propio (nunca termina en una preposición o artículo como "de", "que", "al"), y el texto empieza una idea nueva
   con mayúscula, sin continuar la oración del titular. Si no hay un corte natural, pon todo en el titular y deja el texto vacío.
+
+FORMATO REEL:
+- escena_5_cta: en el cierre del video aparecen los LOGOS de RC Farías y de Constellation, así que NO escribas esos nombres en escena_5_cta (ni en ninguna otra escena si no hace falta); redacta solo la llamada a la acción.

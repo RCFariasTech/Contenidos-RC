@@ -20,6 +20,7 @@ ETIQUETAS = {
 }
 RE_ANIO = re.compile(r"\b(19|20)\d{2}\b")
 RE_HASHTAG = re.compile(r"^#\w+$")
+RE_NOMBRE_EMPRESA = re.compile(r"\bRC\s+Far[ií]as\b|\bConstellation\b", re.IGNORECASE)
 RE_RC_SIN_TILDE = re.compile(r"\bRC\s+Farias\b", re.IGNORECASE)
 
 STOPWORDS = set("""
@@ -145,6 +146,10 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
 
     if formato == "Carrusel":
         errores.extend(_validar_diseno(pieza))
+
+    if formato == "Reel" and RE_NOMBRE_EMPRESA.search(pieza.get("escena_5_cta") or ""):
+        errores.append("La escena 5 no debe escribir los nombres de RC Farías ni de Constellation: en el cierre "
+                       "del reel aparecen sus logos. Reescribe el CTA sin nombrarlas.")
 
     textos = [pieza.get(c, "") for c in CAMPOS_TEXTO[formato]] + [pieza.get("caption", "")]
 

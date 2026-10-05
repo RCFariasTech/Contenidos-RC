@@ -26,6 +26,16 @@ class TestReels(unittest.TestCase):
             self.assertIn("IMAGEN O VIDEO", texto)
         self.assertIn("ESCENA 1 · GANCHO · 0–5 s", " ".join(doc[0].get_text().split()))
 
+    def test_solo_el_cierre_lleva_logos_y_se_adaptan_al_fondo(self):
+        for variante in range(5):
+            doc = pymupdf.open(stream=reels.generar_pdf(REEL, variante=variante), filetype="pdf")
+            self.assertTrue(all(not p.get_images() for p in list(doc)[:4]))   # RC / FARÍAS es una imagen PNG
+            self.assertTrue(doc[4].get_images())
+            self.assertGreater(len(doc[4].get_drawings()), 5)                   # Constellation es vector
+            self.assertNotIn("Constellation", doc[4].get_text())                # logo, no texto
+            texto = " ".join(doc[4].get_text().split())
+            self.assertIn(REEL["escena_5_cta"], texto)
+
     def test_la_descarga_no_trae_la_etiqueta_de_escena(self):
         descarga = pymupdf.open(stream=reels.generar_pdf(REEL), filetype="pdf")
         for pagina in descarga:

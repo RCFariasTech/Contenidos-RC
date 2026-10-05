@@ -11,6 +11,7 @@ import re
 from reportlab.pdfgen import canvas
 
 from rc import tarjetas
+from rc.config import RAIZ, marca
 from rc.tarjetas import M, NEGRITA, NORMAL, MUY_NEGRITA, PORTADAS, Lienzo, ajustar
 
 W, H = 1080, 1920
@@ -31,7 +32,8 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", NEGRITA, c_apoyo, M, ZONA_ARRIBA + 20,
                  W - 2 * M, 50, 34)
     # Espacio para la imagen o el video
-    y_caja, alto_caja = ZONA_ARRIBA + 110, 800
+    cierre = numero == len(CAMPOS)  # la última escena lleva los logos en vez de los nombres de las empresas
+    y_caja, alto_caja = ZONA_ARRIBA + 110, 520 if cierre else 800
     tinta = L.col["blanco"] if oscuro else L.col["azul_marino"]
     c.saveState()
     c.setFillColor(tinta)
@@ -50,7 +52,18 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 - 28, f"Escena {numero} · {tiempo}")
     # Texto en pantalla
     y_texto = y_caja + alto_caja + 60
-    L.bloque(texto, MUY_NEGRITA, c_texto, M, y_texto, W - 2 * M, H - ZONA_ABAJO - y_texto, 96, inter=1.12)
+    limite = 1170 if cierre else H - ZONA_ABAJO
+    L.bloque(texto, MUY_NEGRITA, c_texto, M, y_texto, W - 2 * M, limite - y_texto, 96, inter=1.12)
+    if cierre:
+        _logos(L, oscuro)
+
+
+def _logos(L, oscuro: bool) -> None:
+    """Constellation (vector) y RC / FARÍAS (PNG), en la versión que contrasta con el fondo; dentro de la zona segura."""
+    logos = marca()["logos"]
+    L.logo_svg(RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"], W / 2, H - 1240, 520)
+    L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), W / 2 - 190, H - 1450,
+                  width=380, height=110, mask="auto", preserveAspectRatio=True)
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,

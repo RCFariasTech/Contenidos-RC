@@ -41,6 +41,24 @@ def carrusel(**cambios):
     return pieza
 
 
+class TestCierreReel(unittest.TestCase):
+    REEL = {"formato": "Reel", "tema_especifico": "t", "caption": f"Un caption atemporal.\n\n{CTA}", "cta": CTA,
+            "hashtags": [], "escena_1_gancho": "Hola mundo", "escena_2_desarrollo_a": "a", "escena_3_desarrollo_b": "b",
+            "escena_4_desarrollo_c": "c", "escena_5_cta": "Agenda tu diagnóstico",
+            "investigacion": {"tendencia": "x", "resumen": "Crece 25%.", "estrategia_clave": "y",
+                              "fuente_titulo": "E", "fuente_url": URL, "fuente_fecha": "2026-05-10"}}
+
+    def _errores(self, **cambios):
+        return validar("Reel", {**self.REEL, **cambios}, [URL], [], [], ajustes(), HOY)["errores"]
+
+    def test_cta_sin_nombres_de_empresas(self):
+        self.assertEqual(self._errores(), [])
+
+    def test_cta_con_nombre_de_la_agencia_o_de_constellation(self):
+        for texto in ("Escríbenos a RC Farías", "Habla con RC Farias hoy", "Parte de Constellation"):
+            self.assertTrue(any("logos" in e for e in self._errores(escena_5_cta=texto)), texto)
+
+
 class TestDiseno(unittest.TestCase):
     def _errores(self, pieza):
         return validar("Carrusel", pieza, [URL], [], [], ajustes(), HOY)["errores"]
