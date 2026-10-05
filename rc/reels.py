@@ -8,6 +8,7 @@ Todo queda dentro de la zona segura de Instagram (sin texto en los ~220 px de ar
 import io
 import re
 
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from rc import tarjetas
@@ -52,18 +53,29 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 - 28, f"Escena {numero} · {tiempo}")
     # Texto en pantalla
     y_texto = y_caja + alto_caja + 60
-    limite = 1170 if cierre else H - ZONA_ABAJO
+    limite = 1180 if cierre else H - ZONA_ABAJO
     L.bloque(texto, MUY_NEGRITA, c_texto, M, y_texto, W - 2 * M, limite - y_texto, 96, inter=1.12)
     if cierre:
-        _logos(L, oscuro)
+        _logos(L, oscuro, c_texto)
 
 
-def _logos(L, oscuro: bool) -> None:
-    """Constellation (vector) y RC / FARÍAS (PNG), en la versión que contrasta con el fondo; dentro de la zona segura."""
+def _logos(L, oscuro: bool, c_texto: str) -> None:
+    """Cierre: logo RC / FARÍAS al centro y, de pie de página, «Miembros de» + logo de Constellation en una línea.
+
+    Los logos van en la versión que contrasta con el fondo y todo queda dentro de la zona segura de Instagram.
+    """
     logos = marca()["logos"]
-    L.logo_svg(RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"], W / 2, H - 1240, 520)
-    L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), W / 2 - 190, H - 1450,
-                  width=380, height=110, mask="auto", preserveAspectRatio=True)
+    L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), W / 2 - 200, H - 1330,
+                  width=400, height=116, mask="auto", preserveAspectRatio=True)
+    texto, tam, hueco, ancho_logo = "Miembros de", 40, 22, 360
+    ancho_texto = stringWidth(texto, NORMAL, tam)
+    x0 = (W - (ancho_texto + hueco + ancho_logo)) / 2
+    base = H - 1418  # línea base del texto
+    L.c.setFillColor(L.col[c_texto])
+    L.c.setFont(NORMAL, tam)
+    L.c.drawString(x0, base, texto)
+    L.logo_svg(RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"],
+               x0 + ancho_texto + hueco + ancho_logo / 2, base + tam * 0.4, ancho_logo)
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,

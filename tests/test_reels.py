@@ -35,6 +35,13 @@ class TestReels(unittest.TestCase):
             self.assertNotIn("Constellation", doc[4].get_text())                # logo, no texto
             texto = " ".join(doc[4].get_text().split())
             self.assertIn(REEL["escena_5_cta"], texto)
+            self.assertIn("Miembros de", texto)
+            # «Miembros de» y el logo de Constellation comparten línea y todo queda en la zona segura
+            frase = doc[4].search_for("Miembros de")[0]
+            logo = [d["rect"] for d in doc[4].get_drawings() if d["rect"].y0 > 1300 and d["rect"].x0 > frase.x1]
+            self.assertTrue(logo)
+            self.assertLess(abs((frase.y0 + frase.y1) / 2 - (min(r.y0 for r in logo) + max(r.y1 for r in logo)) / 2), 20)
+            self.assertLessEqual(max(r.y1 for r in logo), reels.H - reels.ZONA_ABAJO)
 
     def test_la_descarga_no_trae_la_etiqueta_de_escena(self):
         descarga = pymupdf.open(stream=reels.generar_pdf(REEL), filetype="pdf")
