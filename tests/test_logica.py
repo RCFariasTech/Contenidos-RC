@@ -14,12 +14,14 @@ URL = "https://www.warc.com/estudio"
 
 def diseno_de(p):
     """Parte cada tarjeta en titular + texto sin cambiar palabras (como pide el prompt)."""
-    d = [{"titular": p["slide_1_gancho"], "texto": "", "ilustracion": "Góndola 3D"}]
+    d = [{"titular": p["slide_1_gancho"], "texto": "", "ilustracion": "Góndola 3D",
+          "prompt_krea": "A 3D character pushing a shopping cart"}]
     for c in ("slide_2", "slide_3", "slide_4"):
         palabras = p[c].split()
         d.append({"titular": " ".join(palabras[:2]), "texto": " ".join(palabras[2:]),
-                  "ilustracion": "Personaje 3D" if c == "slide_2" else ""})
-    d.append({"titular": "", "texto": p["slide_5_cierre"], "ilustracion": ""})
+                  "ilustracion": "Personaje 3D" if c == "slide_2" else "",
+                  "prompt_krea": "Three 3D characters in a store" if c == "slide_2" else ""})
+    d.append({"titular": "", "texto": p["slide_5_cierre"], "ilustracion": "", "prompt_krea": ""})
     return d
 
 
@@ -81,6 +83,14 @@ class TestDiseno(unittest.TestCase):
         p["diseno"][1] = {"titular": "El 78% admite que al", "texto": "menos el 10% de su presupuesto se desperdicia.",
                           "ilustracion": "Personaje 3D"}
         self.assertTrue(any("a la mitad" in e for e in self._errores(p)))
+
+    def test_falta_prompt_krea_en_tarjetas_con_ilustracion(self):
+        p = carrusel()
+        p["diseno"][0]["prompt_krea"] = ""
+        self.assertTrue(any("prompt_krea" in e for e in self._errores(p)))
+        p = carrusel()
+        p["diseno"][3]["prompt_krea"] = ""   # tarjeta 4: puede ir vacío
+        self.assertEqual(self._errores(p), [])
 
     def test_falta_nota_de_ilustracion(self):
         p = carrusel()

@@ -323,6 +323,31 @@ def estilos_sugeridos(variante: int = 0, semilla: int = 0) -> list[int]:
             ESTILOS_SOLO_TEXTO[i], ESTILOS_SOLO_TEXTO[(i + 1) % n], 7]
 
 
+# Fondo de cada estilo con ilustración y tamaño (px) de su recuadro, para pedirle a Krea una imagen del color y la
+# proporción correctos.
+FONDO_ESTILO = {2: "azul_marino", 3: "coral", 4: "blanco"}
+AREA_ILUSTRACION = {1: (W - 2 * M, 640), 2: (W - 2 * M - 200, 560), 3: (420, 620), 4: (410, 880)}
+
+
+def estilo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> int:
+    """Estilo (1-9) que lleva la tarjeta `indice` (1-5) en la propuesta actual."""
+    return estilos_sugeridos(variante, semilla)[indice - 1]
+
+
+def fondo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> tuple[str, str]:
+    """(clave de color, hex) del fondo de una tarjeta con ilustración."""
+    estilo = estilo_de_tarjeta(indice, variante, semilla)
+    clave = PORTADAS[(variante + semilla) % len(PORTADAS)][0] if estilo == 1 else FONDO_ESTILO[estilo]
+    return clave, marca()["paleta"][clave]
+
+
+def tamano_ilustracion(estilo: int, lado_largo: int = 1216) -> tuple[int, int]:
+    """(ancho, alto) para generar la imagen: proporción del recuadro, lado largo dado, múltiplos de 16."""
+    ancho, alto = AREA_ILUSTRACION[estilo]
+    k = lado_largo / max(ancho, alto)
+    return max(512, round(ancho * k / 16) * 16), max(512, round(alto * k / 16) * 16)
+
+
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
                 guias: bool = False) -> bytes:
     """guias=True dibuja los recuadros de ilustración con su nota (vista previa); False los omite (descarga)."""

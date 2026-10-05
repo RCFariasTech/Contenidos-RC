@@ -241,6 +241,23 @@ def ruta_tarjetas_vista(req):
     return 200, _servicio().vista_tarjetas(pieza_id, _semilla(req), ancho)
 
 
+def ruta_ilustraciones_listar(req):
+    _dueno(req)
+    try:
+        pieza_id = int(req["query"].get("pieza", ""))
+    except ValueError:
+        raise ErrorCliente(400, "Falta la pieza.")
+    return 200, _servicio().ilustraciones(pieza_id)
+
+
+def ruta_ilustraciones_generar(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    filas = _servicio().generar_ilustraciones(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"),
+                                              int(cuerpo.get("semilla") or 0))
+    return 200, {"items": filas}
+
+
 def ruta_probar_teams(req):
     _dueno(req)
     from rc import teams
@@ -306,6 +323,8 @@ RUTAS = {
     ("GET", "tarjetas-vista"): ruta_tarjetas_vista,
     ("GET", "configuracion"): ruta_configuracion,
     ("POST", "probar-teams"): ruta_probar_teams,
+    ("GET", "ilustraciones"): ruta_ilustraciones_listar,
+    ("POST", "ilustraciones"): ruta_ilustraciones_generar,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,

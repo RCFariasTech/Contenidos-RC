@@ -39,6 +39,9 @@ FORMATO CARRUSEL:
 - "diseno": lista de EXACTAMENTE 5 elementos (uno por tarjeta, en orden) que parte el texto de cada tarjeta para diseñarla.
   Por tarjeta: "titular" (la idea o dato central, máximo 8 palabras, va en negrita grande), "texto" (el resto) y
   "ilustracion" (solo las tarjetas 1 y 2 llevan ilustración 3D: una frase con personaje, objeto y escena concretos; en las tarjetas 3, 4 y 5 déjala VACÍA).
+  "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás): la misma ilustración descrita EN INGLÉS para un generador de imágenes
+  (máximo 60 palabras): personajes 3D, qué hacen, objetos y escena concretos, sin texto ni logos en la imagen y sin mencionar
+  colores de fondo (el fondo lo agrega el sistema).
   titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).
   Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre.
   Si una tarjeta gira en torno a una cifra, ponla en el titular.

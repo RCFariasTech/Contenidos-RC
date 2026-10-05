@@ -225,7 +225,12 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("span", { clase: "texto-item__num", "aria-hidden": "true" }, String(i + 1)),
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
-        el("p", { clase: "texto-item__texto" }, c[campo] || "—")),
+        el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
+        pieza.formato === "Carrusel" && i < 2 && conMiniaturas ? el("button", {
+          clase: "btn btn--secundario btn--chico", type: "button",
+          title: "Genera variantes de la ilustración 3D en Krea con el modelo «3d characters in red and blue»",
+          onclick: () => abrirIlustraciones(pieza, i + 1),
+        }, "Ilustraciones con Krea") : null),
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
       conMiniaturas ? miniatura(pieza, i) : null);
   });
@@ -631,6 +636,69 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 });
 
 $("btn-pptx").addEventListener("click", () => descargarPptx());
+
+// ---------- ilustraciones 3D (Krea) ----------
+
+const ilus = { piezaId: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "" };
+
+function renderIlustraciones() {
+  const hayEnCola = ilus.items.some((it) => it.estado === "en_cola");
+  const mensaje = ilus.mensaje || (ilus.configurado ? "" : "Las ilustraciones aún no están activadas: falta configurar KREA_API_TOKEN en Vercel (ver README).");
+  $("ilus-aviso").hidden = !mensaje;
+  $("ilus-aviso").textContent = mensaje;
+  $("ilus-generar").disabled = ilus.enviando || !ilus.configurado;
+  $("ilus-generar").textContent = ilus.enviando ? "Enviando a Krea…" : (ilus.items.length ? "Generar más" : "Generar ilustraciones");
+  $("ilus-galeria").replaceChildren(...(ilus.items.length ? ilus.items.map((it) => {
+    const marco = el("div", {
+      clase: `galeria__marco${it.estado === "en_cola" ? " galeria__marco--cargando" : ""}${it.estado === "fallida" ? " galeria__marco--fallida" : ""}`,
+      style: `background-color: ${/^#[0-9A-Fa-f]{6}$/.test(it.fondo) ? it.fondo : "#D8D6D2"}; aspect-ratio: ${it.ancho || 4} / ${it.alto || 3}`,
+    });
+    if (it.estado === "lista" && it.url?.startsWith("https://")) marco.append(el("img", { src: it.url, alt: "Ilustración generada en Krea", loading: "lazy" }));
+    else if (it.estado === "en_cola") marco.append("Generando en Krea…");
+    else marco.append(it.error || "No se pudo generar");
+    return el("figure", { clase: "galeria__item" }, marco,
+      el("figcaption", { clase: "galeria__pie" },
+        el("span", {}, `${it.ancho}×${it.alto}`),
+        it.estado === "lista" && it.url?.startsWith("https://")
+          ? el("a", { href: it.url, target: "_blank", rel: "noopener noreferrer" }, "Abrir en Krea") : null));
+  }) : [el("p", { clase: "ayuda" }, "Aún no hay ilustraciones para esta tarjeta. Pulsa «Generar ilustraciones».")]));
+  clearTimeout(ilus.timer);
+  if (hayEnCola && $("dialogo-ilustraciones").open) ilus.timer = setTimeout(cargarIlustraciones, 4000);
+}
+
+async function cargarIlustraciones() {
+  try {
+    const d = await api(`ilustraciones?pieza=${ilus.piezaId}`);
+    ilus.configurado = d.configurado;
+    ilus.items = d.items.filter((it) => it.tarjeta === ilus.tarjeta);
+  } catch (e) {
+    ilus.mensaje = `No se pudieron cargar las ilustraciones: ${e.message}`;
+  }
+  renderIlustraciones();
+}
+
+async function abrirIlustraciones(pieza, tarjeta) {
+  Object.assign(ilus, { piezaId: pieza.id, tarjeta, items: [], enviando: false, mensaje: "" });
+  $("titulo-ilustraciones").textContent = `Ilustraciones · Tarjeta ${tarjeta}`;
+  renderIlustraciones();
+  $("dialogo-ilustraciones").showModal();
+  await cargarIlustraciones();
+}
+
+$("ilus-generar").addEventListener("click", async () => {
+  ilus.enviando = true;
+  ilus.mensaje = "";
+  renderIlustraciones();
+  try {
+    await api("ilustraciones", { metodo: "POST", cuerpo: { pieza_id: ilus.piezaId, tarjeta: ilus.tarjeta, semilla: semillaDe(ilus.piezaId) } });
+  } catch (e) {
+    ilus.mensaje = `No se pudieron generar las ilustraciones: ${e.message}`;
+  }
+  ilus.enviando = false;
+  await cargarIlustraciones();
+});
+$("ilus-cerrar").addEventListener("click", () => $("dialogo-ilustraciones").close());
+$("dialogo-ilustraciones").addEventListener("close", () => clearTimeout(ilus.timer));
 
 // ---------- repositorio ----------
 

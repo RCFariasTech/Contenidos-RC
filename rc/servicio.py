@@ -3,7 +3,7 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from rc import correos, db, fuentes, generador, planificador, teams, validador
+from rc import correos, db, fuentes, generador, krea, planificador, teams, validador
 from rc.config import ajustes, pilares
 from rc.errores import ErrorNegocio  # noqa: F401 (se reexporta: servicio.ErrorNegocio)
 
@@ -316,17 +316,21 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
     return nombre, contenido
 
 
+def _variante(pieza: dict) -> tuple[str, int]:
+    """(mes_objetivo, variante): cambia de una pieza a otra y de un mes a otro, así los colores del feed rotan."""
+    mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
+    mismas = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}",
+                            formato=f"eq.{pieza['formato']}", order="semana")
+    return mes, int(mes[5:7]) * 2 + [c["id"] for c in mismas].index(pieza["id"])
+
+
 def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[str, bytes]:
     """PDF para diseño: las 5 tarjetas 3:4 de un carrusel o el guion visual 9:16 de un reel."""
     from rc import reels, tarjetas  # import diferido: reportlab/svglib solo se cargan al generar
     pieza = _pieza(pieza_id)
     if not pieza.get("contenido"):
         raise ErrorNegocio("Esta pieza aún no tiene contenido.")
-    mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
-    mismas = db.seleccionar("piezas", select="id", mes_id=f"eq.{pieza['mes_id']}",
-                            formato=f"eq.{pieza['formato']}", order="semana")
-    # Cambia de una pieza a otra y de un mes a otro: así los colores del feed rotan.
-    variante = int(mes[5:7]) * 2 + [c["id"] for c in mismas].index(pieza_id)
+    mes, variante = _variante(pieza)
     contenido = pieza["contenido"]
     modulo, rotulo = (reels, "Reel") if pieza["formato"] == "Reel" else (tarjetas, "Carrusel")
     pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante,
@@ -342,6 +346,66 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     _nombre, pdf = tarjetas_pdf(pieza_id, semilla, guias=True)
     imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf, max(200, min(int(ancho), 900)))]
     return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 3 / 4}
+
+
+# ---------- ilustraciones 3D (Krea) ----------
+
+MINUTOS_MAX_ILUSTRACION = 10
+
+
+def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0) -> list[dict]:
+    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters in red and blue»)."""
+    from rc import tarjetas
+    pieza = _pieza(int(pieza_id))
+    if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
+        raise ErrorNegocio("Las ilustraciones son para tarjetas de carruseles con contenido.")
+    if int(tarjeta) not in (1, 2):
+        raise ErrorNegocio("Solo las tarjetas 1 y 2 llevan ilustración.")
+    if not krea.configurado():
+        raise ErrorNegocio("Las ilustraciones no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
+    _mes, variante = _variante(pieza)
+    semilla = max(0, int(semilla))
+    estilo = tarjetas.estilo_de_tarjeta(int(tarjeta), variante, semilla)
+    clave, hex_fondo = tarjetas.fondo_de_tarjeta(int(tarjeta), variante, semilla)
+    k = ajustes()["krea"]
+    ancho, alto = tarjetas.tamano_ilustracion(estilo, k["lado_largo"])
+    contenido = pieza["contenido"]
+    diseno = (contenido.get("diseno") or [])
+    d = diseno[int(tarjeta) - 1] if len(diseno) >= int(tarjeta) else {}
+    descripcion = d.get("prompt_krea") or d.get("ilustracion") or contenido.get("tema_especifico", "")
+    prompt = krea.construir_prompt(descripcion, clave, hex_fondo)
+    filas, fallo = [], None
+    for _ in range(k["variantes_por_clic"]):
+        try:
+            job_id = krea.crear_trabajo(prompt, ancho, alto)
+        except ErrorNegocio as e:
+            fallo = e
+            break
+        filas.append(db.insertar("ilustraciones", {
+            "pieza_id": pieza["id"], "tarjeta": int(tarjeta), "job_id": job_id, "prompt": prompt,
+            "fondo": hex_fondo, "ancho": ancho, "alto": alto})[0])
+    if fallo and not filas:
+        raise fallo
+    return filas
+
+
+def ilustraciones(pieza_id: int) -> dict:
+    """Variantes de la pieza (más recientes primero); actualiza las que siguen en cola consultando a Krea."""
+    filas = db.seleccionar("ilustraciones", select="*", pieza_id=f"eq.{int(pieza_id)}", order="id.desc", limit="30")
+    limite = (datetime.now(timezone.utc) - timedelta(minutes=MINUTOS_MAX_ILUSTRACION)).isoformat()
+    for f in filas:
+        if f["estado"] != "en_cola":
+            continue
+        try:
+            nuevo = krea.consultar(f["job_id"])
+        except ErrorNegocio:
+            continue  # error transitorio al consultar: se reintenta en la siguiente consulta
+        if nuevo["estado"] == "en_cola" and f["creado_en"] < limite:
+            nuevo = {"estado": "fallida", "url": None, "error": "Krea tardó demasiado en responder."}
+        if nuevo["estado"] != "en_cola":
+            db.actualizar("ilustraciones", nuevo, id=f"eq.{f['id']}", estado="eq.en_cola")
+            f.update(nuevo)
+    return {"configurado": krea.configurado(), "items": filas}
 
 
 def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:

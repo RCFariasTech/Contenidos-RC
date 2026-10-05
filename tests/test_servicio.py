@@ -7,10 +7,10 @@ errores de lógica y de filtros sin tocar Supabase ni la API de Anthropic.
 import copy
 import itertools
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
-from rc import correos, fuentes, teams
+from rc import correos, fuentes, krea, teams
 from rc import db as db_real
 from rc import servicio
 from rc.config import ajustes
@@ -25,7 +25,7 @@ class BDFalsa:
 
     def __init__(self):
         self.tablas = {"meses": [], "piezas": [], "comentarios": [], "versiones_pieza": [],
-                       "fuentes_confiables": [], "correos_favoritos": []}
+                       "fuentes_confiables": [], "correos_favoritos": [], "ilustraciones": []}
         self.unicos = {"fuentes_confiables": "dominio", "correos_favoritos": "email", "meses": "mes_objetivo"}
         self.ids = itertools.count(1)
 
@@ -92,6 +92,9 @@ class BDFalsa:
                 fila.setdefault("estado", "generando")
             if tabla == "comentarios":
                 fila = {"aplicado_en": None, "version_resultante": None, **fila}
+            if tabla == "ilustraciones":
+                fila = {"estado": "en_cola", "url": None, "error": None,
+                        "creado_en": datetime.now(timezone.utc).isoformat(), **fila}
             self.tablas[tabla].append(fila)
             nuevas.append(copy.deepcopy(fila))
         return nuevas
@@ -107,7 +110,7 @@ class BDFalsa:
         self.tablas[tabla] = [f for f in self.tablas[tabla] if f not in filas]
         if tabla == "piezas":  # on delete cascade
             ids = {f["id"] for f in filas}
-            for t in ("comentarios", "versiones_pieza"):
+            for t in ("comentarios", "versiones_pieza", "ilustraciones"):
                 self.tablas[t] = [f for f in self.tablas[t] if f["pieza_id"] not in ids]
         return filas
 
@@ -341,6 +344,74 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual((despues["estado"], despues["version"]), ("generada", 1))
         self.assertEqual(despues["contenido"], pieza["contenido"])
         self.assertIn("No se pudo rehacer", despues["error_msg"])
+
+    def _mes_generado(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+        piezas = servicio.estado_mes(mes)["piezas"]
+        return (next(p for p in piezas if p["formato"] == "Carrusel"), next(p for p in piezas if p["formato"] == "Reel"))
+
+    def test_generar_ilustraciones_pide_varias_variantes_a_krea(self):
+        carrusel, reel = self._mes_generado()
+        trabajos = iter(f"job-{i}" for i in range(1, 20))
+        enviados = []
+
+        def crear(prompt, ancho, alto):
+            enviados.append((prompt, ancho, alto))
+            return next(trabajos)
+
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=crear):
+            filas = servicio.generar_ilustraciones(carrusel["id"], 1)
+            self.assertEqual(len(filas), 3)
+            self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2", "job-3"})
+            self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
+            prompt, ancho, alto = enviados[0]
+            self.assertIn("A 3D character pushing a shopping cart", prompt)     # el prompt_krea de la tarjeta
+            self.assertIn("edges of the image blur softly", prompt)             # bordes difuminados
+            self.assertRegex(prompt, r"#[0-9A-Fa-f]{6}")                        # color de fondo de la tarjeta
+            self.assertEqual((ancho, alto), (1216, 848))                        # recuadro de la portada
+            self.assertEqual(filas[0]["fondo"][0], "#")
+            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)), 3)
+            for caso in ((carrusel["id"], 3), (reel["id"], 1)):
+                with self.assertRaises(servicio.ErrorNegocio):
+                    servicio.generar_ilustraciones(*caso)
+        with mock.patch.object(krea, "configurado", return_value=False):
+            with self.assertRaises(servicio.ErrorNegocio) as ctx:
+                servicio.generar_ilustraciones(carrusel["id"], 1)
+        self.assertIn("KREA_API_TOKEN", str(ctx.exception))
+
+    def test_ilustraciones_falla_a_medias_conserva_las_que_si_salieron(self):
+        carrusel, _ = self._mes_generado()
+        respuestas = [lambda: "job-a", lambda: (_ for _ in ()).throw(servicio.ErrorNegocio("Krea tiene demasiados trabajos"))]
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=lambda *a: respuestas.pop(0)()):
+            filas = servicio.generar_ilustraciones(carrusel["id"], 1)
+        self.assertEqual([f["job_id"] for f in filas], ["job-a"])
+
+    def test_ilustraciones_consulta_y_actualiza_el_estado(self):
+        carrusel, _ = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["j1", "j2", "j3"]):
+            servicio.generar_ilustraciones(carrusel["id"], 1)
+        estados = {"j1": {"estado": "lista", "url": "https://gen.krea.ai/images/x.png", "error": None},
+                   "j2": {"estado": "en_cola", "url": None, "error": None},
+                   "j3": {"estado": "fallida", "url": None, "error": "Krea no pudo generarla."}}
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "consultar", side_effect=lambda j: estados[j]):
+            res = servicio.ilustraciones(carrusel["id"])
+        por_job = {f["job_id"]: f for f in res["items"]}
+        self.assertEqual(por_job["j1"]["url"], "https://gen.krea.ai/images/x.png")
+        self.assertEqual((por_job["j1"]["estado"], por_job["j2"]["estado"], por_job["j3"]["estado"]),
+                         ("lista", "en_cola", "fallida"))
+        # un trabajo en cola desde hace demasiado tiempo se da por fallido
+        for f in self.bd.tablas["ilustraciones"]:
+            f["creado_en"] = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        with mock.patch.object(krea, "consultar", side_effect=lambda j: estados[j]):
+            res = servicio.ilustraciones(carrusel["id"])
+        self.assertEqual({f["job_id"]: f["estado"] for f in res["items"]}["j2"], "fallida")
 
     def test_teams_avisa_una_sola_vez_cuando_el_mes_queda_en_revision(self):
         mes = date(2026, 11, 1)

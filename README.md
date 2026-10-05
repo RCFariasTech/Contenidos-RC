@@ -60,6 +60,12 @@ Teams ya no permite crear conectores de webhook entrantes nuevos; se usa un fluj
 
 El mensaje es una Adaptive Card dentro de `{"type": "message", "attachments": [...]}`, el formato que espera ese disparador.
 
+### Ilustraciones 3D con Krea (opcional)
+
+En las tarjetas 1 y 2 de cada carrusel, el botón **Ilustraciones con Krea** genera 3 variantes con el modelo (LoRA) «3d characters in red and blue» de la cuenta de Krea (`config/ajustes.json` → `krea`: modelo Flux.1 Dev, `style_id`, tamaño y variantes por clic). El prompt sale del campo `prompt_krea` del carrusel (en inglés) y pide un fondo del color de la tarjeta con los bordes difuminados; el tamaño sigue la proporción del recuadro de esa tarjeta. Las imágenes **quedan solo en Krea**: la app guarda únicamente el enlace, el prompt y el estado (tabla `ilustraciones`, migración 005). Cada clic consume créditos de Krea.
+
+Para activarlo agrega en Vercel `KREA_API_TOKEN` (clave de API creada en tu cuenta de Krea, tipo **Sensitive**) y vuelve a desplegar.
+
 Después de agregar o cambiar variables hay que **volver a desplegar** (Deployments → ⋯ → Redeploy).
 
 ## Tarjetas de carrusel
@@ -88,6 +94,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `002_semilla_historico.sql`: los 7 temas ya publicados, como mes histórico.
 - `003_configuracion.sql`: fuentes confiables (con la lista inicial de `config/fuentes.json`) y correos favoritos.
 - `004_motivo_rehacer.sql`: permite el motivo «rehacer» en las versiones (botón «Rehacer propuesta»).
+- `005_ilustraciones.sql`: variantes de ilustración generadas en Krea (solo enlaces y estado).
 
 ## Desarrollo local
 

@@ -15,11 +15,44 @@
   "max_palabras_caption": 150,
   "cta": "📲 Síguenos para más ideas que conectan data, experiencia y negocio.",
   "hashtags_max": 3,
-  "hashtags_prohibidos": ["#viral", "#explore", "#trending", "#fyp", "#instagood", "#love", "#follow", "#like4like"],
+  "hashtags_prohibidos": [
+    "#viral",
+    "#explore",
+    "#trending",
+    "#fyp",
+    "#instagood",
+    "#love",
+    "#follow",
+    "#like4like"
+  ],
   "calendario": [
-    {"semana": 1, "formato": "Carrusel", "pilar": "Tendencias de marketing estratégico"},
-    {"semana": 2, "formato": "Reel", "pilar": "Tendencias de marketing BTL"},
-    {"semana": 3, "formato": "Carrusel", "pilar": "Tendencias de marketing BTL"},
-    {"semana": 4, "formato": "Reel", "pilar": "Tendencias de marketing estratégico"}
-  ]
+    {
+      "semana": 1,
+      "formato": "Carrusel",
+      "pilar": "Tendencias de marketing estratégico"
+    },
+    {
+      "semana": 2,
+      "formato": "Reel",
+      "pilar": "Tendencias de marketing BTL"
+    },
+    {
+      "semana": 3,
+      "formato": "Carrusel",
+      "pilar": "Tendencias de marketing BTL"
+    },
+    {
+      "semana": 4,
+      "formato": "Reel",
+      "pilar": "Tendencias de marketing estratégico"
+    }
+  ],
+  "krea": {
+    "modelo": "bfl/flux-1-dev",
+    "style_id": "kq4b7fium",
+    "style_strength": 1,
+    "pasos": 28,
+    "variantes_por_clic": 3,
+    "lado_largo": 1216
+  }
 }
