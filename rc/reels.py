@@ -71,7 +71,7 @@ def _logos(L, oscuro: bool, c_texto: str) -> None:
     baja hasta el borde inferior de la zona segura. Los logos usan la versión que contrasta con el fondo.
     """
     logos = marca()["logos"]
-    L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), W / 2 - 200, H - 1330,
+    L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), M, H - 1330,
                   width=400, height=116, mask="auto", preserveAspectRatio=True)
     ruta = RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"]
     texto, tam, hueco, ancho_logo = "Miembros de", 37, 22, 360  # altura de mayúscula del texto ≈ alto de CONSTELLATION
@@ -80,7 +80,7 @@ def _logos(L, oscuro: bool, c_texto: str) -> None:
     arriba = borde - alto_logo
     base = H - (arriba + LINEA_BASE_CONSTELLATION * alto_logo)  # línea de base común (desde abajo)
     ancho_texto = stringWidth(texto, NORMAL, tam)
-    x0 = (W - (ancho_texto + hueco + ancho_logo)) / 2
+    x0 = M - 3  # compensa el espacio lateral de la «M» para que su borde visible caiga en el margen
     L.c.setFillColor(L.col[c_texto])
     L.c.setFont(NORMAL, tam)
     L.c.drawString(x0, base, texto)

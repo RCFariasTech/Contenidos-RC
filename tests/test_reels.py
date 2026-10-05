@@ -47,6 +47,22 @@ class TestReels(unittest.TestCase):
             self.assertAlmostEqual(y1, reels.H - reels.ZONA_ABAJO, delta=6)       # pegado al límite inferior
             self.assertLessEqual(y1, reels.H - reels.ZONA_ABAJO)                    # sin pasarlo
 
+    def test_cierre_alineado_a_la_izquierda_con_el_texto(self):
+        """El borde visible izquierdo del CTA, del logo RC / FARÍAS y de «Miembros de» coincide (±2 px)."""
+        for variante in range(5):
+            pix = pymupdf.open(stream=reels.generar_pdf(REEL, variante=variante), filetype="pdf")[4] \
+                .get_pixmap(matrix=pymupdf.Matrix(2, 2))
+            fondo = pix.pixel(5, 5)
+
+            def borde_izquierdo(y0, y1):
+                for x in range(pix.width):
+                    for y in range(y0 * 2, y1 * 2):
+                        if sum(abs(a - b) for a, b in zip(pix.pixel(x, y)[:3], fondo[:3])) > 60:
+                            return x / 2
+
+            bordes = [borde_izquierdo(900, 1130), borde_izquierdo(1215, 1335), borde_izquierdo(1400, 1470)]
+            self.assertLessEqual(max(bordes) - min(bordes), 2, bordes)
+
     def test_la_descarga_no_trae_la_etiqueta_de_escena(self):
         descarga = pymupdf.open(stream=reels.generar_pdf(REEL), filetype="pdf")
         for pagina in descarga:
