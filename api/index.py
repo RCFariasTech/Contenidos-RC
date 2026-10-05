@@ -105,6 +105,11 @@ def ruta_ajustar_pieza(req):
     return 200, _servicio().ajustar_pieza(_entero(req["cuerpo"], "pieza_id"))
 
 
+def ruta_rehacer_pieza(req):
+    _dueno(req)
+    return 200, _servicio().rehacer_pieza(_entero(req["cuerpo"], "pieza_id"))
+
+
 def ruta_comentar(req):
     _dueno(req)
     return 200, _servicio().comentar(_entero(req["cuerpo"], "pieza_id"), req["cuerpo"].get("texto"))
@@ -291,6 +296,7 @@ RUTAS = {
     ("POST", "iniciar-mes"): ruta_iniciar_mes,
     ("POST", "generar-pieza"): ruta_generar_pieza,
     ("POST", "ajustar-pieza"): ruta_ajustar_pieza,
+    ("POST", "rehacer-pieza"): ruta_rehacer_pieza,
     ("POST", "comentarios"): ruta_comentar,
     ("DELETE", "comentarios"): ruta_borrar_comentario,
     ("POST", "aprobar"): ruta_aprobar,

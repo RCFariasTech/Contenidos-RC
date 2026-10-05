@@ -31,9 +31,10 @@ def sistema() -> str:
         cta=a["cta"], temas_ya_usados=temas, max_palabras_caption=a["max_palabras_caption"])
 
 
-def generar(slot: dict, historial: list[dict], hermanas: list[dict]) -> str:
+def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> str:
     return _plantilla("generar").substitute(
         historial=_lineas_resumen(historial), hermanas=_lineas_resumen(hermanas),
+        descartados=_lineas_resumen(descartados) if descartados else "(ninguno)",
         semana=slot["semana"], formato=slot["formato"], tipo=slot["tipo"], pilar=slot["pilar"])
 
 

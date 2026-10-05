@@ -294,7 +294,17 @@ function renderComentarios(pieza, bloqueada) {
   },
   el("label", { for: idCampo }, "Comentarios y ajustes"),
   campo,
-  el("button", { clase: "btn btn--secundario", type: "submit", disabled: !puedeComentar }, "Agregar comentario"),
+  el("div", { clase: "comentarios__acciones" },
+    el("button", { clase: "btn btn--secundario", type: "submit", disabled: !puedeComentar }, "Agregar comentario"),
+    el("button", {
+      clase: "btn btn--secundario", type: "button", disabled: !puedeComentar,
+      title: `Descarta esta propuesta y genera otra con un tema distinto (nuevos textos, ${pieza.formato === "Reel" ? "escenas" : "tarjetas"} y caption)`,
+      onclick: () => {
+        if (window.confirm("¿Rehacer esta propuesta desde cero con otro tema? Se investiga y se redacta de nuevo (1-3 minutos). La versión actual queda guardada en el Repositorio.")) {
+          procesar(pieza.id, "rehacer-pieza");
+        }
+      },
+    }, "Rehacer propuesta")),
   pieza.estado === "aprobada" ? el("p", { clase: "ayuda" }, "Para comentar, primero desmarca «Aprobado».") : null);
 
   return el("section", { clase: "bloque comentarios" },
@@ -705,7 +715,7 @@ function renderDetalle() {
         repo.versiones.map((v) => el("button", {
           clase: "version-btn", type: "button", "aria-pressed": v.version === repo.version ? "true" : "false",
           onclick: () => { repo.version = v.version; renderDetalle(); },
-        }, `v${v.version} · ${v.motivo === "generacion" ? "original" : v.motivo} · ${fechaCorta(v.creado_en)}`))) : null,
+        }, `v${v.version} · ${{ generacion: "original", rehacer: "rehecha" }[v.motivo] || v.motivo} · ${fechaCorta(v.creado_en)}`))) : null,
       renderInvestigacion(vista.contenido.investigacion),
       renderTextos(vista, !version || version.version === p.version),
       renderCaption(vista.contenido));

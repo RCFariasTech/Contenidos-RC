@@ -87,6 +87,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `001_esquema.sql`: tablas, tipos y RLS sin políticas (solo el servidor accede).
 - `002_semilla_historico.sql`: los 7 temas ya publicados, como mes histórico.
 - `003_configuracion.sql`: fuentes confiables (con la lista inicial de `config/fuentes.json`) y correos favoritos.
+- `004_motivo_rehacer.sql`: permite el motivo «rehacer» en las versiones (botón «Rehacer propuesta»).
 
 ## Desarrollo local
 

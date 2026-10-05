@@ -143,8 +143,8 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     }
 
 
-def generar(slot: dict, historial: list[dict], hermanas: list[dict]) -> dict:
-    usuario = prompts.generar(slot, historial, hermanas)
+def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> dict:
+    usuario = prompts.generar(slot, historial, hermanas, descartados)
     return llamar(usuario, slot["formato"], ajustes()["web_search_max_uses_generar"])
 
 

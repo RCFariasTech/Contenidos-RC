@@ -112,6 +112,7 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
   border: 1px solid var(--borde); border-radius: 8px; padding: 12px 14px; }
 .texto-item__num { width: 32px; height: 32px; border-radius: 50%; background: var(--azul-marino); color: var(--blanco);
   display: grid; place-items: center; font-weight: bold; }
+.comentarios__acciones { display: flex; flex-wrap: wrap; gap: 8px; }
 .texto-item--miniatura { grid-template-columns: auto 1fr auto auto; }
 .miniatura { padding: 0; border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; background: var(--fondo); cursor: zoom-in;
   display: grid; place-items: center; font-size: .7rem; color: var(--texto-suave); text-align: center; }

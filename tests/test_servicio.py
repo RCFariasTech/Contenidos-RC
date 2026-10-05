@@ -136,7 +136,7 @@ class TestFlujo(unittest.TestCase):
         temas = iter(["Retail media", "Comercio conversacional", "Experiencias olfativas", "Eventos híbridos",
                       "Gancho ajustado"])
 
-        def generar(slot, historial, hermanas):
+        def generar(slot, historial, hermanas, descartados=None):
             return {"pieza": pieza_generada(slot["formato"], next(temas)), "urls": [URL],
                     "uso": {"input_tokens": 100, "output_tokens": 50}}
 
@@ -295,6 +295,52 @@ class TestFlujo(unittest.TestCase):
             with self.assertRaises(servicio.ErrorNegocio):
                 servicio.enviar_pptx(mes, ["a@x.co"])
         self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "aprobado")
+
+    def test_rehacer_propuesta_busca_otro_tema(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+        pieza = servicio.estado_mes(mes)["piezas"][1]
+        tema_viejo = pieza["contenido"]["tema_especifico"]
+        recibido = {}
+
+        def nueva(slot, historial, hermanas, descartados=None):
+            recibido["descartados"] = descartados
+            recibido["hermanas"] = hermanas
+            return {"pieza": pieza_generada(slot["formato"], "Gamificación en activaciones de marca"), "urls": [URL],
+                    "uso": {"input_tokens": 10, "output_tokens": 5}}
+
+        servicio.comentar(pieza["id"], "ajusta algo")
+        with self.assertRaises(servicio.ErrorNegocio):  # comentario pendiente
+            servicio.rehacer_pieza(pieza["id"])
+        servicio.borrar_comentario(servicio.estado_mes(mes)["piezas"][1]["comentarios"][0]["id"])
+
+        with mock.patch.object(servicio.generador, "generar", side_effect=nueva):
+            fila = servicio.rehacer_pieza(pieza["id"])
+        self.assertEqual((fila["version"], fila["estado"]), (2, "generada"))
+        self.assertEqual(fila["contenido"]["tema_especifico"], "Gamificación en activaciones de marca")
+        self.assertEqual([d["contenido"]["tema_especifico"] for d in recibido["descartados"]], [tema_viejo])
+        self.assertIn(tema_viejo, [h["contenido"]["tema_especifico"] for h in recibido["hermanas"]])
+        self.assertEqual({v["motivo"] for v in servicio.versiones(pieza["id"])}, {"rehacer", "generacion"})
+
+        servicio.aprobar(pieza["id"], True)
+        with self.assertRaises(servicio.ErrorNegocio):  # aprobada: no se rehace
+            servicio.rehacer_pieza(pieza["id"])
+
+    def test_rehacer_que_falla_conserva_la_propuesta_anterior(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+        pieza = servicio.estado_mes(mes)["piezas"][0]
+        with mock.patch.object(servicio.generador, "generar", side_effect=RuntimeError("API caída")):
+            with self.assertRaises(RuntimeError):
+                servicio.rehacer_pieza(pieza["id"])
+        despues = servicio.estado_mes(mes)["piezas"][0]
+        self.assertEqual((despues["estado"], despues["version"]), ("generada", 1))
+        self.assertEqual(despues["contenido"], pieza["contenido"])
+        self.assertIn("No se pudo rehacer", despues["error_msg"])
 
     def test_teams_avisa_una_sola_vez_cuando_el_mes_queda_en_revision(self):
         mes = date(2026, 11, 1)

@@ -4,6 +4,9 @@ $historial
 OTRAS PIEZAS DE ESTE MES (tampoco repetir):
 $hermanas
 
+TEMAS DESCARTADOS PARA ESTA PIEZA (el responsable ya los vio y pidió otra propuesta: elige un tema, una tendencia y una fuente claramente distintos):
+$descartados
+
 Genera UNA pieza de Instagram:
 Semana: $semana
 Formato: $formato

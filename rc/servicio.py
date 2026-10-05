@@ -182,6 +182,31 @@ def generar_pieza(pieza_id: int) -> dict:
         raise
 
 
+def rehacer_pieza(pieza_id: int) -> dict:
+    """Descarta la propuesta actual y genera otra desde cero: tema, investigación y textos nuevos."""
+    pieza_id = int(pieza_id)
+    if db.seleccionar("comentarios", select="id", pieza_id=f"eq.{pieza_id}", aplicado_en="is.null"):
+        raise ErrorNegocio("Esta pieza tiene comentarios pendientes: aplícalos con «Aplicar ajustes» o bórralos antes de rehacerla.")
+    pieza = _reclamar(pieza_id, "generada", "generando")
+    if pieza is None:
+        raise ErrorNegocio("La pieza no se puede rehacer ahora (está aprobada o en proceso).")
+    try:
+        historial, hermanas = _contexto(pieza)
+        # Todos los temas que esta pieza ya tuvo (incluida la propuesta actual) se descartan y cuentan como repetidos.
+        previos = db.seleccionar("versiones_pieza", select="contenido", pieza_id=f"eq.{pieza_id}", order="version")
+        descartados = [{"mes": "", "pilar": pieza["pilar"], "contenido": v["contenido"]} for v in previos]
+        resultado = generador.generar(_slot(pieza), historial, hermanas + descartados, descartados)
+        urls = resultado["urls"]
+        contenido, informe, uso = _validar_y_reparar(pieza, resultado, urls, historial, hermanas + descartados)
+        fila = _guardar_version(pieza, contenido, informe, urls, uso, "rehacer")
+        return fila
+    except Exception as e:
+        log.exception("Fallo al rehacer la pieza %s", pieza_id)
+        db.actualizar("piezas", {"estado": "generada", "error_msg": f"No se pudo rehacer la propuesta: {str(e)[:400]}"},
+                      id=f"eq.{pieza_id}")
+        raise
+
+
 def ajustar_pieza(pieza_id: int) -> dict:
     pendientes = db.seleccionar("comentarios", select="id,texto", pieza_id=f"eq.{int(pieza_id)}",
                                 aplicado_en="is.null", order="id")
