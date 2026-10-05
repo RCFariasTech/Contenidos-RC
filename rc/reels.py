@@ -59,23 +59,32 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         _logos(L, oscuro, c_texto)
 
 
+# En el logo de Constellation, la línea de base de la palabra CONSTELLATION está a esta fracción de su alto
+# (medida sobre el SVG renderizado: el resto es «GLOBAL NETWORK», que no se usa para alinear).
+LINEA_BASE_CONSTELLATION = 0.509
+
+
 def _logos(L, oscuro: bool, c_texto: str) -> None:
     """Cierre: logo RC / FARÍAS al centro y, de pie de página, «Miembros de» + logo de Constellation en una línea.
 
-    Los logos van en la versión que contrasta con el fondo y todo queda dentro de la zona segura de Instagram.
+    El texto comparte línea de base con la palabra CONSTELLATION (sin contar «GLOBAL NETWORK») y la línea
+    baja hasta el borde inferior de la zona segura. Los logos usan la versión que contrasta con el fondo.
     """
     logos = marca()["logos"]
     L.c.drawImage(str(RAIZ / logos["fondo_oscuro" if oscuro else "fondo_claro_sobrio"]), W / 2 - 200, H - 1330,
                   width=400, height=116, mask="auto", preserveAspectRatio=True)
-    texto, tam, hueco, ancho_logo = "Miembros de", 40, 22, 360
+    ruta = RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"]
+    texto, tam, hueco, ancho_logo = "Miembros de", 37, 22, 360  # altura de mayúscula del texto ≈ alto de CONSTELLATION
+    alto_logo = ancho_logo * tarjetas.proporcion_svg(str(ruta))
+    borde = H - ZONA_ABAJO - 4                      # borde inferior del logo: límite de la zona segura (desde arriba)
+    arriba = borde - alto_logo
+    base = H - (arriba + LINEA_BASE_CONSTELLATION * alto_logo)  # línea de base común (desde abajo)
     ancho_texto = stringWidth(texto, NORMAL, tam)
     x0 = (W - (ancho_texto + hueco + ancho_logo)) / 2
-    base = H - 1418  # línea base del texto
     L.c.setFillColor(L.col[c_texto])
     L.c.setFont(NORMAL, tam)
     L.c.drawString(x0, base, texto)
-    L.logo_svg(RAIZ / logos["constellation_blanco" if oscuro else "constellation_negro"],
-               x0 + ancho_texto + hueco + ancho_logo / 2, base + tam * 0.4, ancho_logo)
+    L.logo_svg(ruta, x0 + ancho_texto + hueco + ancho_logo / 2, H - (arriba + alto_logo / 2), ancho_logo)
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,

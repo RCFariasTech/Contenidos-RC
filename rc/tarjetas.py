@@ -149,6 +149,14 @@ class Lienzo:
         renderPDF.draw(dib, self.c, cx - ancho / 2, cy - dib.height * k / 2)
 
 
+@lru_cache(maxsize=None)
+def proporcion_svg(ruta: str) -> float:
+    """Alto / ancho de un SVG."""
+    from svglib.svglib import svg2rlg
+    dib = svg2rlg(ruta)
+    return dib.height / dib.width
+
+
 # ---------- los 7 estilos (todos reciben titular, texto y nota de ilustración) ----------
 
 # Portadas: el color de fondo rota para que el feed se vea variado (fondo, titular, texto, ilustración sobre fondo oscuro)
