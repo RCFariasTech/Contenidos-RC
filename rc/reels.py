@@ -22,13 +22,14 @@ ROLES = (("Gancho", "0–5 s"), ("Desarrollo", "5–12 s"), ("Desarrollo", "12�
 
 
 def _pagina(L, numero: int, texto: str, variante: int) -> None:
-    fondo, c_texto, c_apoyo, oscuro = PORTADAS[variante % len(PORTADAS)]
+    # Cada escena cambia de color de fondo, como las tarjetas del carrusel.
+    fondo, c_texto, c_apoyo, oscuro = PORTADAS[(variante + numero - 1) % len(PORTADAS)]
     rol, tiempo = ROLES[numero - 1]
     c = L.c
     L.fondo(fondo)
-    # Etiqueta de la escena (dentro de la zona segura)
-    L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", NEGRITA, c_apoyo, M, ZONA_ARRIBA + 20,
-             W - 2 * M, 50, 34)
+    if L.guias:  # la etiqueta con escena, rol y tiempo solo se ve en la vista previa
+        L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", NEGRITA, c_apoyo, M, ZONA_ARRIBA + 20,
+                 W - 2 * M, 50, 34)
     # Espacio para la imagen o el video
     y_caja, alto_caja = ZONA_ARRIBA + 110, 800
     tinta = L.col["blanco"] if oscuro else L.col["azul_marino"]
@@ -44,22 +45,25 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
     c.setFillColor(tinta)
     c.setFont(NEGRITA, 30)
     c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 + 10, "IMAGEN O VIDEO")
-    c.setFont(NORMAL, 24)
-    c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 - 28, f"Escena {numero} · {tiempo}")
+    if L.guias:
+        c.setFont(NORMAL, 24)
+        c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 - 28, f"Escena {numero} · {tiempo}")
     # Texto en pantalla
     y_texto = y_caja + alto_caja + 60
     L.bloque(texto, MUY_NEGRITA, c_texto, M, y_texto, W - 2 * M, H - ZONA_ABAJO - y_texto, 96, inter=1.12)
 
 
-def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0) -> bytes:
+def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,
+                guias: bool = False) -> bytes:
+    """guias=True añade la etiqueta de cada escena (vista previa); False la omite (descarga)."""
     tarjetas._registrar_fuentes()
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(W, H))
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
-    L = Lienzo(c, tarjetas._colores(), alto=H, ancho=W)
+    L = Lienzo(c, tarjetas._colores(), alto=H, ancho=W, guias=guias)
     for i, campo in enumerate(CAMPOS, 1):
-        _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
+        _pagina(L, i, (contenido.get(campo) or "").strip(), variante + semilla)
         c.showPage()
     c.save()
     return buffer.getvalue()

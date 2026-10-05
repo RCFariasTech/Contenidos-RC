@@ -17,7 +17,7 @@ REEL = {
 
 class TestReels(unittest.TestCase):
     def test_cinco_paginas_9_16_con_texto_editable(self):
-        doc = pymupdf.open(stream=reels.generar_pdf(REEL), filetype="pdf")
+        doc = pymupdf.open(stream=reels.generar_pdf(REEL, guias=True), filetype="pdf")
         self.assertEqual(len(doc), 5)
         self.assertEqual((doc[0].rect.width, doc[0].rect.height), (1080, 1920))
         for pagina, campo in zip(doc, reels.CAMPOS):
@@ -25,6 +25,21 @@ class TestReels(unittest.TestCase):
             self.assertIn(REEL[campo], texto)
             self.assertIn("IMAGEN O VIDEO", texto)
         self.assertIn("ESCENA 1 · GANCHO · 0–5 s", " ".join(doc[0].get_text().split()))
+
+    def test_la_descarga_no_trae_la_etiqueta_de_escena(self):
+        descarga = pymupdf.open(stream=reels.generar_pdf(REEL), filetype="pdf")
+        for pagina in descarga:
+            texto = pagina.get_text()
+            self.assertNotIn("ESCENA", texto)
+            self.assertNotIn("0–5 s", texto)
+        self.assertIn(REEL["escena_1_gancho"], " ".join(descarga[0].get_text().split()))
+
+    def test_cada_escena_tiene_un_fondo_distinto(self):
+        doc = pymupdf.open(stream=reels.generar_pdf(REEL, variante=2), filetype="pdf")
+        fondos = [tuple(p.get_pixmap(matrix=pymupdf.Matrix(.1, .1)).pixel(2, 2)) for p in doc]
+        self.assertEqual(len(set(fondos)), 5, fondos)
+        otra = pymupdf.open(stream=reels.generar_pdf(REEL, variante=2, semilla=1), filetype="pdf")
+        self.assertNotEqual(fondos[0], tuple(otra[0].get_pixmap(matrix=pymupdf.Matrix(.1, .1)).pixel(2, 2)))
 
     def test_el_texto_respeta_la_zona_segura_de_instagram(self):
         rnd = random.Random(3)

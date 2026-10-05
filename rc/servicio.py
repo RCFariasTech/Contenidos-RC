@@ -291,7 +291,7 @@ def exportar_pptx(mes: date) -> tuple[str, bytes]:
     return nombre, contenido
 
 
-def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
+def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[str, bytes]:
     """PDF para diseño: las 5 tarjetas 3:4 de un carrusel o el guion visual 9:16 de un reel."""
     from rc import reels, tarjetas  # import diferido: reportlab/svglib solo se cargan al generar
     pieza = _pieza(pieza_id)
@@ -304,16 +304,17 @@ def tarjetas_pdf(pieza_id: int) -> tuple[str, bytes]:
     variante = int(mes[5:7]) * 2 + [c["id"] for c in mismas].index(pieza_id)
     contenido = pieza["contenido"]
     modulo, rotulo = (reels, "Reel") if pieza["formato"] == "Reel" else (tarjetas, "Carrusel")
-    pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante)
+    pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante,
+                             semilla=max(0, int(semilla)), guias=guias)
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
-def vista_tarjetas(pieza_id: int) -> dict:
+def vista_tarjetas(pieza_id: int, semilla: int = 0) -> dict:
     """Las páginas como imágenes PNG (data URI) para la vista previa tipo carrusel, y su relación de aspecto."""
     import base64
     from rc import tarjetas
     pieza = _pieza(pieza_id)
-    _nombre, pdf = tarjetas_pdf(pieza_id)
+    _nombre, pdf = tarjetas_pdf(pieza_id, semilla, guias=True)
     imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf)]
     return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 3 / 4}
 

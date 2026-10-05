@@ -75,8 +75,9 @@ def ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter):
 
 
 class Lienzo:
-    def __init__(self, c, col, alto=H, ancho=W):
-        self.c, self.col, self.alto, self.ancho = c, col, alto, ancho
+    def __init__(self, c, col, alto=H, ancho=W, guias=True):
+        # guias=False (PDF que se descarga): se omiten los recuadros y notas que solo sirven en la vista previa.
+        self.c, self.col, self.alto, self.ancho, self.guias = c, col, alto, ancho, guias
 
     def bloque(self, texto, fuente, color, x, y_sup, ancho, alto, tam_max, alinear="izq", inter=1.2, tam_min=34):
         """Texto con el borde superior en y_sup (medido desde arriba). Devuelve el alto usado."""
@@ -99,7 +100,9 @@ class Lienzo:
         self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
 
     def marcador(self, x, y_sup, ancho, alto, nota, claro=True):
-        """Espacio reservado para la ilustración 3D de Krea, con la nota de qué ilustrar."""
+        """Espacio reservado para la ilustración 3D de Krea, con la nota de qué ilustrar (solo en la vista previa)."""
+        if not self.guias:
+            return
         c = self.c
         y = H - y_sup - alto
         tinta = self.col["blanco"] if claro else self.col["azul_marino"]
@@ -301,23 +304,29 @@ def datos_tarjetas(contenido: dict) -> list[dict]:
     return tarjetas
 
 
-def estilos_sugeridos(variante: int = 0) -> list[int]:
-    """Portada · tarjeta 2 con ilustración · tarjetas 3 y 4 solo texto · cierre. Rotan según la variante."""
+def estilos_sugeridos(variante: int = 0, semilla: int = 0) -> list[int]:
+    """Portada · tarjeta 2 con ilustración · tarjetas 3 y 4 solo texto · cierre.
+
+    Rotan según la variante (mes y carrusel); la semilla (botón «Rehacer») produce otra propuesta.
+    """
     n = len(ESTILOS_SOLO_TEXTO)
-    return [1, ESTILOS_TARJETA_2[variante % len(ESTILOS_TARJETA_2)],
-            ESTILOS_SOLO_TEXTO[(variante * 2) % n], ESTILOS_SOLO_TEXTO[(variante * 2 + 1) % n], 7]
+    i = (variante * 2 + semilla * 3) % n
+    return [1, ESTILOS_TARJETA_2[(variante + semilla) % len(ESTILOS_TARJETA_2)],
+            ESTILOS_SOLO_TEXTO[i], ESTILOS_SOLO_TEXTO[(i + 1) % n], 7]
 
 
-def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0) -> bytes:
+def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
+                guias: bool = False) -> bytes:
+    """guias=True dibuja los recuadros de ilustración con su nota (vista previa); False los omite (descarga)."""
     _registrar_fuentes()
     col = _colores()
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(W, H))
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
-    L = Lienzo(c, col)
-    for estilo, datos in zip(estilos_sugeridos(variante), datos_tarjetas(contenido)):
-        ESTILOS[estilo](L, {**datos, "variante": variante})
+    L = Lienzo(c, col, guias=guias)
+    for estilo, datos in zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)):
+        ESTILOS[estilo](L, {**datos, "variante": variante + semilla})
         c.showPage()
     c.save()
     return buffer.getvalue()

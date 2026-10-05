@@ -40,9 +40,28 @@ class TestTarjetas(unittest.TestCase):
             est = tarjetas.estilos_sugeridos(v)
             self.assertIn(est[1], tarjetas.ESTILOS_CON_ILUSTRACION)
             self.assertTrue(all(e not in tarjetas.ESTILOS_CON_ILUSTRACION for e in est[2:]), est)
-        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=3), filetype="pdf")
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=3, guias=True), filetype="pdf")
         con = [i + 1 for i, p in enumerate(doc) if "ILUSTRACIÓN 3D" in p.get_text()]
         self.assertEqual(con, [1, 2])
+
+    def test_la_descarga_no_trae_recuadros_de_ilustracion_solo_la_vista_previa(self):
+        previa = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True), filetype="pdf")
+        descarga = pymupdf.open(stream=tarjetas.generar_pdf(carrusel()), filetype="pdf")
+        self.assertTrue(any("ILUSTRACIÓN 3D" in p.get_text() for p in previa))
+        self.assertFalse(any("ILUSTRACIÓN 3D" in p.get_text() or "Krea" in p.get_text() for p in descarga))
+        self.assertIn("Tu góndola", " ".join(descarga[0].get_text().split()))  # el texto sigue ahí
+
+    def test_rehacer_cambia_la_propuesta(self):
+        propuestas = {tuple(tarjetas.estilos_sugeridos(2, s)) for s in range(6)}
+        self.assertGreaterEqual(len(propuestas), 4)
+        for s in range(8):
+            est = tarjetas.estilos_sugeridos(2, s)
+            self.assertIn(est[1], tarjetas.ESTILOS_CON_ILUSTRACION)
+            self.assertTrue(all(e not in tarjetas.ESTILOS_CON_ILUSTRACION for e in est[2:4]))
+        self.assertEqual(tarjetas.estilos_sugeridos(2, 0), tarjetas.estilos_sugeridos(2))
+        pdf0 = tarjetas.generar_pdf(carrusel(), variante=2, semilla=0)
+        pdf1 = tarjetas.generar_pdf(carrusel(), variante=2, semilla=1)
+        self.assertNotEqual(pdf0, pdf1)
 
     def test_portadas_rotan_de_color(self):
         fondos = [tarjetas.PORTADAS[v % len(tarjetas.PORTADAS)][0] for v in range(5)]

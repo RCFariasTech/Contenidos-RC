@@ -205,13 +205,21 @@ def ruta_exportar_pptx(req):
                         "application/vnd.openxmlformats-officedocument.presentationml.presentation")
 
 
+def _semilla(req) -> int:
+    """Número de «Rehacer» (0 = propuesta inicial); acotado para que no se use como vector de abuso."""
+    try:
+        return max(0, min(int(req["query"].get("semilla", "0")), 1000))
+    except ValueError:
+        return 0
+
+
 def ruta_tarjetas_pdf(req):
     _dueno(req)
     try:
         pieza_id = int(req["query"].get("pieza", ""))
     except ValueError:
         raise ErrorCliente(400, "Falta la pieza.")
-    nombre, contenido = _servicio().tarjetas_pdf(pieza_id)
+    nombre, contenido = _servicio().tarjetas_pdf(pieza_id, _semilla(req))
     return 200, Archivo(nombre, contenido, "application/pdf")
 
 
@@ -221,7 +229,7 @@ def ruta_tarjetas_vista(req):
         pieza_id = int(req["query"].get("pieza", ""))
     except ValueError:
         raise ErrorCliente(400, "Falta la pieza.")
-    return 200, _servicio().vista_tarjetas(pieza_id)
+    return 200, _servicio().vista_tarjetas(pieza_id, _semilla(req))
 
 
 def ruta_probar_teams(req):

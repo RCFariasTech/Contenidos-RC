@@ -475,23 +475,31 @@ function actualizarCarrusel() {
   $("tarjetas-sig").disabled = i >= n - 1;
 }
 
+let semillaTarjetas = 0;
+
+async function cargarVistaTarjetas(piezaId) {
+  const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaTarjetas}`);
+  const posicion = $("dialogo-tarjetas").open ? tarjetaActual() : 0;
+  piezaTarjetas = piezaId;
+  $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
+  $("tarjetas-ayuda").textContent = relacion < 0.7
+    ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable. Ábrelo en Adobe Express con «Empezar con tu contenido». La etiqueta de cada escena solo se ve aquí, no en el PDF."
+    : "3:4 · 1080 × 1440. Los recuadros con la nota de ilustración (Krea) solo se ven aquí: el PDF descargado deja ese espacio libre. «Rehacer» muestra otra propuesta de colores y estilos.";
+  $("tarjetas-titulo").textContent = relacion < 0.7 ? "Vista previa del guion visual" : "Vista previa del carrusel";
+  $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` })));
+  if (!$("dialogo-tarjetas").open) $("dialogo-tarjetas").showModal();
+  $("tarjetas-pista").scrollLeft = posicion * $("tarjetas-pista").clientWidth;
+  actualizarCarrusel();
+  $("tarjetas-pista").focus();
+}
+
 async function verTarjetas(piezaId, boton) {
   boton.disabled = true;
   const texto = boton.textContent;
   boton.textContent = "Generando vista previa…";
   try {
-    const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}`);
-    piezaTarjetas = piezaId;
-    $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
-    $("tarjetas-ayuda").textContent = relacion < 0.7
-      ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable y el espacio para la imagen o el video. Ábrelo en Adobe Express con «Empezar con tu contenido»."
-      : "3:4 · 1080 × 1440. Los recuadros punteados son los espacios para las ilustraciones 3D de Krea; el PDF conserva el texto editable.";
-    $("tarjetas-titulo").textContent = relacion < 0.7 ? "Vista previa del guion visual" : "Vista previa del carrusel";
-    $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` })));
-    $("dialogo-tarjetas").showModal();
-    $("tarjetas-pista").scrollLeft = 0;
-    actualizarCarrusel();
-    $("tarjetas-pista").focus();
+    semillaTarjetas = 0;
+    await cargarVistaTarjetas(piezaId);
   } catch (e) {
     aviso(`No se pudo generar la vista previa: ${e.message}`);
   } finally {
@@ -499,6 +507,22 @@ async function verTarjetas(piezaId, boton) {
     boton.textContent = texto;
   }
 }
+
+$("tarjetas-rehacer").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  boton.disabled = true;
+  boton.textContent = "Rehaciendo…";
+  semillaTarjetas += 1;
+  try {
+    await cargarVistaTarjetas(piezaTarjetas);
+  } catch (e) {
+    semillaTarjetas -= 1;
+    aviso(`No se pudo rehacer la propuesta: ${e.message}`);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Rehacer";
+  }
+});
 
 $("tarjetas-pista").addEventListener("scroll", actualizarCarrusel, { passive: true });
 $("tarjetas-ant").addEventListener("click", () => irATarjeta(tarjetaActual() - 1));
@@ -514,7 +538,7 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
   const boton = ev.currentTarget;
   boton.disabled = true;
   try {
-    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaTarjetas}`, "tarjetas.pdf");
+    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaTarjetas}&semilla=${semillaTarjetas}`, "tarjetas.pdf");
   } catch (e) {
     aviso(`No se pudo descargar el PDF: ${e.message}`);
   } finally {
