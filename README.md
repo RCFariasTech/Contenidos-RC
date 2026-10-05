@@ -62,7 +62,7 @@ El mensaje es una Adaptive Card dentro de `{"type": "message", "attachments": [.
 
 ### Ilustraciones 3D con Krea (opcional)
 
-En las tarjetas 1 y 2 de cada carrusel, el botón **Ilustraciones con Krea** genera 3 variantes con el modelo (LoRA) «3d characters in red and blue» de la cuenta de Krea (`config/ajustes.json` → `krea`: modelo Flux.1 Dev, `style_id`, tamaño y variantes por clic). El prompt sale del campo `prompt_krea` del carrusel (en inglés) y pide un fondo del color de la tarjeta con los bordes difuminados; el tamaño sigue la proporción del recuadro de esa tarjeta. Las imágenes **quedan solo en Krea**: la app guarda únicamente el enlace, el prompt y el estado (tabla `ilustraciones`, migración 005). Cada clic consume créditos de Krea.
+En las tarjetas 1 y 2 de cada carrusel, el botón **Ilustraciones con Krea** genera 3 variantes con el modelo (LoRA) «3d characters in red and blue» de la cuenta de Krea (`config/ajustes.json` → `krea`: modelo Flux.1 Dev, `style_id`, tamaño y variantes por clic). El prompt sale del campo `prompt_krea` del carrusel (en inglés) y pide un fondo del color de la tarjeta con los bordes difuminados; el tamaño sigue la proporción del recuadro de esa tarjeta. Las imágenes **quedan solo en Krea**: la app guarda únicamente el enlace, el prompt y el estado (tabla `ilustraciones`, migración 005). Cada clic consume **saldo de API** de Krea: es un saldo en dólares del workspace (Krea → API → «Workspace API balance»), distinto de los créditos mensuales de la aplicación; con saldo $0 la API responde error de pago.
 
 Para activarlo agrega en Vercel `KREA_API_TOKEN` (clave de API creada en tu cuenta de Krea, tipo **Sensitive**) y vuelve a desplegar.
 

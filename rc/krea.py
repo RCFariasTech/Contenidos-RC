@@ -51,7 +51,7 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
         if e.code in (401, 403):
             raise ErrorNegocio("Krea rechazó la clave de API (KREA_API_TOKEN). Revísala en Vercel.") from e
         if e.code == 402:
-            raise ErrorNegocio("Se acabaron los créditos de Krea.") from e
+            raise ErrorNegocio("El saldo de API de Krea está en cero. Agrega saldo en Krea (sección API); es distinto de los créditos de la aplicación.") from e
         if e.code == 429:
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
         raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code}).") from e

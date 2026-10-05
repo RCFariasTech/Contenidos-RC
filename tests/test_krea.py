@@ -49,7 +49,7 @@ class TestKrea(unittest.TestCase):
                 self.assertEqual(krea.consultar("j")["estado"], "fallida")  # solo se aceptan URLs https
 
     def test_errores_http_con_mensaje_claro(self):
-        for codigo, texto in ((401, "clave"), (402, "créditos"), (429, "demasiados")):
+        for codigo, texto in ((401, "clave"), (402, "saldo de API"), (429, "demasiados")):
             def urlopen(req, timeout=None, c=codigo):
                 raise urllib.error.HTTPError(req.full_url, c, "x", {}, io.BytesIO(b"{}"))
             with mock.patch.dict("os.environ", {"KREA_API_TOKEN": "tok"}), mock.patch("urllib.request.urlopen", urlopen):
