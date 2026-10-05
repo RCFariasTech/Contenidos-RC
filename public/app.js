@@ -161,16 +161,65 @@ function renderInvestigacion(inv) {
     ));
 }
 
-function renderTextos(pieza) {
+// ---------- miniaturas de las propuestas gráficas (junto a cada texto) ----------
+
+const miniaturas = { cache: new Map(), pendientes: new Set(), semillas: new Map() };
+const semillaDe = (piezaId) => miniaturas.semillas.get(piezaId) || 0;
+const claveVista = (p) => `${p.id}:${p.version}:${semillaDe(p.id)}`;
+
+function pintarMiniatura(caja, pieza) {
+  const dato = miniaturas.cache.get(claveVista(pieza));
+  const i = Number(caja.dataset.indice);
+  caja.classList.toggle("miniatura--cargando", !dato);
+  if (dato?.imagenes?.[i]) {
+    caja.replaceChildren(el("img", { src: dato.imagenes[i], alt: "", loading: "lazy" }));
+  } else if (dato) {
+    caja.replaceChildren(el("span", {}, "Sin vista previa"));
+  }
+}
+
+function repintarMiniaturas(piezaId) {
+  const pieza = estado.piezas.find((p) => p.id === piezaId);
+  if (!pieza) return;
+  document.querySelectorAll(`.miniatura[data-pieza="${piezaId}"]`).forEach((caja) => pintarMiniatura(caja, pieza));
+}
+
+function pedirMiniaturas(pieza) {
+  const clave = claveVista(pieza);
+  if (miniaturas.cache.has(clave) || miniaturas.pendientes.has(clave)) return;
+  miniaturas.pendientes.add(clave);
+  api(`tarjetas-vista?pieza=${pieza.id}&semilla=${semillaDe(pieza.id)}&ancho=360`)
+    .then((datos) => miniaturas.cache.set(clave, datos))
+    .catch(() => miniaturas.cache.set(clave, { error: true }))
+    .finally(() => { miniaturas.pendientes.delete(clave); repintarMiniaturas(pieza.id); });
+}
+
+function miniatura(pieza, i) {
+  const reel = pieza.formato === "Reel";
+  const caja = el("button", {
+    clase: "miniatura", type: "button", "data-pieza": pieza.id, "data-indice": i,
+    style: `aspect-ratio: ${reel ? "9 / 16" : "3 / 4"}; width: ${reel ? 84 : 112}px`,
+    title: "Ver en grande",
+    "aria-label": `Ver la propuesta gráfica de la ${reel ? "escena" : "tarjeta"} ${i + 1} en grande`,
+    onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget, i),
+  });
+  pintarMiniatura(caja, pieza);
+  pedirMiniaturas(pieza);
+  return caja;
+}
+
+function renderTextos(pieza, conMiniaturas = true) {
   const c = pieza.contenido;
+  conMiniaturas = conMiniaturas && Boolean(pieza.id) && pieza.version != null;
   const items = CAMPOS[pieza.formato].map(({ campo, rol, max }, i) => {
     const n = contarPalabras(c[campo]);
-    return el("li", { clase: `texto-item${i === 0 ? " texto-item--gancho" : ""}` },
+    return el("li", { clase: `texto-item${i === 0 ? " texto-item--gancho" : ""}${conMiniaturas ? " texto-item--miniatura" : ""}` },
       el("span", { clase: "texto-item__num", "aria-hidden": "true" }, String(i + 1)),
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
         el("p", { clase: "texto-item__texto" }, c[campo] || "—")),
-      el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`));
+      el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
+      conMiniaturas ? miniatura(pieza, i) : null);
   });
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
   const boton = pieza.id ? el("button", {
@@ -475,12 +524,15 @@ function actualizarCarrusel() {
   $("tarjetas-sig").disabled = i >= n - 1;
 }
 
-let semillaTarjetas = 0;
-
-async function cargarVistaTarjetas(piezaId) {
-  const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaTarjetas}`);
-  const posicion = $("dialogo-tarjetas").open ? tarjetaActual() : 0;
+async function cargarVistaTarjetas(piezaId, indice = 0) {
+  const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaDe(piezaId)}`);
+  const posicion = $("dialogo-tarjetas").open ? tarjetaActual() : indice;
   piezaTarjetas = piezaId;
+  const pieza = estado.piezas.find((p) => p.id === piezaId);
+  if (pieza) {  // reutiliza estas imágenes en las miniaturas de la pieza
+    miniaturas.cache.set(claveVista(pieza), { imagenes, relacion });
+    repintarMiniaturas(piezaId);
+  }
   $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
   $("tarjetas-ayuda").textContent = relacion < 0.7
     ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable. Ábrelo en Adobe Express con «Empezar con tu contenido». La etiqueta de cada escena solo se ve aquí, no en el PDF."
@@ -493,18 +545,20 @@ async function cargarVistaTarjetas(piezaId) {
   $("tarjetas-pista").focus();
 }
 
-async function verTarjetas(piezaId, boton) {
+async function verTarjetas(piezaId, boton, indice = 0) {
+  const esMiniatura = boton.classList.contains("miniatura");
   boton.disabled = true;
   const texto = boton.textContent;
-  boton.textContent = "Generando vista previa…";
+  if (esMiniatura) boton.classList.add("miniatura--cargando");
+  else boton.textContent = "Generando vista previa…";
   try {
-    semillaTarjetas = 0;
-    await cargarVistaTarjetas(piezaId);
+    await cargarVistaTarjetas(piezaId, indice);
   } catch (e) {
     aviso(`No se pudo generar la vista previa: ${e.message}`);
   } finally {
     boton.disabled = false;
-    boton.textContent = texto;
+    if (esMiniatura) boton.classList.remove("miniatura--cargando");
+    else boton.textContent = texto;
   }
 }
 
@@ -512,11 +566,11 @@ $("tarjetas-rehacer").addEventListener("click", async (ev) => {
   const boton = ev.currentTarget;
   boton.disabled = true;
   boton.textContent = "Rehaciendo…";
-  semillaTarjetas += 1;
+  miniaturas.semillas.set(piezaTarjetas, semillaDe(piezaTarjetas) + 1);
   try {
     await cargarVistaTarjetas(piezaTarjetas);
   } catch (e) {
-    semillaTarjetas -= 1;
+    miniaturas.semillas.set(piezaTarjetas, semillaDe(piezaTarjetas) - 1);
     aviso(`No se pudo rehacer la propuesta: ${e.message}`);
   } finally {
     boton.disabled = false;
@@ -538,7 +592,7 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
   const boton = ev.currentTarget;
   boton.disabled = true;
   try {
-    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaTarjetas}&semilla=${semillaTarjetas}`, "tarjetas.pdf");
+    await descargarArchivo(`/api/tarjetas-pdf?pieza=${piezaTarjetas}&semilla=${semillaDe(piezaTarjetas)}`, "tarjetas.pdf");
   } catch (e) {
     aviso(`No se pudo descargar el PDF: ${e.message}`);
   } finally {
@@ -653,7 +707,7 @@ function renderDetalle() {
           onclick: () => { repo.version = v.version; renderDetalle(); },
         }, `v${v.version} · ${v.motivo === "generacion" ? "original" : v.motivo} · ${fechaCorta(v.creado_en)}`))) : null,
       renderInvestigacion(vista.contenido.investigacion),
-      renderTextos(vista),
+      renderTextos(vista, !version || version.version === p.version),
       renderCaption(vista.contenido));
   }
   const acciones = el("div", { clase: "pieza__controles" },

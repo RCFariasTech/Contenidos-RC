@@ -309,13 +309,13 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
-def vista_tarjetas(pieza_id: int, semilla: int = 0) -> dict:
+def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     """Las páginas como imágenes PNG (data URI) para la vista previa tipo carrusel, y su relación de aspecto."""
     import base64
     from rc import tarjetas
     pieza = _pieza(pieza_id)
     _nombre, pdf = tarjetas_pdf(pieza_id, semilla, guias=True)
-    imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf)]
+    imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf, max(200, min(int(ancho), 900)))]
     return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 3 / 4}
 
 
