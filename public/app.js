@@ -146,13 +146,18 @@ function renderBarra() {
   botonPptx.title = listo ? "Descarga el PowerPoint para el equipo de publicación" : "Se habilita cuando las 4 piezas están aprobadas";
 }
 
-function renderInvestigacion(inv) {
+const investigacionAbierta = new Set();  // piezas cuya investigación el usuario dejó desplegada (sobrevive a los re-render)
+
+function renderInvestigacion(inv, piezaId) {
   if (!inv) return null;
   const fuente = inv.fuente_url && inv.fuente_url.startsWith("https://")
     ? el("a", { href: inv.fuente_url, target: "_blank", rel: "noopener noreferrer" }, inv.fuente_titulo || inv.fuente_url)
     : (inv.fuente_titulo || "Sin fuente");
-  return el("section", { clase: "bloque" },
-    el("h3", {}, "Investigación"),
+  return el("details", {
+    clase: "bloque desplegable", open: investigacionAbierta.has(piezaId),
+    ontoggle: (ev) => { if (ev.currentTarget.open) investigacionAbierta.add(piezaId); else investigacionAbierta.delete(piezaId); },
+  },
+    el("summary", {}, el("h3", {}, "Investigación"), el("span", { clase: "desplegable__pista" }, inv.tendencia)),
     el("div", { clase: "investigacion" },
       el("p", { clase: "investigacion__tendencia" }, inv.tendencia),
       el("p", {}, inv.resumen),
@@ -395,7 +400,7 @@ function renderPieza(pieza) {
     cuerpo.append(
       el("div", { clase: "pieza__titulo" }, el("h2", {}, c.tema_especifico), el("p", {}, pieza.pilar)),
       ...renderAlertas(pieza),
-      renderInvestigacion(c.investigacion),
+      renderInvestigacion(c.investigacion, pieza.id),
       renderTextos(pieza),
       renderCaption(c),
       renderComentarios(pieza, bloqueada));
@@ -731,7 +736,7 @@ function renderDetalle() {
           clase: "version-btn", type: "button", "aria-pressed": v.version === repo.version ? "true" : "false",
           onclick: () => { repo.version = v.version; renderDetalle(); },
         }, `v${v.version} · ${{ generacion: "original", rehacer: "rehecha" }[v.motivo] || v.motivo} · ${fechaCorta(v.creado_en)}`))) : null,
-      renderInvestigacion(vista.contenido.investigacion),
+      renderInvestigacion(vista.contenido.investigacion, p.id),
       renderTextos(vista, !version || version.version === p.version),
       renderCaption(vista.contenido));
   }
