@@ -937,11 +937,12 @@ function paintTo(p) {                // p en uv; la máscara tiene su propia res
   const step = Math.max(1, protectR() * mk.height * .25);
   const a = { x: last.x * mk.width, y: last.y * mk.height }, b = { x: p.x * mk.width, y: p.y * mk.height };
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
-  const sB = Math.min(.5, .22 * +$("gstr").value);        // fuerza del empuje (comparte el deslizador Fuerza)
+  const sB = Math.min(.7, .3 * +$("gstr").value);         // fuerza del empuje (comparte el deslizador Fuerza)
   for (let i = 1; i <= n; i++) {
     const x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n;
     stamp(x, y);
-    pushField(1, 1, x / mk.width, y / mk.height, sB, 0, protectR());   // empuja los pliegues fuera de la zona
+    // el empuje alcanza más allá del círculo (2.3x) para que los pliegues salgan de la zona y se acumulen fuera
+    for (let k = 0; k < 3; k++) pushField(1, 1, x / mk.width, y / mk.height, sB, 0, protectR() * 2.3);
   }
   state.hasGel = true;
   last = p;
