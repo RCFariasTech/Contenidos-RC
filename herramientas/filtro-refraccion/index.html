@@ -132,6 +132,8 @@
       <input type="range" id="cov" min="0" max="1" step="0.01" value="0.60"></div>
     <div class="ctl" title="Cuánto se corre cada pieza delimitada por los pliegues respecto a las vecinas"><label>Desplazamiento <span id="vsDesp"></span></label>
       <input type="range" id="sDesp" min="0" max="1" step="0.01" value="0.25"></div>
+    <div class="ctl" title="Opacidad del brillo claro en los bordes de los pliegues: 0 sin brillo, 1 completo"><label>Brillo de pliegues <span id="vsShine"></span></label>
+      <input type="range" id="sShine" min="0" max="1" step="0.01" value="1"></div>
 
     <div class="grid3">
       <div class="ctl"><label for="selSize">Pliegue</label>
@@ -320,7 +322,7 @@ vec2 getU(vec2 uv){ return getF(ufield, uv); }
 vec2 getE(vec2 uv){ return getF(efield, uv); }`;
 
 const SESGO = `
-uniform float intensity, coverage, sizeMix, dirMode, dupAmt, dispAmt;
+uniform float intensity, coverage, sizeMix, dirMode, dupAmt, dispAmt, shineAmt;
 // "grosor" de la lámina transparente en el punto p (espacio con alto = 1)
 float height(vec2 p){
   // orientación de los pliegues
@@ -429,8 +431,11 @@ void main(){
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
   float hi = max(edge, 0.), lo = max(-edge, 0.);
-  col = mix(col, col + (1.-col)*.55, clamp(hi,0.,1.));
+  col = mix(col, col + (1.-col)*.55, clamp(hi,0.,1.)*shineAmt);   // shineAmt: opacidad del brillo
   col *= 1. - .45*clamp(lo,0.,1.);
+  // brillo bajo: además apaga los destellos de la foto refractada dentro de los pliegues
+  float foldAmt = clamp(length(d)*vec2(aspect,1.).x/.03, 0., 1.);
+  col = mix(col, col*col*1.15, (1. - shineAmt)*foldAmt*.75);
 
   gl_FragColor = vec4(clamp(col,0.,1.), 1.);
 }`;
@@ -660,7 +665,7 @@ const OX_PAL = ["pS", "pM", "pL", "pA", "pC"];
 const OX_KEYS = ["S", "M", "L", "A", "C"];                      // sombra, medio, luz, acento, borde frío
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const oxColors = () => OX_KEYS.map(k => hexRgb($("c" + k).value));
-const COMMON_U = ["efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const COMMON_U = ["shineAmt", "efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -731,6 +736,7 @@ function setCommon(L) {
   gl.uniform1f(L.dirMode, state.dir);
   gl.uniform1f(L.dupAmt, state.dup);
   gl.uniform1f(L.dispAmt, +$("sDesp").value);
+  gl.uniform1f(L.shineAmt, +$("sShine").value);
   for (const id of MIN_IDS) gl.uniform1f(L[id], +$(id).value);
   PAL_IDS.forEach((id, i) => gl.uniform3fv(L[id], state.pal[i]));
   for (const id of OX_IDS) gl.uniform1f(L[id], +$(id).value);
@@ -967,6 +973,7 @@ function drawTiled() {
 $("vInt").textContent = (+$("int").value).toFixed(2);
 $("vCov").textContent = (+$("cov").value).toFixed(2);
 $("vsDesp").textContent = (+$("sDesp").value).toFixed(2);
+$("vsShine").textContent = (+$("sShine").value).toFixed(2);
 $("vRad").textContent = (+$("rad").value).toFixed(2);
 $("vGrad").textContent = (+$("grad").value).toFixed(2);
 $("vStr").textContent = (+$("gstr").value).toFixed(2);
@@ -992,9 +999,9 @@ document.querySelector('.seg[data-key="effect"]').addEventListener("click", e =>
     document.querySelectorAll('.seg[data-key="tool"] button').forEach(x => x.classList.toggle("on", x.dataset.v === "0"));
   }
 });
-for (const id of ["int", "cov", "sDesp", "rad", "grad", "gstr"]) {
+for (const id of ["int", "cov", "sDesp", "sShine", "rad", "grad", "gstr"]) {
   $(id).addEventListener("input", () => {
-    $({int:"vInt", cov:"vCov", sDesp:"vsDesp", rad:"vRad", grad:"vGrad", gstr:"vStr"}[id]).textContent = (+$(id).value).toFixed(2);
+    $({int:"vInt", cov:"vCov", sDesp:"vsDesp", sShine:"vsShine", rad:"vRad", grad:"vGrad", gstr:"vStr"}[id]).textContent = (+$(id).value).toFixed(2);
     render();
   });
 }
