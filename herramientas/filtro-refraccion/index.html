@@ -56,7 +56,13 @@
   .crow label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
   .crow input[type=color] { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
   .crow input[type=text] { min-width: 0; width: 100%; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--text); font: 12px ui-monospace, monospace; }
-  .presets { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .presets { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    background: color-mix(in srgb, var(--panel) 80%, #000); }   /* 20 % más oscuro que el panel */
+  .presets summary { list-style: none; white-space: nowrap; }
+  .presets summary::-webkit-details-marker { display: none; }
+  .presets summary::before { content: "▸"; margin-right: 6px; display: inline-block; transition: transform .15s; }
+  .presets[open] summary::before { transform: rotate(90deg); }
+  .presets summary > span { margin-left: auto; }
   .presets summary { cursor: pointer; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
   .presets[open] summary { margin-bottom: 8px; }
   .presets .favrow .btn { flex: 1; }
@@ -1123,7 +1129,8 @@ function renderPresets(selIdx) {
   ph.value = ""; ph.textContent = list.length ? "Elegir ajuste…" : "(ninguno guardado)"; sel.appendChild(ph);
   list.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name; sel.appendChild(o); });
   sel.value = selIdx === undefined ? "" : String(selIdx);
-  $("prCount").textContent = PR_NAMES[fx] + " " + list.length + "/" + PR_MAX;
+  $("prCount").textContent = list.length + "/" + PR_MAX;
+  $("prCount").title = "Ajustes guardados de " + PR_NAMES[fx];
   $("prDel").disabled = sel.value === "";
   $("prConfirm").hidden = true;
 }
