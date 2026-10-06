@@ -188,6 +188,11 @@
     </div>
 
     <hr class="sep">
+    <div class="row">
+      <button class="btn primary" id="apply" disabled title="Fija el resultado como imagen base para aplicarle otro filtro encima">Aplicar filtro</button>
+      <button class="btn" id="unapply" disabled title="Quita el último filtro aplicado">Quitar último</button>
+    </div>
+    <p class="hint" id="stackInfo" style="margin:-2px 0 8px"></p>
     <button class="btn" id="cmp">Mantén pulsado: ver original</button>
     <button class="btn primary" id="dl" disabled>Descargar PNG</button>
     <p class="hint" id="info"></p>
@@ -784,31 +789,89 @@ async function loadImage(file) {
     if (src.close) src.close();
     imgW = w; imgH = h; cv.width = w; cv.height = h;
     gl.viewport(0, 0, w, h);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tmp);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    state.pal = extractPalette(tmp);
+    uploadBase(tmp);
+    baseStack.length = 0; syncStack();
     resetMask(w, h); initGel(w, h);
     state.loaded = true;
     for (const id of ["clearP", "clearG"]) $(id).disabled = false;
     drop.style.display = "none"; wrap.classList.add("on");
-    $("dl").disabled = false;
+    $("dl").disabled = false; $("apply").disabled = false;
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
     render();
   } catch (e) { errEl.textContent = e.message; }
 }
 
+// ---- apilar filtros: 'Aplicar filtro' fija el resultado como nueva imagen base ----
+const MAX_STACK = 6;
+const baseStack = [];                 // imágenes base anteriores (canvas), la última es la inmediata
+let baseCanvas = null;
+function uploadBase(src) {
+  baseCanvas = src;
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  state.pal = extractPalette(src);
+}
+function syncStack() {
+  $("unapply").disabled = baseStack.length === 0;
+  $("stackInfo").textContent = baseStack.length ? baseStack.length + " filtro" + (baseStack.length > 1 ? "s" : "") + " aplicado" + (baseStack.length > 1 ? "s" : "") : "";
+}
+function copyCanvas(c) {
+  const t = document.createElement("canvas"); t.width = c.width; t.height = c.height;
+  t.getContext("2d").drawImage(c, 0, 0);
+  return t;
+}
+function resetControls() {          // vuelve los ajustes de los filtros a sus valores iniciales (no toca el pincel)
+  const keep = new Set(["rad", "grad", "gstr"]);
+  document.querySelectorAll("aside input[type=range]").forEach(el => {
+    if (keep.has(el.id) || +el.value === +el.defaultValue) return;
+    el.value = el.defaultValue; el.dispatchEvent(new Event("input"));
+  });
+  document.querySelectorAll("aside select[data-key]").forEach(el => {
+    const d = [...el.options].find(o => o.defaultSelected);
+    if (!d || el.value === d.value) return;
+    el.value = d.value; el.dispatchEvent(new Event("change"));
+  });
+}
+$("apply").addEventListener("click", () => {
+  if (!state.loaded || stroking) return;
+  errEl.textContent = "";
+  try {
+    cancelAnimationFrame(raf); drawNow();                   // resultado actual, con todos los ajustes
+    const before = baseCanvas;
+    const result = copyCanvas(cv);
+    baseStack.push(before); if (baseStack.length > MAX_STACK) baseStack.shift();
+    uploadBase(result);
+    resetMask(imgW, imgH); initGel(imgW, imgH);             // pinceladas y zona protegida se reinician
+    resetControls();
+    state.effect = 3;                                       // la imagen base ya lleva el filtro: elige el siguiente
+    document.querySelectorAll('.seg[data-key="effect"] button').forEach(x => x.classList.remove("on"));
+    syncStack(); render();
+  } catch (e) { errEl.textContent = "No se pudo aplicar el filtro: " + e.message; }
+});
+$("unapply").addEventListener("click", () => {
+  if (!baseStack.length) return;
+  uploadBase(baseStack.pop());
+  state.effect = 3;
+  document.querySelectorAll('.seg[data-key="effect"] button').forEach(x => x.classList.remove("on"));
+  resetMask(imgW, imgH); initGel(imgW, imgH);
+  syncStack(); render();
+});
+
 function render() {
   if (!state.loaded) return;
   cancelAnimationFrame(raf);
-  raf = requestAnimationFrame(() => {
-    const L = [U, U2, U3][state.effect];
-    gl.useProgram([prog, prog2, prog3][state.effect]);
+  raf = requestAnimationFrame(drawNow);
+}
+function drawNow() {
+  {
+    const L = [U, U2, U3, U][state.effect];            // efecto 3 = ninguno (muestra la imagen base)
+    gl.useProgram([prog, prog2, prog3, prog][state.effect]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, imgW, imgH);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
@@ -816,10 +879,10 @@ function render() {
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(L.tex, 0);
     setCommon(L);
-    gl.uniform1f(L.showOrig, state.showOrig);
+    gl.uniform1f(L.showOrig, state.effect === 3 ? 1 : state.showOrig);
     gl.uniform1f(L.hasGel, state.hasGel ? 1 : 0);
     drawTiled();
-  });
+  }
 }
 
 // Dibuja por franjas de ~1 Mpx con finish() entre cada una: así ninguna llamada a la GPU dura lo
@@ -1027,7 +1090,7 @@ $("dl").addEventListener("click", () => {
   if (gl.isContextLost()) { errEl.textContent = "La GPU se reinició. Recarga la página y vuelve a cargar la imagen."; return; }
   const save = url => {
     const a = document.createElement("a");
-    a.href = url; a.download = ["sesgo-liquido", "memoria-mineral", "oxido-solar"][state.effect] + ".png";
+    a.href = url; a.download = ["sesgo-liquido", "memoria-mineral", "oxido-solar", "imagen"][state.effect] + ".png";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
