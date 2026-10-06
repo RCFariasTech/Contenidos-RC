@@ -107,7 +107,7 @@
 
     <div id="fxOxido" hidden>
       <div class="ctl"><label for="selOPal">Paleta</label>
-        <select id="selOPal" data-key="oPal"><option value="0" selected>Naranja y azul</option><option value="1">Verde y cian</option><option value="2">Rojo y menta</option><option value="3">Verde azulado y naranja</option></select></div>
+        <select id="selOPal" data-key="oPal"><option value="0">Naranja y azul</option><option value="1">Verde y cian</option><option value="2">Rojo y menta</option><option value="3" selected>Verde azulado y naranja</option></select></div>
       <div class="grid2">
         <div class="ctl" title="Cuántos colores usa la imagen"><label for="selOTones">Tonos</label>
           <select id="selOTones" data-key="oTones"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
@@ -116,27 +116,27 @@
       </div>
       <div class="grid3">
         <div class="ctl" title="Cuánto se estira el barrido horizontal"><label>Longitud <span id="voLen"></span></label>
-          <input type="range" id="oLen" min="0" max="1" step="0.01" value="0.25"></div>
+          <input type="range" id="oLen" min="0" max="1" step="0.01" value="0.22"></div>
         <div class="ctl" title="Variación del largo entre filas: más = bordes en peine"><label>Aspereza <span id="voRough"></span></label>
-          <input type="range" id="oRough" min="0" max="1" step="0.01" value="0.35"></div>
+          <input type="range" id="oRough" min="0" max="1" step="0.01" value="0.66"></div>
         <div class="ctl" title="Solo las luces se estiran ↔ toda la imagen"><label>Alcance <span id="voReach"></span></label>
-          <input type="range" id="oReach" min="0" max="1" step="0.01" value="0.3"></div>
+          <input type="range" id="oReach" min="0" max="1" step="0.01" value="0.37"></div>
         <div class="ctl" title="Desplaza qué es sombra, medio y luz"><label>Umbral <span id="voThr"></span></label>
-          <input type="range" id="oThr" min="-0.3" max="0.3" step="0.01" value="0"></div>
+          <input type="range" id="oThr" min="-0.3" max="0.3" step="0.01" value="0.03"></div>
         <div class="ctl" title="Borde entre tonos: duro o difuso"><label>Suavidad <span id="voSoft"></span></label>
-          <input type="range" id="oSoft" min="0" max="1" step="0.01" value="0.35"></div>
+          <input type="range" id="oSoft" min="0" max="1" step="0.01" value="1.00"></div>
         <div class="ctl" title="Brillo del resplandor alrededor de las luces"><label>Halo <span id="voHalo"></span></label>
-          <input type="range" id="oHalo" min="0" max="1" step="0.01" value="0.6"></div>
+          <input type="range" id="oHalo" min="0" max="1" step="0.01" value="0.64"></div>
         <div class="ctl" title="Cuánto se extiende el halo"><label>R. halo <span id="voHaloR"></span></label>
-          <input type="range" id="oHaloR" min="0" max="1" step="0.01" value="0.4"></div>
+          <input type="range" id="oHaloR" min="0" max="1" step="0.01" value="0.47"></div>
         <div class="ctl" title="Fuerza de la franja de color junto a los negros"><label>Borde <span id="voEdge"></span></label>
-          <input type="range" id="oEdge" min="0" max="1" step="0.01" value="0.5"></div>
+          <input type="range" id="oEdge" min="0" max="1" step="0.01" value="0.12"></div>
         <div class="ctl" title="Ancho de la franja de color"><label>Grosor <span id="voEdgeW"></span></label>
-          <input type="range" id="oEdgeW" min="0" max="1" step="0.01" value="0.4"></div>
+          <input type="range" id="oEdgeW" min="0" max="1" step="0.01" value="0.83"></div>
         <div class="ctl" title="Cantidad de grano"><label>Grano <span id="voGrain"></span></label>
-          <input type="range" id="oGrain" min="0" max="1" step="0.01" value="0.35"></div>
+          <input type="range" id="oGrain" min="0" max="1" step="0.01" value="0.28"></div>
         <div class="ctl" title="Tamaño del grano"><label>Tam. gr. <span id="voGrainS"></span></label>
-          <input type="range" id="oGrainS" min="0" max="1" step="0.01" value="0.3"></div>
+          <input type="range" id="oGrainS" min="0" max="1" step="0.01" value="0.11"></div>
       </div>
     </div>
 
@@ -564,7 +564,7 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
+const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 3, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
 let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
