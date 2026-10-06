@@ -56,6 +56,10 @@
   .crow label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
   .crow input[type=color] { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
   .crow input[type=text] { min-width: 0; width: 100%; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--text); font: 12px ui-monospace, monospace; }
+  .presets { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .presets summary { cursor: pointer; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+  .presets[open] summary { margin-bottom: 8px; }
+  .presets .favrow .btn { flex: 1; }
   .favs { margin: -4px 0 14px; }
   .favs > label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .favrow { display: flex; gap: 6px; margin-bottom: 6px; }
@@ -97,6 +101,28 @@
       <button class="btn" id="seedNext" title="Ir al patrón siguiente" aria-label="Patrón siguiente" style="flex:0 0 46px" disabled>→</button>
     </div>
     <div class="ctl"><div class="seg" data-key="effect"><button data-v="0" class="on">Sesgo líquido</button><button data-v="1">Memoria mineral</button><button data-v="2">Óxido solar</button></div></div>
+    <details class="presets" id="presets">
+      <summary>Mis ajustes guardados <span id="prCount"></span></summary>
+      <div class="favrow">
+        <input type="text" id="prName" maxlength="24" placeholder="Nombre" autocomplete="off">
+        <button class="btn" id="prSave" title="Guarda los ajustes actuales de este filtro, con el patrón">Guardar</button>
+      </div>
+      <div class="favrow">
+        <select id="prList" aria-label="Ajustes guardados de este filtro"></select>
+        <button class="btn" id="prDel" title="Borra el ajuste elegido" disabled>Borrar</button>
+      </div>
+      <div class="favrow" id="prConfirm" hidden>
+        <span id="prAsk" style="flex:1;font-size:13px;align-self:center"></span>
+        <button class="btn" id="prYes">Sí, borrar</button>
+        <button class="btn" id="prNo">Cancelar</button>
+      </div>
+      <div class="favrow">
+        <button class="btn" id="prExport" title="Baja todos tus ajustes guardados (los 3 filtros) a un archivo .json">Exportar</button>
+        <button class="btn" id="prImport" title="Carga ajustes desde un archivo .json exportado">Importar</button>
+        <input type="file" id="prFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="hint" id="prMsg" style="margin:4px 0 0"></p>
+    </details>
     <button class="btn" id="open">Cambiar imagen</button>
 
     <div id="fxLiquid">
@@ -1041,6 +1067,101 @@ $("favYes").addEventListener("click", () => {
   const n = favs[i].name; favs.splice(i, 1); persistFavs(); renderFavs(); favMsg("Paleta «" + n + "» borrada.");
 });
 renderFavs();
+// ---- ajustes guardados por filtro (máx. 3 por filtro): deslizadores, menús, colores y patrón ----
+const PR_KEY = "efectos-ajustes-guardados", PR_MAX = 3, PR_NAMES = ["Sesgo líquido", "Memoria mineral", "Óxido solar"];
+const PANELS = ["fxLiquid", "fxMineral", "fxOxido"];
+let presets = [[], [], []];
+try {
+  const v = JSON.parse(localStorage.getItem(PR_KEY) || "null");
+  if (Array.isArray(v) && v.length === 3) presets = v.map(l => Array.isArray(l) ? l.filter(p => p && p.name && p.v).slice(0, PR_MAX) : []);
+} catch (e) {}
+function persistPresets() { try { localStorage.setItem(PR_KEY, JSON.stringify(presets)); return true; } catch (e) { return false; } }
+const prMsg = t => { $("prMsg").textContent = t; };
+const panelFields = fx => [...$(PANELS[fx]).querySelectorAll("input[type=range], input[type=color], select[data-key]")];
+function captureSettings(fx) {
+  const v = {}; panelFields(fx).forEach(el => { v[el.id] = el.value; });
+  return { v, seed: state.seed };
+}
+function applySettings(fx, p) {
+  panelFields(fx).forEach(el => {
+    if (!(el.id in p.v)) return;
+    el.value = p.v[el.id];
+    if (el.type === "color") $("h" + el.id.slice(1)).value = el.value;
+    else el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input"));
+  });
+  if (typeof p.seed === "number") {                       // el patrón entra al historial de patrones
+    seedHist.length = seedIdx + 1; seedHist.push(p.seed); goSeed(seedHist.length - 1);
+  }
+  render();
+}
+function renderPresets(selIdx) {
+  const fx = state.effect; if (fx > 2) return;
+  const list = presets[fx], sel = $("prList");
+  sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = list.length ? "Elegir ajuste…" : "(ninguno guardado)"; sel.appendChild(ph);
+  list.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+  sel.value = selIdx === undefined ? "" : String(selIdx);
+  $("prCount").textContent = PR_NAMES[fx] + " " + list.length + "/" + PR_MAX;
+  $("prDel").disabled = sel.value === "";
+  $("prConfirm").hidden = true;
+}
+$("prSave").addEventListener("click", () => {
+  const fx = state.effect; if (fx > 2) { prMsg("Elige un filtro para guardar sus ajustes."); return; }
+  const name = $("prName").value.trim();
+  if (!name) { prMsg("Escribe un nombre para el ajuste."); $("prName").focus(); return; }
+  const list = presets[fx], i = list.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+  const data = { name, ...captureSettings(fx) };
+  if (i >= 0) list[i] = data;
+  else if (list.length >= PR_MAX) { prMsg("Ya tienes 3 ajustes en " + PR_NAMES[fx] + ". Borra uno para guardar otro."); return; }
+  else list.push(data);
+  renderPresets(i >= 0 ? i : list.length - 1);
+  prMsg(persistPresets() ? "Ajuste «" + name + "» " + (i >= 0 ? "actualizado." : "guardado.") : "Guardado solo mientras la página esté abierta: el navegador no permite guardar en este archivo. Usa Exportar.");
+  if (i < 0) $("prName").value = "";
+});
+$("prList").addEventListener("change", () => {
+  $("prConfirm").hidden = true;
+  const p = presets[state.effect][+$("prList").value];
+  $("prDel").disabled = !p;
+  if (p) { applySettings(state.effect, p); $("prName").value = p.name; prMsg("Ajuste «" + p.name + "» aplicado."); }
+});
+$("prDel").addEventListener("click", () => {
+  const p = presets[state.effect][+$("prList").value]; if (!p) return;
+  $("prAsk").textContent = "¿Borrar «" + p.name + "»?"; $("prConfirm").hidden = false; $("prYes").focus();
+});
+$("prNo").addEventListener("click", () => { $("prConfirm").hidden = true; prMsg(""); });
+$("prYes").addEventListener("click", () => {
+  const i = +$("prList").value, p = presets[state.effect][i]; if (!p) return;
+  presets[state.effect].splice(i, 1); persistPresets(); renderPresets(); prMsg("Ajuste «" + p.name + "» borrado.");
+});
+$("prExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ app: "efectos-de-imagen", version: 1, presets }, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "mis-ajustes-efectos.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  prMsg("Archivo exportado.");
+});
+$("prImport").addEventListener("click", () => $("prFile").click());
+$("prFile").addEventListener("change", async () => {
+  const f = $("prFile").files[0]; $("prFile").value = ""; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || d.app !== "efectos-de-imagen" || !Array.isArray(d.presets) || d.presets.length !== 3) throw new Error("formato");
+    let added = 0, skipped = 0;
+    d.presets.forEach((list, fx) => (Array.isArray(list) ? list : []).forEach(p => {
+      if (!p || typeof p.name !== "string" || !p.name.trim() || typeof p.v !== "object" || !p.v) return;
+      const clean = { name: p.name.trim().slice(0, 24), v: {}, seed: typeof p.seed === "number" ? p.seed : state.seed };
+      for (const [k, val] of Object.entries(p.v)) if (typeof val === "string" && val.length < 12) clean.v[k] = val;
+      const i = presets[fx].findIndex(q => q.name.toLowerCase() === clean.name.toLowerCase());
+      if (i >= 0) { presets[fx][i] = clean; added++; }
+      else if (presets[fx].length < PR_MAX) { presets[fx].push(clean); added++; }
+      else skipped++;
+    }));
+    persistPresets(); renderPresets();
+    prMsg(added + " ajuste" + (added === 1 ? "" : "s") + " importado" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " no cupieron (máx. 3 por filtro)" : "") + ".");
+  } catch (e) { prMsg("No se pudo importar: el archivo no es un export de esta app."); }
+});
+renderPresets();
+document.querySelector('.seg[data-key="effect"]').addEventListener("click", () => setTimeout(() => { $("presets").hidden = state.effect > 2; renderPresets(); prMsg(""); }, 0));
 document.querySelectorAll("select[data-key]").forEach(sel =>
   sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
 // historial de patrones: cada "Nuevo patrón" se guarda y se puede volver atrás o adelante
