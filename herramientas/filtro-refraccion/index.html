@@ -175,9 +175,9 @@
     <div class="grid3">
       <div class="ctl" title="Diámetro del dedo al mover el gel (arrastra sobre la imagen)"><label>Dedo <span id="vGrad"></span></label>
         <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
-      <div class="ctl" title="Diámetro del pincel de zona protegida (pinta sobre ojos, texto o producto)"><label>Zona <span id="vRad"></span></label>
+      <div class="ctl" title="Diámetro del pincel Proteger: pinta sobre ojos, texto o producto y empuja los pliegues hacia afuera (en Sesgo líquido)"><label>Zona <span id="vRad"></span></label>
         <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.12"></div>
-      <div class="ctl" title="Menos de 1: el gel sigue al dedo solo en parte. Más de 1: lo arrastra más lejos"><label>Fuerza <span id="vStr"></span></label>
+      <div class="ctl" title="Fuerza del dedo (Mover gel) y del empuje del pincel Proteger. Menos de 1: parcial. Más de 1: más lejos"><label>Fuerza <span id="vStr"></span></label>
         <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
     </div>
 
@@ -212,7 +212,8 @@ precision highp float;
 varying vec2 vUv;
 uniform float aspect, seed;
 uniform sampler2D mask;            // alfa = zona protegida (pincel)
-uniform sampler2D ufield;          // desplazamiento extra del gel movido con el dedo (16 bits por eje)
+uniform sampler2D ufield;          // desplazamiento del gel movido con el dedo (16 bits por eje): mueve imagen y pliegues
+uniform sampler2D efield;          // desplazamiento extra solo de los pliegues (empuje del pincel Proteger)
 uniform vec2 uTexel;
 
 float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
@@ -238,14 +239,16 @@ float protect(vec2 uv){ return 1. - texture2D(mask, uv).a; }
 // campo del gel movido: dos canales de 8 bits por eje (RGBA8 sirve en cualquier GPU)
 const float UR = 1.;
 vec2 decodeU(vec4 t){ t = floor(t*255. + .5); return ((vec2(t.x,t.z)*256. + vec2(t.y,t.w)) - 32768.)/32768.*UR; }
-vec2 fetchU(vec2 tc){ return decodeU(texture2D(ufield, tc)); }
-vec2 getU(vec2 uv){                // bilineal manual (la textura es NEAREST)
+vec2 fetchF(sampler2D s, vec2 tc){ return decodeU(texture2D(s, tc)); }
+vec2 getF(sampler2D s, vec2 uv){       // bilineal manual (las texturas son NEAREST)
   vec2 tc = vec2(uv.x, 1.-uv.y);
   vec2 st = tc/uTexel - .5; vec2 i = floor(st), f = fract(st);
-  vec2 a = fetchU((i+vec2(.5,.5))*uTexel), b = fetchU((i+vec2(1.5,.5))*uTexel);
-  vec2 c = fetchU((i+vec2(.5,1.5))*uTexel), d = fetchU((i+vec2(1.5,1.5))*uTexel);
+  vec2 a = fetchF(s, (i+vec2(.5,.5))*uTexel), b = fetchF(s, (i+vec2(1.5,.5))*uTexel);
+  vec2 c = fetchF(s, (i+vec2(.5,1.5))*uTexel), d = fetchF(s, (i+vec2(1.5,1.5))*uTexel);
   return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
-}`;
+}
+vec2 getU(vec2 uv){ return getF(ufield, uv); }
+vec2 getE(vec2 uv){ return getF(efield, uv); }`;
 
 const SESGO = `
 uniform float intensity, coverage, sizeMix, dirMode, dupAmt, dispAmt;
@@ -279,20 +282,26 @@ float coverMask(vec2 p){
 
 `;
 
-// Empuje del dedo. El campo guarda O(x) = M(x) - x, donde M(x) es el punto del gel ORIGINAL
-// que ahora está en x. Empujar es M'(x) = M(x - v·w): se mueve el gel entero (pliegues,
-// brillos, gotas y colores) y todo se evalúa luego en M(x).
+// Empuje del dedo. Hay dos campos: O (mueve imagen y pliegues) y E (solo pliegues).
+//  uMode 0, "arrastrar" (Mover gel): O' (x) = q + O(q) - x   y   E' (x) = E(q),  con q = x - v·w
+//  uMode 1, "empujar hacia fuera" (Proteger): solo cambia E, con q = x - (x-c)·s·w:
+//           los pliegues se corren hacia afuera del pincel y la foto no se mueve.
 const PUSH = COMMON + `
 uniform vec2 pc, pv;
-uniform float pr;
+uniform float pr, uMode, uSel;
 void main(){
   vec2 tc = gl_FragCoord.xy * uTexel;
   vec2 uv = vec2(tc.x, 1.-tc.y);
   float t = length((uv - pc) * vec2(aspect, 1.)) / pr;
-  if(t >= 1.){ gl_FragColor = texture2D(ufield, tc); return; }   // copia exacta fuera del pincel
+  vec4 raw = uSel > .5 ? texture2D(efield, tc) : texture2D(ufield, tc);
+  if(t >= 1.){ gl_FragColor = raw; return; }     // copia exacta fuera del pincel
   float w = 1. - t*t; w *= w;
-  vec2 q = uv - pv*w;
-  vec2 nu = clamp(q + getU(q) - uv, -UR, UR);
+  vec2 q = uMode < .5 ? uv - pv*w : uv - (uv - pc)*pv.x*w;
+  vec2 nu;
+  if(uSel < .5) nu = q + getU(q) - uv;                                   // O (solo en modo arrastrar)
+  else if(uMode < .5) nu = getE(q);                                      // E al arrastrar
+  else nu = (q - uv) + getU(q) - getU(uv) + getE(q);                     // E al empujar hacia fuera
+  nu = clamp(nu, -UR, UR);
   vec2 n = clamp(floor(nu/UR*32768. + 32768. + .5), 0., 65535.);
   vec2 hi = floor(n/256.), lo = n - hi*256.;
   gl_FragColor = vec4(hi.x, lo.x, hi.y, lo.y) / 255.;
@@ -331,14 +340,15 @@ void field(vec2 p, float prot, out vec2 d, out float edge, out vec2 off, out flo
 void main(){
   vec2 uv = vUv;
   if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
-  vec2 M = hasGel > .5 ? uv + getU(uv) : uv;      // posición de este punto en el gel original
-  vec2 p = M * vec2(aspect, 1.);
+  vec2 Mi = uv, Mf = uv;                          // Mi: de dónde sale la foto; Mf: dónde están los pliegues
+  if(hasGel > .5){ Mi = uv + getU(uv); Mf = Mi + getE(uv); }
+  vec2 p = Mf * vec2(aspect, 1.);
   float pm = protect(uv);
 
   vec2 d, off; float edge, cut;
   field(p, pm, d, edge, off, cut);
 
-  vec3 col = texture2D(tex, mirror(M + d + off)).rgb;
+  vec3 col = texture2D(tex, mirror(Mi + d + off)).rgb;
   col *= 1. - .4*cut;                            // corte visible entre piezas
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
@@ -549,7 +559,7 @@ const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
 const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
-let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
 function makeProgram(fragSrc) {
   const sh = (t, src) => {
@@ -577,7 +587,7 @@ const PALETTES = [
   ["#3a0f0f", "#8c2a22", "#bcd6c8", "#e8956e", "#7fc9b8"],   // rojo y menta
   ["#0a2530", "#2a7f8c", "#efe3c8", "#e8702a", "#5fd0d8"],   // verde azulado y naranja
 ].map(p => p.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)));
-const COMMON_U = ["dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const COMMON_U = ["efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -614,26 +624,30 @@ function zeroGelData() {
   for (let i = 0; i < uw * uh; i++) { d[i*4] = 128; d[i*4+2] = 128; }
   return d;
 }
-function initGel(w, h) {
-  const k = GEL_SIDE / Math.max(w, h);
-  uw = Math.max(1, Math.round(w * k)); uh = Math.max(1, Math.round(h * k));
-  const zero = zeroGelData();
-  gl.activeTexture(gl.TEXTURE2);
+function makeFieldPair(unit, texArr, fboArr, zero) {
+  gl.activeTexture(unit);
   for (let j = 0; j < 2; j++) {
-    if (gelTex[j]) { gl.deleteTexture(gelTex[j]); gl.deleteFramebuffer(gelFbo[j]); }
-    gelTex[j] = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, gelTex[j]);
+    if (texArr[j]) { gl.deleteTexture(texArr[j]); gl.deleteFramebuffer(fboArr[j]); }
+    texArr[j] = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texArr[j]);
     for (const [kk, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST],
                            [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
       gl.texParameteri(gl.TEXTURE_2D, kk, v);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, uw, uh, 0, gl.RGBA, gl.UNSIGNED_BYTE, zero);
-    gelFbo[j] = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[j]);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, gelTex[j], 0);
+    fboArr[j] = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fboArr[j]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texArr[j], 0);
   }
+}
+function initGel(w, h) {
+  const k = GEL_SIDE / Math.max(w, h);
+  uw = Math.max(1, Math.round(w * k)); uh = Math.max(1, Math.round(h * k));
+  const zero = zeroGelData();
+  makeFieldPair(gl.TEXTURE2, gelTex, gelFbo, zero);     // O: mueve imagen y pliegues
+  makeFieldPair(gl.TEXTURE3, eTex, eFbo, zero);         // E: solo pliegues
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.activeTexture(gl.TEXTURE0);
-  gelCur = 0; state.hasGel = false;
+  gelCur = 0; eCur = 0; state.hasGel = false;
 }
 function setCommon(L) {
   gl.uniform1f(L.aspect, imgW / imgH);
@@ -653,32 +667,41 @@ function setCommon(L) {
   gl.uniform1f(L.uLo, state.lum[0]); gl.uniform1f(L.uHi, state.lum[1]);
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
+  gl.uniform1i(L.efield, 3);
   gl.uniform2f(L.uTexel, 1 / uw, 1 / uh);
 }
-function pushStep(cx, cy, vx, vy, r) {
-  const dst = 1 - gelCur;
+// sel 0 = campo O, 1 = campo E. mode 0 = arrastrar, 1 = empujar hacia fuera del centro (vx = fuerza).
+function pushField(sel, mode, cx, cy, vx, vy, r) {
+  const texA = sel ? eTex : gelTex, fboA = sel ? eFbo : gelFbo, cur = sel ? eCur : gelCur, dst = 1 - cur;
   gl.useProgram(pushProg);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[dst]);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fboA[dst]);
   gl.viewport(0, 0, uw, uh);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, eTex[eCur]);
   setCommon(PL);
+  gl.uniform1f(PL.uSel, sel); gl.uniform1f(PL.uMode, mode);
   gl.uniform2f(PL.pc, cx, cy); gl.uniform2f(PL.pv, vx, vy); gl.uniform1f(PL.pr, r);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  gelCur = dst;
+  if (sel) eCur = dst; else gelCur = dst;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, imgW, imgH);
   gl.activeTexture(gl.TEXTURE0);
 }
-function snapGel() {
+// Mover gel: arrastra el campo de la imagen y el de los pliegues a la vez
+function pushStep(cx, cy, vx, vy, r) {
+  pushField(0, 0, cx, cy, vx, vy, r);
+  pushField(1, 0, cx, cy, vx, vy, r);
+}
+function snapField(sel) {
   const b = new Uint8Array(uw * uh * 4);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, gelFbo[gelCur]);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, (sel ? eFbo : gelFbo)[sel ? eCur : gelCur]);
   gl.readPixels(0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return b;
 }
-function restoreGel(b) {
-  gl.activeTexture(gl.TEXTURE2);
-  gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+function restoreField(sel, b) {
+  gl.activeTexture(sel ? gl.TEXTURE3 : gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, (sel ? eTex : gelTex)[sel ? eCur : gelCur]);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
   gl.activeTexture(gl.TEXTURE0);
 }
@@ -776,6 +799,7 @@ function render() {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, imgW, imgH);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, eTex[eCur]);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(L.tex, 0);
     setCommon(L);
@@ -884,15 +908,18 @@ function uploadMask() {
 }
 function syncUndo() { $("undo").disabled = history.length === 0; }
 function pushHistory(kind) {
-  history.push({ kind, snap: kind === "mask" ? mctx.getImageData(0, 0, mk.width, mk.height) : snapGel() });
+  history.push({ kind, snap: kind === "mask"
+    ? { img: mctx.getImageData(0, 0, mk.width, mk.height), e: snapField(1) }
+    : { o: snapField(0), e: snapField(1) } });
   if (history.length > MAX_UNDO) history.shift();
   syncUndo();
 }
 function undo() {
   if (!history.length || stroking) return;
   const h = history.pop();
-  if (h.kind === "mask") { mctx.putImageData(h.snap, 0, 0); uploadMask(); }
-  else restoreGel(h.snap);
+  if (h.kind === "mask") { mctx.putImageData(h.snap.img, 0, 0); uploadMask(); }
+  else restoreField(0, h.snap.o);
+  restoreField(1, h.snap.e);
   syncUndo(); render();
 }
 function stamp(x, y) {
@@ -910,7 +937,13 @@ function paintTo(p) {                // p en uv; la máscara tiene su propia res
   const step = Math.max(1, protectR() * mk.height * .25);
   const a = { x: last.x * mk.width, y: last.y * mk.height }, b = { x: p.x * mk.width, y: p.y * mk.height };
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
-  for (let i = 1; i <= n; i++) stamp(a.x + (b.x - a.x) * i / n, a.y + (b.y - a.y) * i / n);
+  const sB = Math.min(.5, .22 * +$("gstr").value);        // fuerza del empuje (comparte el deslizador Fuerza)
+  for (let i = 1; i <= n; i++) {
+    const x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n;
+    stamp(x, y);
+    pushField(1, 1, x / mk.width, y / mk.height, sB, 0, protectR());   // empuja los pliegues fuera de la zona
+  }
+  state.hasGel = true;
   last = p;
   uploadMask(); render();
 }
@@ -963,7 +996,7 @@ $("clearP").addEventListener("click", () => {
 });
 $("clearG").addEventListener("click", () => {
   if (!state.loaded) return;
-  pushHistory("gel"); restoreGel(zeroGelData()); render();
+  pushHistory("gel"); restoreField(0, zeroGelData()); restoreField(1, zeroGelData()); render();
 });
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
