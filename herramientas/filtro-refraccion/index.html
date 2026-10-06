@@ -56,6 +56,12 @@
   .crow label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
   .crow input[type=color] { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
   .crow input[type=text] { min-width: 0; width: 100%; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--text); font: 12px ui-monospace, monospace; }
+  .favs { margin: -4px 0 14px; }
+  .favs > label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .favrow { display: flex; gap: 6px; margin-bottom: 6px; }
+  .favrow input[type=text] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+  .favrow select { flex: 1; min-width: 0; }
+  .favrow .btn { width: auto; margin: 0; padding: 6px 10px; font-size: 13px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 14px; }
   .grid2 .ctl { margin: 0; min-width: 0; }
   .grid2 label { font-size: 12px; }
@@ -117,6 +123,19 @@
         <div class="crow"><label for="cL">Luz</label><input type="color" id="cL" value="#efe3c8"><input type="text" id="hL" value="#efe3c8" maxlength="7" spellcheck="false" aria-label="Hex luz"></div>
         <div class="crow"><label for="cA">Acento</label><input type="color" id="cA" value="#e8702a"><input type="text" id="hA" value="#e8702a" maxlength="7" spellcheck="false" aria-label="Hex acento"></div>
         <div class="crow"><label for="cC">Borde frío</label><input type="color" id="cC" value="#5fd0d8"><input type="text" id="hC" value="#5fd0d8" maxlength="7" spellcheck="false" aria-label="Hex borde frío"></div>
+      </div>
+      <div class="favs">
+        <label for="favName">Paletas favoritas <span id="favCount"></span></label>
+        <div class="favrow">
+          <input type="text" id="favName" maxlength="24" placeholder="Nombre de la paleta" autocomplete="off">
+          <button class="btn" id="favSave" title="Guarda los 5 colores actuales con ese nombre (si el nombre ya existe, lo reemplaza)">Guardar</button>
+        </div>
+        <div class="favrow">
+          <select id="favList" aria-label="Paletas guardadas"></select>
+          <button class="btn" id="favApply">Usar</button>
+          <button class="btn" id="favDel" title="Borra la paleta elegida">Borrar</button>
+        </div>
+        <p class="hint" id="favMsg" style="margin:4px 0 0"></p>
       </div>
       <div class="grid2">
         <div class="ctl" title="Cuántos colores usa la imagen"><label for="selOTones">Tonos</label>
@@ -965,6 +984,43 @@ for (const k of OX_KEYS) {
   });
   h.addEventListener("blur", () => { h.value = c.value; });
 }
+// ---- paletas favoritas (máx. 10, con nombre); se guardan en el navegador ----
+const FAV_KEY = "efectos-paletas-favoritas", MAX_FAVS = 10;
+let favs = [];
+try { const v = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); if (Array.isArray(v)) favs = v.filter(f => f && f.name && Array.isArray(f.c) && f.c.length === 5).slice(0, MAX_FAVS); } catch (e) {}
+function persistFavs() { try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); return true; } catch (e) { return false; } }
+function favMsg(t) { $("favMsg").textContent = t; }
+function renderFavs() {
+  const sel = $("favList");
+  sel.innerHTML = "";
+  if (!favs.length) { const o = document.createElement("option"); o.textContent = "(ninguna guardada)"; o.value = ""; sel.appendChild(o); }
+  favs.forEach((f, i) => { const o = document.createElement("option"); o.value = i; o.textContent = f.name; sel.appendChild(o); });
+  $("favCount").textContent = favs.length + "/" + MAX_FAVS;
+  $("favApply").disabled = $("favDel").disabled = !favs.length;
+}
+function setOxColors(list) {
+  OX_KEYS.forEach((k, i) => { $("c" + k).value = list[i]; $("h" + k).value = list[i]; });
+  render();
+}
+$("favSave").addEventListener("click", () => {
+  const name = $("favName").value.trim();
+  if (!name) { favMsg("Escribe un nombre para la paleta."); $("favName").focus(); return; }
+  const colors = OX_KEYS.map(k => $("c" + k).value);
+  const i = favs.findIndex(f => f.name.toLowerCase() === name.toLowerCase());
+  if (i >= 0) favs[i] = { name, c: colors };
+  else if (favs.length >= MAX_FAVS) { favMsg("Ya tienes 10 paletas. Borra una para guardar otra."); return; }
+  else favs.push({ name, c: colors });
+  renderFavs(); $("favList").value = String(i >= 0 ? i : favs.length - 1);
+  favMsg(persistFavs() ? (i >= 0 ? "Paleta «" + name + "» actualizada." : "Paleta «" + name + "» guardada.") : "Guardada solo mientras la página esté abierta: el navegador no permite guardar en este archivo.");
+  if (i < 0) $("favName").value = "";
+});
+$("favApply").addEventListener("click", () => { const f = favs[+$("favList").value]; if (f) { setOxColors(f.c); favMsg("Paleta «" + f.name + "» aplicada."); } });
+$("favList").addEventListener("change", () => { const f = favs[+$("favList").value]; if (f) $("favName").value = f.name; });
+$("favDel").addEventListener("click", () => {
+  const i = +$("favList").value; if (!favs[i]) return;
+  const n = favs[i].name; favs.splice(i, 1); persistFavs(); renderFavs(); favMsg("Paleta «" + n + "» borrada.");
+});
+renderFavs();
 document.querySelectorAll("select[data-key]").forEach(sel =>
   sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
 // historial de patrones: cada "Nuevo patrón" se guarda y se puede volver atrás o adelante
