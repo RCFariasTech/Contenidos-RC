@@ -131,11 +131,11 @@
     <div class="ctl"><label>Cobertura <span id="vCov"></span></label>
       <input type="range" id="cov" min="0" max="1" step="0.01" value="0.60"></div>
     <div class="ctl" title="Cuánto se corre cada pieza delimitada por los pliegues respecto a las vecinas"><label>Desplazamiento <span id="vsDesp"></span></label>
-      <input type="range" id="sDesp" min="0" max="1" step="0.01" value="0.25"></div>
+      <input type="range" id="sDesp" min="0" max="1" step="0.01" value="0.15"></div>
     <div class="ctl" title="Opacidad del brillo claro en los bordes de los pliegues: 0 sin brillo, 1 completo"><label>Brillo de pliegues <span id="vsShine"></span></label>
-      <input type="range" id="sShine" min="0" max="1" step="0.01" value="1"></div>
+      <input type="range" id="sShine" min="0" max="1" step="0.01" value="0.20"></div>
     <div class="ctl" title="Opacidad de la sombra oscura en los bordes de los pliegues: 0 sin sombra, 1 completa"><label>Sombra de pliegues <span id="vsShade"></span></label>
-      <input type="range" id="sShade" min="0" max="1" step="0.01" value="1"></div>
+      <input type="range" id="sShade" min="0" max="1" step="0.01" value="0.20"></div>
 
     <div class="grid3">
       <div class="ctl"><label for="selSize">Pliegue</label>
@@ -429,7 +429,7 @@ void main(){
   field(p, pm, d, edge, off, cut);
 
   vec3 col = texture2D(tex, mirror(Mi + d + off)).rgb;
-  col *= 1. - .4*cut;                            // corte visible entre piezas
+  col *= 1. - .4*cut*shadeAmt;                            // corte visible entre piezas
 
   // bordes líquidos finos: claro en una cara de la cresta, oscuro en la otra
   float hi = max(edge, 0.), lo = max(-edge, 0.);
