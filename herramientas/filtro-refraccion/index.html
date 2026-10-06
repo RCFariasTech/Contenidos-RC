@@ -79,7 +79,11 @@
 
   <aside>
     <h1>Efectos de imagen</h1>
-    <button class="btn" id="seed">Nuevo patrón (semilla)</button>
+    <div class="row">
+      <button class="btn" id="seedPrev" title="Volver al patrón anterior" aria-label="Patrón anterior" style="flex:0 0 46px" disabled>←</button>
+      <button class="btn" id="seed">Nuevo patrón</button>
+      <button class="btn" id="seedNext" title="Ir al patrón siguiente" aria-label="Patrón siguiente" style="flex:0 0 46px" disabled>→</button>
+    </div>
     <div class="ctl"><div class="seg" data-key="effect"><button data-v="0" class="on">Sesgo líquido</button><button data-v="1">Memoria mineral</button><button data-v="2">Óxido solar</button></div></div>
     <button class="btn" id="open">Cambiar imagen</button>
 
@@ -834,7 +838,22 @@ document.querySelectorAll(".seg").forEach(seg => {
 });
 document.querySelectorAll("select[data-key]").forEach(sel =>
   sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
-$("seed").addEventListener("click", () => { state.seed = Math.round(Math.random() * 900) / 10 + 1; render(); });
+// historial de patrones: cada "Nuevo patrón" se guarda y se puede volver atrás o adelante
+const seedHist = [state.seed];
+let seedIdx = 0;
+function syncSeedBtns() {
+  $("seedPrev").disabled = seedIdx === 0;
+  $("seedNext").disabled = seedIdx >= seedHist.length - 1;
+  $("seedPrev").title = seedIdx ? "Volver al patrón anterior (" + seedIdx + " guardados)" : "No hay patrón anterior";
+}
+function goSeed(i) { seedIdx = i; state.seed = seedHist[i]; syncSeedBtns(); render(); }
+$("seed").addEventListener("click", () => {
+  seedHist.length = seedIdx + 1;                   // un patrón nuevo descarta los "siguientes"
+  seedHist.push(Math.round(Math.random() * 900) / 10 + 1);
+  goSeed(seedHist.length - 1);
+});
+$("seedPrev").addEventListener("click", () => { if (seedIdx > 0) goSeed(seedIdx - 1); });
+$("seedNext").addEventListener("click", () => { if (seedIdx < seedHist.length - 1) goSeed(seedIdx + 1); });
 
 const cmp = $("cmp");
 const setOrig = v => { state.showOrig = v; render(); };
