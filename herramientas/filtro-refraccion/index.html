@@ -94,6 +94,7 @@
       <input type="range" id="cov" min="0" max="1" step="0.01" value="0.7"></div>
     <div class="ctl" title="Cuánto se corre cada pieza delimitada por los pliegues respecto a las vecinas"><label>Desplazamiento <span id="vsDesp"></span></label>
       <input type="range" id="sDesp" min="0" max="1" step="0.01" value="0.35"></div>
+    <button class="btn" id="gelFlat" title="Quita los pliegues base (Intensidad y Desplazamiento a 0) para que modeles los tuyos con Mover gel">Gel liso: off</button>
 
     <div class="grid3">
       <div class="ctl"><label for="selSize">Pliegue</label>
@@ -173,7 +174,7 @@
       <div class="seg" data-key="tool"><button data-v="0" class="on">Ninguna</button><button data-v="1">Proteger</button><button data-v="2">Mover gel</button></div></div>
 
     <div class="grid3">
-      <div class="ctl" title="Diámetro del dedo al mover el gel. En Sesgo líquido empuja los pliegues sin mover la foto; en los otros efectos arrastra la imagen"><label>Dedo <span id="vGrad"></span></label>
+      <div class="ctl" title="Diámetro del dedo al mover el gel. En Sesgo líquido empuja los pliegues y crea pliegues nuevos sin mover la foto; en los otros efectos arrastra la imagen"><label>Dedo <span id="vGrad"></span></label>
         <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.25"></div>
       <div class="ctl" title="Diámetro del pincel Proteger: pinta sobre ojos, texto o producto y empuja los pliegues hacia afuera (en Sesgo líquido)"><label>Zona <span id="vRad"></span></label>
         <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.12"></div>
@@ -214,6 +215,7 @@ uniform float aspect, seed;
 uniform sampler2D mask;            // alfa = zona protegida (pincel)
 uniform sampler2D ufield;          // desplazamiento del gel movido con el dedo (16 bits por eje): mueve imagen y pliegues
 uniform sampler2D efield;          // desplazamiento extra solo de los pliegues (empuje del pincel Proteger)
+uniform sampler2D gfield;          // altura del gel modelado con el dedo (pliegues nuevos), en el canal x
 uniform vec2 uTexel;
 
 float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
@@ -290,24 +292,43 @@ float coverMask(vec2 p){
 //           los pliegues se corren hacia afuera del pincel y la foto no se mueve.
 const PUSH = COMMON + `
 uniform vec2 pc, pv;
-uniform float pr, uMode, uSel;
+uniform float pr, uMode, uSel, uDepo;
 void main(){
   vec2 tc = gl_FragCoord.xy * uTexel;
   vec2 uv = vec2(tc.x, 1.-tc.y);
-  float t = length((uv - pc) * vec2(aspect, 1.)) / pr;
-  vec4 raw = uSel > .5 ? texture2D(efield, tc) : texture2D(ufield, tc);
+  vec2 rel = (uv - pc) * vec2(aspect, 1.);
+  float t = length(rel) / pr;
+  vec4 raw = uSel > 1.5 ? texture2D(gfield, tc) : (uSel > .5 ? texture2D(efield, tc) : texture2D(ufield, tc));
   if(t >= 1.){ gl_FragColor = raw; return; }     // copia exacta fuera del pincel
   float w = 1. - t*t; w *= w;
   vec2 q = (uMode < .5 || uMode > 2.5) ? uv - pv*w : uv - (uv - pc)*pv.x*w;
   vec2 nu;
-  if(uSel > .5 && uMode > 1.5){                                          // E: suavizado (gel más espeso)
+  if(uSel > .5 && uMode > 1.5 && uMode < 2.5){                           // E o G: suavizado (gel más espeso)
     vec2 acc = vec2(0.);
-    for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++) acc += getE(uv + vec2(float(i), float(j))*uTexel*pv.x);
-    nu = mix(getE(uv), acc/9., clamp(w*1.6, 0., 1.));
+    for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+      vec2 o = uv + vec2(float(i), float(j))*uTexel*pv.x;
+      acc += uSel > 1.5 ? getF(gfield, o) : getE(o);
+    }
+    vec2 base = uSel > 1.5 ? getF(gfield, uv) : getE(uv);
+    nu = mix(base, acc/9., clamp(w*1.6, 0., 1.));
   }
-  else if(uSel < .5) nu = q + getU(q) - uv;                                   // O (solo en modo arrastrar)
+  else if(uSel > 1.5){
+    // G: el gel se desplaza con el dedo y además se amontona delante y se vacía detrás (dipolo),
+    // lo que crea pliegues nuevos aunque antes la capa fuera lisa
+    float h = getF(gfield, q).x;
+    vec2 dp = pv * vec2(aspect, 1.);
+    float len = length(dp);
+    vec2 dir = dp / max(len, 1e-6);
+    float r = pr * .5;
+    float u = dot(rel, dir) / r;
+    float perp = (rel.x*dir.y - rel.y*dir.x) / r;
+    float m = min(len / (r*.2), 3.);          // se normaliza al paso de .2r: el depósito total no depende de cuántos pasos se den
+    h += uDepo * m * (2.*u*exp(-1.1*u*u)) * exp(-(perp*perp)/.3);
+    nu = vec2(h, 0.);
+  }
+  else if(uSel < .5) nu = q + getU(q) - uv;                              // O (solo en modo arrastrar)
   else if(uMode > 2.5) nu = getE(q);                                     // E acompaña a la imagen (O se arrastra)
-  else nu = (q - uv) + getU(q) - getU(uv) + getE(q);                     // E al empujar hacia fuera
+  else nu = (q - uv) + getU(q) - getU(uv) + getE(q);                     // E arrastrado o empujado hacia fuera
   nu = clamp(nu, -UR, UR);
   vec2 n = clamp(floor(nu/UR*32768. + 32768. + .5), 0., 65535.);
   vec2 hi = floor(n/256.), lo = n - hi*256.;
@@ -316,7 +337,24 @@ void main(){
 
 const FRAG = COMMON + SESGO + `
 uniform sampler2D tex;
-uniform float showOrig, hasGel;
+uniform float showOrig, hasGel, hasG;
+
+// gel modelado con el dedo: altura G en pantalla; su gradiente refracta y su curvatura da los brillos
+float gAt(vec2 uv){ return getF(gfield, uv).x; }
+void fieldG(vec2 uv, float prot, out vec2 d, out float edge){
+  float e = uTexel.y*1.6;
+  vec2 ex = vec2(e/aspect, 0.), ey = vec2(0., e);
+  float xp = gAt(uv + ex), xm = gAt(uv - ex), yp = gAt(uv + ey), ym = gAt(uv - ey);
+  vec2 g = vec2(xp - xm, yp - ym) / (2.*e);
+  d = -g * (.06*prot);
+  d /= 1. + length(d)/.12;
+  d.x /= aspect;
+  // brillos: curvatura a una escala más ancha (4 texels) para que no se vean los escalones de la textura
+  float L = uTexel.y*4.;
+  vec2 lx = vec2(L/aspect, 0.), ly = vec2(0., L);
+  float lap = (gAt(uv + lx) + gAt(uv - lx) + gAt(uv + ly) + gAt(uv - ly) - 4.*gAt(uv)) / (L*L);
+  edge = clamp(lap * .012 * prot, -1., 1.);
+}
 
 // campo de desplazamiento (en uv) + diagnóstico para bordes
 void field(vec2 p, float prot, out vec2 d, out float edge, out vec2 off, out float cut){
@@ -355,6 +393,7 @@ void main(){
   vec2 d, off; float edge, cut;
   field(p, pm, d, edge, off, cut);
 
+  if(hasG > .5){ vec2 dg; float eg; fieldG(uv, pm, dg, eg); d += dg; edge = clamp(edge + eg, -1., 1.); }
   vec3 col = texture2D(tex, mirror(Mi + d + off)).rgb;
   col *= 1. - .4*cut;                            // corte visible entre piezas
 
@@ -564,9 +603,9 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
+const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, hasG: false, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
-let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, gTex = [null, null], gFbo = [null, null], gCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
 function makeProgram(fragSrc) {
   const sh = (t, src) => {
@@ -594,7 +633,7 @@ const PALETTES = [
   ["#3a0f0f", "#8c2a22", "#bcd6c8", "#e8956e", "#7fc9b8"],   // rojo y menta
   ["#0a2530", "#2a7f8c", "#efe3c8", "#e8702a", "#5fd0d8"],   // verde azulado y naranja
 ].map(p => p.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)));
-const COMMON_U = ["efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const COMMON_U = ["efield", "gfield", "uDepo", "hasG", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -652,9 +691,10 @@ function initGel(w, h) {
   const zero = zeroGelData();
   makeFieldPair(gl.TEXTURE2, gelTex, gelFbo, zero);     // O: mueve imagen y pliegues
   makeFieldPair(gl.TEXTURE3, eTex, eFbo, zero);         // E: solo pliegues
+  makeFieldPair(gl.TEXTURE4, gTex, gFbo, zero);         // G: altura del gel modelado con el dedo
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.activeTexture(gl.TEXTURE0);
-  gelCur = 0; eCur = 0; state.hasGel = false;
+  gelCur = 0; eCur = 0; gCur = 0; state.hasGel = false; state.hasG = false;
 }
 function setCommon(L) {
   gl.uniform1f(L.aspect, imgW / imgH);
@@ -675,21 +715,24 @@ function setCommon(L) {
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
   gl.uniform1i(L.efield, 3);
+  gl.uniform1i(L.gfield, 4);
   gl.uniform2f(L.uTexel, 1 / uw, 1 / uh);
 }
 // sel 0 = campo O, 1 = campo E. mode 0 = arrastrar, 1 = empujar hacia fuera del centro (vx = fuerza).
 function pushField(sel, mode, cx, cy, vx, vy, r) {
-  const texA = sel ? eTex : gelTex, fboA = sel ? eFbo : gelFbo, cur = sel ? eCur : gelCur, dst = 1 - cur;
+  const texA = [gelTex, eTex, gTex][sel], fboA = [gelFbo, eFbo, gFbo][sel], cur = [gelCur, eCur, gCur][sel], dst = 1 - cur;
   gl.useProgram(pushProg);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fboA[dst]);
   gl.viewport(0, 0, uw, uh);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, eTex[eCur]);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, gTex[gCur]);
   setCommon(PL);
   gl.uniform1f(PL.uSel, sel); gl.uniform1f(PL.uMode, mode);
+  gl.uniform1f(PL.uDepo, .05 * +$("gstr").value);
   gl.uniform2f(PL.pc, cx, cy); gl.uniform2f(PL.pv, vx, vy); gl.uniform1f(PL.pr, r);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  if (sel) eCur = dst; else gelCur = dst;
+  if (sel === 2) gCur = dst; else if (sel === 1) eCur = dst; else gelCur = dst;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, imgW, imgH);
   gl.activeTexture(gl.TEXTURE0);
@@ -699,22 +742,25 @@ function pushStep(cx, cy, vx, vy, r) {
   pushField(0, 0, cx, cy, vx, vy, r);
   pushField(1, 3, cx, cy, vx, vy, r);
 }
-// Mover gel en Sesgo líquido: empuja solo los pliegues; la foto no se mueve
+// Mover gel en Sesgo líquido: empuja los pliegues que ya hay y modela pliegues nuevos en la capa de gel;
+// la foto no se mueve
 function pushFolds(cx, cy, vx, vy, r) {
   pushField(1, 0, cx, cy, vx, vy, r);
   const spread = Math.max(2, Math.min(14, r * uh * .25));      // suaviza para que la cresta sea ancha, como un gel espeso
   pushField(1, 2, cx, cy, spread, 0, r * 1.6);
+  pushField(2, 0, cx, cy, vx, vy, r * 2);                       // gel nuevo: se amontona delante y se vacía detrás
+  state.hasG = true;
 }
 function snapField(sel) {
   const b = new Uint8Array(uw * uh * 4);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, (sel ? eFbo : gelFbo)[sel ? eCur : gelCur]);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, [gelFbo, eFbo, gFbo][sel][[gelCur, eCur, gCur][sel]]);
   gl.readPixels(0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return b;
 }
 function restoreField(sel, b) {
-  gl.activeTexture(sel ? gl.TEXTURE3 : gl.TEXTURE2);
-  gl.bindTexture(gl.TEXTURE_2D, (sel ? eTex : gelTex)[sel ? eCur : gelCur]);
+  gl.activeTexture([gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4][sel]);
+  gl.bindTexture(gl.TEXTURE_2D, [gelTex, eTex, gTex][sel][[gelCur, eCur, gCur][sel]]);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, uw, uh, gl.RGBA, gl.UNSIGNED_BYTE, b);
   gl.activeTexture(gl.TEXTURE0);
 }
@@ -813,11 +859,13 @@ function render() {
     gl.viewport(0, 0, imgW, imgH);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, eTex[eCur]);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, gTex[gCur]);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(L.tex, 0);
     setCommon(L);
     gl.uniform1f(L.showOrig, state.showOrig);
     gl.uniform1f(L.hasGel, state.hasGel ? 1 : 0);
+    gl.uniform1f(L.hasG, state.hasG ? 1 : 0);
     drawTiled();
   });
 }
@@ -873,6 +921,14 @@ document.querySelectorAll(".seg").forEach(seg => {
     render();
   });
 });
+// Gel liso: capa de gel sin pliegues; el dedo (Mover gel) crea los pliegues nuevos
+let flatPrev = null;
+$("gelFlat").addEventListener("click", () => {
+  const setV = (id, v) => { const e = $(id); e.value = v; e.dispatchEvent(new Event("input")); };
+  if (!flatPrev) { flatPrev = { i: +$("int").value, d: +$("sDesp").value }; setV("int", 0); setV("sDesp", 0); }
+  else { setV("int", flatPrev.i); setV("sDesp", flatPrev.d); flatPrev = null; }
+  $("gelFlat").textContent = "Gel liso: " + (flatPrev ? "on" : "off");
+});
 document.querySelectorAll("select[data-key]").forEach(sel =>
   sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
 // historial de patrones: cada "Nuevo patrón" se guarda y se puede volver atrás o adelante
@@ -923,7 +979,7 @@ function syncUndo() { $("undo").disabled = history.length === 0; }
 function pushHistory(kind) {
   history.push({ kind, snap: kind === "mask"
     ? { img: mctx.getImageData(0, 0, mk.width, mk.height), e: snapField(1) }
-    : { o: snapField(0), e: snapField(1) } });
+    : { o: snapField(0), e: snapField(1), g: snapField(2) } });
   if (history.length > MAX_UNDO) history.shift();
   syncUndo();
 }
@@ -931,7 +987,7 @@ function undo() {
   if (!history.length || stroking) return;
   const h = history.pop();
   if (h.kind === "mask") { mctx.putImageData(h.snap.img, 0, 0); uploadMask(); }
-  else restoreField(0, h.snap.o);
+  else { restoreField(0, h.snap.o); restoreField(2, h.snap.g); }
   restoreField(1, h.snap.e);
   syncUndo(); render();
 }
@@ -966,7 +1022,7 @@ function paintTo(p) {                // p en uv; la máscara tiene su propia res
 }
 function dragGel(p) {                // empuja el gel a lo largo del trazo, en pasos pequeños
   const dx = p.x - last.x, dy = p.y - last.y, r = gelR(), str = +$("gstr").value;
-  const n = Math.min(40, Math.max(1, Math.ceil(Math.hypot(dx * imgW / imgH, dy) / (r * .2))));
+  const n = Math.min(80, Math.max(1, Math.ceil(Math.hypot(dx * imgW / imgH, dy) / (r * .1))));
   for (let i = 1; i <= n; i++)
     (state.effect === 0 ? pushFolds : pushStep)(last.x + dx * (i - .5) / n, last.y + dy * (i - .5) / n, dx / n * str, dy / n * str, r);
   state.hasGel = true;
@@ -1016,7 +1072,7 @@ $("clearP").addEventListener("click", () => {
 });
 $("clearG").addEventListener("click", () => {
   if (!state.loaded) return;
-  pushHistory("gel"); restoreField(0, zeroGelData()); restoreField(1, zeroGelData()); render();
+  pushHistory("gel"); restoreField(0, zeroGelData()); restoreField(1, zeroGelData()); restoreField(2, zeroGelData()); render();
 });
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
