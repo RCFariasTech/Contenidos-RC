@@ -97,9 +97,9 @@
 
     <div class="grid3">
       <div class="ctl"><label for="selSize">Pliegue</label>
-        <select id="selSize" data-key="size"><option value="0">Amplio</option><option value="1">Fino</option><option value="2" selected>Mixto</option></select></div>
+        <select id="selSize" data-key="size"><option value="0" selected>Amplio</option><option value="1">Fino</option><option value="2">Mixto</option></select></div>
       <div class="ctl"><label for="selDir">Dirección</label>
-        <select id="selDir" data-key="dir"><option value="0">Horizontal</option><option value="1" selected>Diagonal</option><option value="2">Libre</option></select></div>
+        <select id="selDir" data-key="dir"><option value="0">Horizontal</option><option value="1">Diagonal</option><option value="2" selected>Libre</option></select></div>
       <div class="ctl"><label for="selDup">Duplicación</label>
         <select id="selDup" data-key="dup"><option value="0">Ninguna</option><option value="1" selected>Sutil</option><option value="2">Marcada</option></select></div>
     </div>
@@ -284,6 +284,7 @@ float coverMask(vec2 p){
 
 // Empuje del dedo. Hay dos campos: O (mueve imagen y pliegues) y E (solo pliegues).
 //  uMode 0, "arrastrar" (Mover gel): O' (x) = q + O(q) - x   y   E' (x) = E(q),  con q = x - v·w
+//  uMode 2, "suavizar" (solo E): promedia el empuje para que la cresta sea ancha, como un gel espeso.
 //  uMode 1, "empujar hacia fuera" (Proteger): solo cambia E, con q = x - (x-c)·s·w:
 //           los pliegues se corren hacia afuera del pincel y la foto no se mueve.
 const PUSH = COMMON + `
@@ -298,7 +299,12 @@ void main(){
   float w = 1. - t*t; w *= w;
   vec2 q = uMode < .5 ? uv - pv*w : uv - (uv - pc)*pv.x*w;
   vec2 nu;
-  if(uSel < .5) nu = q + getU(q) - uv;                                   // O (solo en modo arrastrar)
+  if(uSel > .5 && uMode > 1.5){                                          // E: suavizado (gel más espeso)
+    vec2 acc = vec2(0.);
+    for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++) acc += getE(uv + vec2(float(i), float(j))*uTexel*pv.x);
+    nu = mix(getE(uv), acc/9., clamp(w*1.6, 0., 1.));
+  }
+  else if(uSel < .5) nu = q + getU(q) - uv;                                   // O (solo en modo arrastrar)
   else if(uMode < .5) nu = getE(q);                                      // E al arrastrar
   else nu = (q - uv) + getU(q) - getU(uv) + getE(q);                     // E al empujar hacia fuera
   nu = clamp(nu, -UR, UR);
@@ -557,7 +563,7 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
+const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
 let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
@@ -925,7 +931,7 @@ function undo() {
 function stamp(x, y) {
   const r = protectR() * mk.height;
   const g = mctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, "rgba(255,50,50,1)"); g.addColorStop(.6, "rgba(255,50,50,1)"); g.addColorStop(1, "rgba(255,50,50,0)");
+  g.addColorStop(0, "rgba(255,50,50,1)"); g.addColorStop(.3, "rgba(255,50,50,1)"); g.addColorStop(1, "rgba(255,50,50,0)");
   mctx.fillStyle = g;
   mctx.fillRect(x - r, y - r, 2 * r, 2 * r);
 }
@@ -943,6 +949,9 @@ function paintTo(p) {                // p en uv; la máscara tiene su propia res
     stamp(x, y);
     // el empuje alcanza más allá del círculo (2.3x) para que los pliegues salgan de la zona y se acumulen fuera
     for (let k = 0; k < 3; k++) pushField(1, 1, x / mk.width, y / mk.height, sB, 0, protectR() * 2.3);
+    // suavizado: ensancha la cresta de pliegues del borde para que se sienta un gel espeso
+    const spread = Math.max(2, Math.min(14, protectR() * uh * .3));
+    for (let k = 0; k < 2; k++) pushField(1, 2, x / mk.width, y / mk.height, spread, 0, protectR() * 2.8);
   }
   state.hasGel = true;
   last = p;
@@ -993,7 +1002,10 @@ cv.addEventListener("pointerleave", () => { if (!stroking) ring.style.display = 
 $("undo").addEventListener("click", undo);
 $("clearP").addEventListener("click", () => {
   if (!state.loaded) return;
-  pushHistory("mask"); mctx.clearRect(0, 0, mk.width, mk.height); uploadMask(); render();
+  pushHistory("mask");
+  mctx.clearRect(0, 0, mk.width, mk.height); uploadMask();
+  restoreField(1, zeroGelData());                  // también devuelve los pliegues que el pincel había empujado
+  render();
 });
 $("clearG").addEventListener("click", () => {
   if (!state.loaded) return;
