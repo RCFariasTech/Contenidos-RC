@@ -59,6 +59,7 @@
   .favs { margin: -4px 0 14px; }
   .favs > label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .favrow { display: flex; gap: 6px; margin-bottom: 6px; }
+  .favrow[hidden] { display: none; }
   .favrow input[type=text] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
   .favrow select { flex: 1; min-width: 0; }
   .favrow .btn { width: auto; margin: 0; padding: 6px 10px; font-size: 13px; }
@@ -132,8 +133,12 @@
         </div>
         <div class="favrow">
           <select id="favList" aria-label="Paletas guardadas"></select>
-          <button class="btn" id="favApply">Usar</button>
-          <button class="btn" id="favDel" title="Borra la paleta elegida">Borrar</button>
+          <button class="btn" id="favDel" title="Borra la paleta elegida" disabled>Borrar</button>
+        </div>
+        <div class="favrow" id="favConfirm" hidden>
+          <span id="favAsk" style="flex:1;font-size:13px;align-self:center"></span>
+          <button class="btn" id="favYes">Sí, borrar</button>
+          <button class="btn" id="favNo">Cancelar</button>
         </div>
         <p class="hint" id="favMsg" style="margin:4px 0 0"></p>
       </div>
@@ -990,13 +995,16 @@ let favs = [];
 try { const v = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); if (Array.isArray(v)) favs = v.filter(f => f && f.name && Array.isArray(f.c) && f.c.length === 5).slice(0, MAX_FAVS); } catch (e) {}
 function persistFavs() { try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); return true; } catch (e) { return false; } }
 function favMsg(t) { $("favMsg").textContent = t; }
-function renderFavs() {
+function renderFavs(sel_) {
   const sel = $("favList");
   sel.innerHTML = "";
-  if (!favs.length) { const o = document.createElement("option"); o.textContent = "(ninguna guardada)"; o.value = ""; sel.appendChild(o); }
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = favs.length ? "Elegir paleta…" : "(ninguna guardada)"; sel.appendChild(ph);
   favs.forEach((f, i) => { const o = document.createElement("option"); o.value = i; o.textContent = f.name; sel.appendChild(o); });
+  sel.value = sel_ === undefined ? "" : String(sel_);
   $("favCount").textContent = favs.length + "/" + MAX_FAVS;
-  $("favApply").disabled = $("favDel").disabled = !favs.length;
+  $("favDel").disabled = sel.value === "";
+  $("favConfirm").hidden = true;
 }
 function setOxColors(list) {
   OX_KEYS.forEach((k, i) => { $("c" + k).value = list[i]; $("h" + k).value = list[i]; });
@@ -1010,13 +1018,25 @@ $("favSave").addEventListener("click", () => {
   if (i >= 0) favs[i] = { name, c: colors };
   else if (favs.length >= MAX_FAVS) { favMsg("Ya tienes 10 paletas. Borra una para guardar otra."); return; }
   else favs.push({ name, c: colors });
-  renderFavs(); $("favList").value = String(i >= 0 ? i : favs.length - 1);
+  renderFavs(i >= 0 ? i : favs.length - 1);
   favMsg(persistFavs() ? (i >= 0 ? "Paleta «" + name + "» actualizada." : "Paleta «" + name + "» guardada.") : "Guardada solo mientras la página esté abierta: el navegador no permite guardar en este archivo.");
   if (i < 0) $("favName").value = "";
 });
-$("favApply").addEventListener("click", () => { const f = favs[+$("favList").value]; if (f) { setOxColors(f.c); favMsg("Paleta «" + f.name + "» aplicada."); } });
-$("favList").addEventListener("change", () => { const f = favs[+$("favList").value]; if (f) $("favName").value = f.name; });
+// elegir una paleta en el menú la aplica de inmediato
+$("favList").addEventListener("change", () => {
+  $("favConfirm").hidden = true;
+  const f = favs[+$("favList").value];
+  $("favDel").disabled = !f;
+  if (f) { setOxColors(f.c); $("favName").value = f.name; favMsg("Paleta «" + f.name + "» aplicada."); }
+});
+// borrar pide confirmación
 $("favDel").addEventListener("click", () => {
+  const f = favs[+$("favList").value]; if (!f) return;
+  $("favAsk").textContent = "¿Borrar «" + f.name + "»?";
+  $("favConfirm").hidden = false; $("favYes").focus();
+});
+$("favNo").addEventListener("click", () => { $("favConfirm").hidden = true; favMsg(""); });
+$("favYes").addEventListener("click", () => {
   const i = +$("favList").value; if (!favs[i]) return;
   const n = favs[i].name; favs.splice(i, 1); persistFavs(); renderFavs(); favMsg("Paleta «" + n + "» borrada.");
 });
