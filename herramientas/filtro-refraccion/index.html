@@ -51,6 +51,11 @@
   .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
   .sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
   .err { color: #b3261e; font-size: 13px; }
+  .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 14px; }
+  .crow { display: grid; grid-template-columns: 34px 1fr; gap: 2px 6px; align-items: center; min-width: 0; }
+  .crow label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  .crow input[type=color] { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
+  .crow input[type=text] { min-width: 0; width: 100%; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--text); font: 12px ui-monospace, monospace; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 14px; }
   .grid2 .ctl { margin: 0; min-width: 0; }
   .grid2 label { font-size: 12px; }
@@ -106,8 +111,13 @@
     </div>
 
     <div id="fxOxido" hidden>
-      <div class="ctl"><label for="selOPal">Paleta</label>
-        <select id="selOPal" data-key="oPal"><option value="0">Naranja y azul</option><option value="1">Verde y cian</option><option value="2">Rojo y menta</option><option value="3" selected>Verde azulado y naranja</option></select></div>
+      <div class="colors" id="oColors">
+        <div class="crow"><label for="cS">Sombra</label><input type="color" id="cS" value="#0a2530"><input type="text" id="hS" value="#0a2530" maxlength="7" spellcheck="false" aria-label="Hex sombra"></div>
+        <div class="crow"><label for="cM">Medio</label><input type="color" id="cM" value="#2a7f8c"><input type="text" id="hM" value="#2a7f8c" maxlength="7" spellcheck="false" aria-label="Hex medio"></div>
+        <div class="crow"><label for="cL">Luz</label><input type="color" id="cL" value="#efe3c8"><input type="text" id="hL" value="#efe3c8" maxlength="7" spellcheck="false" aria-label="Hex luz"></div>
+        <div class="crow"><label for="cA">Acento</label><input type="color" id="cA" value="#e8702a"><input type="text" id="hA" value="#e8702a" maxlength="7" spellcheck="false" aria-label="Hex acento"></div>
+        <div class="crow"><label for="cC">Borde frío</label><input type="color" id="cC" value="#5fd0d8"><input type="text" id="hC" value="#5fd0d8" maxlength="7" spellcheck="false" aria-label="Hex borde frío"></div>
+      </div>
       <div class="grid2">
         <div class="ctl" title="Cuántos colores usa la imagen"><label for="selOTones">Tonos</label>
           <select id="selOTones" data-key="oTones"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
@@ -127,6 +137,8 @@
           <input type="range" id="oSoft" min="0" max="1" step="0.01" value="1.00"></div>
         <div class="ctl" title="Brillo del resplandor alrededor de las luces"><label>Halo <span id="voHalo"></span></label>
           <input type="range" id="oHalo" min="0" max="1" step="0.01" value="0.64"></div>
+        <div class="ctl" title="Suavidad de la franja de color: nítida o difusa"><label>Suav. borde <span id="voEdgeS"></span></label>
+          <input type="range" id="oEdgeS" min="0" max="1" step="0.01" value="0.35"></div>
         <div class="ctl" title="Cuánto se extiende el halo"><label>R. halo <span id="voHaloR"></span></label>
           <input type="range" id="oHaloR" min="0" max="1" step="0.01" value="0.47"></div>
         <div class="ctl" title="Fuerza de la franja de color junto a los negros"><label>Borde <span id="voEdge"></span></label>
@@ -169,6 +181,7 @@
     </div>
 
     <hr class="sep">
+    <div id="brushPanel">
     <div class="ctl"><label>Herramienta de pincel</label>
       <div class="seg" data-key="tool"><button data-v="0" class="on">Ninguna</button><button data-v="1">Proteger</button><button data-v="2">Mover gel</button></div></div>
 
@@ -185,6 +198,7 @@
     <div class="row">
       <button class="btn" id="clearP" disabled>Borrar zona protegida</button>
       <button class="btn" id="clearG" disabled>Restablecer gel</button>
+    </div>
     </div>
 
     <hr class="sep">
@@ -487,7 +501,7 @@ void main(){
 const FRAG3 = COMMON + `
 uniform sampler2D tex;
 uniform float showOrig, hasGel;
-uniform float oLen, oRough, oReach, oThr, oSoft, oHalo, oHaloR, oEdge, oEdgeW, oGrain, oGrainS, oTones, oDir;
+uniform float oLen, oRough, oReach, oThr, oSoft, oHalo, oHaloR, oEdge, oEdgeW, oEdgeS, oGrain, oGrainS, oTones, oDir;
 uniform vec3 pS, pM, pL, pA, pC;                // sombra, medio, luz, acento (halo y borde cálido), borde frío
 uniform vec2 uRes;
 uniform float uLo, uHi;                         // rango de luminosidad de la foto (percentiles 3 y 97)
@@ -498,8 +512,8 @@ float nrm(float y){ return clamp((y - uLo) / max(uHi - uLo, .05), 0., 1.); }
 void main(){
   vec2 uv = vUv;
   if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
-  vec2 M = hasGel > .5 ? uv + getU(uv) : uv;
-  float pm = protect(uv);                        // zona protegida: sin barrido
+  vec2 M = uv;                                   // este efecto no usa gel ni zona protegida
+  float pm = 1.;
 
   // ---- barrido horizontal: la longitud varía fila a fila (bordes en peine) y crece con la luz ----
   float rows = 520.;
@@ -553,7 +567,7 @@ void main(){
   float gx = nrm(lumAt(M + ex)) - nrm(lumAt(M - ex));
   float gy = nrm(lumAt(M + ey)) - nrm(lumAt(M - ey));
   float mag = clamp(abs(gx) + abs(gy)*.7, 0., 1.);
-  float rim = smoothstep(.12, .45, mag) * (1. - smoothstep(.3, .6, y0)) * oEdge;
+  float rim = smoothstep(.12*(1. - oEdgeS), .45 + .55*oEdgeS, mag) * (1. - smoothstep(.3, .6 + .3*oEdgeS, y0)) * oEdge;   // oEdgeS: franja nítida ↔ difusa
   col = mix(col, (gx + gy*.5) > 0. ? pA : pC, clamp(rim, 0., 1.));
 
   // ---- grano uniforme, más marcado en medios tonos ----
@@ -569,7 +583,7 @@ void main(){
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 3, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
+const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 0, effect: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
 let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
@@ -590,15 +604,12 @@ function makeProgram(fragSrc) {
 const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
 const MIN_IDS = ["mRet", "mPose", "mHue", "mTwist", "mEro", "mCov", "mScale", "mVHue", "mVTone", "mVCon"];
 const PAL_IDS = ["palD", "palL", "pal0", "pal1", "pal2"];
-const OX_IDS = ["oLen", "oRough", "oReach", "oThr", "oSoft", "oHalo", "oHaloR", "oEdge", "oEdgeW", "oGrain", "oGrainS"];
+const OX_IDS = ["oLen", "oRough", "oReach", "oThr", "oSoft", "oHalo", "oHaloR", "oEdge", "oEdgeW", "oEdgeS", "oGrain", "oGrainS"];
 const OX_PAL = ["pS", "pM", "pL", "pA", "pC"];
 // paletas fijas (colores tomados a ojo de las referencias): sombra, medio, luz, acento, borde frío
-const PALETTES = [
-  ["#0f1d33", "#c4602e", "#f2ecd8", "#f5a23a", "#2f9bb5"],   // naranja y azul
-  ["#0b1d12", "#2f6b2a", "#9fd0e8", "#3a9fd0", "#8fb8ff"],   // verde y cian
-  ["#3a0f0f", "#8c2a22", "#bcd6c8", "#e8956e", "#7fc9b8"],   // rojo y menta
-  ["#0a2530", "#2a7f8c", "#efe3c8", "#e8702a", "#5fd0d8"],   // verde azulado y naranja
-].map(p => p.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)));
+const OX_KEYS = ["S", "M", "L", "A", "C"];                      // sombra, medio, luz, acento, borde frío
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const oxColors = () => OX_KEYS.map(k => hexRgb($("c" + k).value));
 const COMMON_U = ["efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
@@ -673,7 +684,7 @@ function setCommon(L) {
   for (const id of MIN_IDS) gl.uniform1f(L[id], +$(id).value);
   PAL_IDS.forEach((id, i) => gl.uniform3fv(L[id], state.pal[i]));
   for (const id of OX_IDS) gl.uniform1f(L[id], +$(id).value);
-  OX_PAL.forEach((id, i) => gl.uniform3fv(L[id], PALETTES[state.oPal][i]));
+  OX_PAL.forEach((id, i) => gl.uniform3fv(L[id], oxColors()[i]));
   gl.uniform1f(L.oTones, state.oTones); gl.uniform1f(L.oDir, state.oDir);
   gl.uniform2f(L.uRes, imgW, imgH);
   gl.uniform1f(L.uLo, state.lum[0]); gl.uniform1f(L.uHi, state.lum[1]);
@@ -832,6 +843,10 @@ function resetControls() {          // vuelve los ajustes de los filtros a sus v
     if (keep.has(el.id) || +el.value === +el.defaultValue) return;
     el.value = el.defaultValue; el.dispatchEvent(new Event("input"));
   });
+  for (const k of OX_KEYS) {
+    const c = $("c" + k);
+    if (c.value !== c.defaultValue) { c.value = c.defaultValue; $("h" + k).value = c.defaultValue; }
+  }
   document.querySelectorAll("aside select[data-key]").forEach(el => {
     const d = [...el.options].find(o => o.defaultSelected);
     if (!d || el.value === d.value) return;
@@ -921,6 +936,11 @@ document.querySelector('.seg[data-key="effect"]').addEventListener("click", e =>
   $("fxLiquid").hidden = +bt.dataset.v !== 0;
   $("fxMineral").hidden = +bt.dataset.v !== 1;
   $("fxOxido").hidden = +bt.dataset.v !== 2;
+  $("brushPanel").hidden = +bt.dataset.v === 2;
+  if (+bt.dataset.v === 2) {                      // desactiva el pincel al entrar a Óxido solar
+    state.tool = 0; cv.classList.remove("brush"); ring.style.display = "none";
+    document.querySelectorAll('.seg[data-key="tool"] button').forEach(x => x.classList.toggle("on", x.dataset.v === "0"));
+  }
 });
 for (const id of ["int", "cov", "sDesp", "rad", "grad", "gstr"]) {
   $(id).addEventListener("input", () => {
@@ -936,6 +956,15 @@ document.querySelectorAll(".seg").forEach(seg => {
     render();
   });
 });
+for (const k of OX_KEYS) {
+  const c = $("c" + k), h = $("h" + k);
+  c.addEventListener("input", () => { h.value = c.value; render(); });
+  h.addEventListener("input", () => {
+    let v = h.value.trim(); if (v && v[0] !== "#") v = "#" + v;
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) { c.value = v.toLowerCase(); render(); }
+  });
+  h.addEventListener("blur", () => { h.value = c.value; });
+}
 document.querySelectorAll("select[data-key]").forEach(sel =>
   sel.addEventListener("change", () => { state[sel.dataset.key] = +sel.value; render(); }));
 // historial de patrones: cada "Nuevo patrón" se guarda y se puede volver atrás o adelante
