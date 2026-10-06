@@ -80,7 +80,7 @@
   <aside>
     <h1>Efectos de imagen</h1>
     <button class="btn" id="seed">Nuevo patrón (semilla)</button>
-    <div class="ctl"><div class="seg" data-key="effect"><button data-v="0" class="on">Sesgo líquido</button><button data-v="1">Memoria mineral</button></div></div>
+    <div class="ctl"><div class="seg" data-key="effect"><button data-v="0" class="on">Sesgo líquido</button><button data-v="1">Memoria mineral</button><button data-v="2">Óxido solar</button></div></div>
     <button class="btn" id="open">Cambiar imagen</button>
 
     <div id="fxLiquid">
@@ -97,6 +97,41 @@
       <div class="ctl"><label for="selDup">Duplicación</label>
         <select id="selDup" data-key="dup"><option value="0">Ninguna</option><option value="1" selected>Sutil</option><option value="2">Marcada</option></select></div>
     </div>
+    </div>
+
+    <div id="fxOxido" hidden>
+      <div class="ctl"><label for="selOPal">Paleta</label>
+        <select id="selOPal" data-key="oPal"><option value="0" selected>Naranja y azul</option><option value="1">Verde y cian</option><option value="2">Rojo y menta</option><option value="3">Verde azulado y naranja</option></select></div>
+      <div class="grid2">
+        <div class="ctl" title="Cuántos colores usa la imagen"><label for="selOTones">Tonos</label>
+          <select id="selOTones" data-key="oTones"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></div>
+        <div class="ctl" title="Hacia dónde se estiran las luces"><label for="selODir">Barrido</label>
+          <select id="selODir" data-key="oDir"><option value="0">Izquierda</option><option value="1">Derecha</option><option value="2" selected>Ambos</option></select></div>
+      </div>
+      <div class="grid3">
+        <div class="ctl" title="Cuánto se estira el barrido horizontal"><label>Longitud <span id="voLen"></span></label>
+          <input type="range" id="oLen" min="0" max="1" step="0.01" value="0.25"></div>
+        <div class="ctl" title="Variación del largo entre filas: más = bordes en peine"><label>Aspereza <span id="voRough"></span></label>
+          <input type="range" id="oRough" min="0" max="1" step="0.01" value="0.35"></div>
+        <div class="ctl" title="Solo las luces se estiran ↔ toda la imagen"><label>Alcance <span id="voReach"></span></label>
+          <input type="range" id="oReach" min="0" max="1" step="0.01" value="0.3"></div>
+        <div class="ctl" title="Desplaza qué es sombra, medio y luz"><label>Umbral <span id="voThr"></span></label>
+          <input type="range" id="oThr" min="-0.3" max="0.3" step="0.01" value="0"></div>
+        <div class="ctl" title="Borde entre tonos: duro o difuso"><label>Suavidad <span id="voSoft"></span></label>
+          <input type="range" id="oSoft" min="0" max="1" step="0.01" value="0.35"></div>
+        <div class="ctl" title="Brillo del resplandor alrededor de las luces"><label>Halo <span id="voHalo"></span></label>
+          <input type="range" id="oHalo" min="0" max="1" step="0.01" value="0.6"></div>
+        <div class="ctl" title="Cuánto se extiende el halo"><label>R. halo <span id="voHaloR"></span></label>
+          <input type="range" id="oHaloR" min="0" max="1" step="0.01" value="0.4"></div>
+        <div class="ctl" title="Fuerza de la franja de color junto a los negros"><label>Borde <span id="voEdge"></span></label>
+          <input type="range" id="oEdge" min="0" max="1" step="0.01" value="0.5"></div>
+        <div class="ctl" title="Ancho de la franja de color"><label>Grosor <span id="voEdgeW"></span></label>
+          <input type="range" id="oEdgeW" min="0" max="1" step="0.01" value="0.4"></div>
+        <div class="ctl" title="Cantidad de grano"><label>Grano <span id="voGrain"></span></label>
+          <input type="range" id="oGrain" min="0" max="1" step="0.01" value="0.35"></div>
+        <div class="ctl" title="Tamaño del grano"><label>Tam. gr. <span id="voGrainS"></span></label>
+          <input type="range" id="oGrainS" min="0" max="1" step="0.01" value="0.3"></div>
+      </div>
     </div>
 
     <div id="fxMineral" hidden>
@@ -408,11 +443,95 @@ void main(){
   gl_FragColor = vec4(clamp(col, 0., 1.), 1.);
 }`;
 
+// ===== Óxido solar: foto reducida a pocos tonos fijos, con barrido horizontal, halo, borde de color y grano =====
+const FRAG3 = COMMON + `
+uniform sampler2D tex;
+uniform float showOrig, hasGel;
+uniform float oLen, oRough, oReach, oThr, oSoft, oHalo, oHaloR, oEdge, oEdgeW, oGrain, oGrainS, oTones, oDir;
+uniform vec3 pS, pM, pL, pA, pC;                // sombra, medio, luz, acento (halo y borde cálido), borde frío
+uniform vec2 uRes;
+uniform float uLo, uHi;                         // rango de luminosidad de la foto (percentiles 3 y 97)
+
+float lumAt(vec2 uv){ return dot(texture2D(tex, mirror(uv)).rgb, vec3(.2126, .7152, .0722)); }
+float nrm(float y){ return clamp((y - uLo) / max(uHi - uLo, .05), 0., 1.); }
+
+void main(){
+  vec2 uv = vUv;
+  if(showOrig > .5){ gl_FragColor = texture2D(tex, uv); return; }
+  vec2 M = hasGel > .5 ? uv + getU(uv) : uv;
+  float pm = protect(uv);                        // zona protegida: sin barrido
+
+  // ---- barrido horizontal: la longitud varía fila a fila (bordes en peine) y crece con la luz ----
+  float rows = 520.;
+  float ry = floor(M.y*rows);
+  float rA = hash(vec2(ry, seed)), rB = hash(vec2(ry + 17.3, seed*1.7));
+  float rS = vnoise(vec2(M.y*rows*.35, seed));
+  float rowVar = mix(1., .1 + 1.8*(.35*rA + .65*rS), oRough);
+  float y0 = nrm(lumAt(M));
+  float reach = mix(smoothstep(.45, .85, y0), 1., oReach);
+  float len = oLen*.3*rowVar*reach*pm;
+  float a = oDir > .5 ? (oDir > 1.5 ? len*(.3 + .7*rA) : len) : 0.;   // hacia la derecha
+  float b = oDir < .5 ? len : (oDir > 1.5 ? len*(.3 + .7*rB) : 0.);   // hacia la izquierda
+  float acc = pow(y0, 4.), ws = 1.;
+  for(int i=0;i<16;i++){
+    float t = (float(i) + .5)/16.;
+    float w = 1. - t*t;
+    acc += w*pow(nrm(lumAt(M + vec2(t*b, 0.))), 4.) + w*pow(nrm(lumAt(M - vec2(t*a, 0.))), 4.);
+    ws += 2.*w;
+  }
+  float Y = pow(acc/ws, .25);                    // media de potencia: las luces se imponen y se estiran
+
+  // ---- mapeo a 2, 3 o 4 tonos con borde suave ----
+  float w = mix(.01, .22, oSoft);
+  vec3 col;
+  if(oTones < 2.5){
+    col = mix(pS, pL, smoothstep(.5 + oThr - w, .5 + oThr + w, Y));
+  } else if(oTones < 3.5){
+    col = mix(pS, pM, smoothstep(.33 + oThr - w, .33 + oThr + w, Y));
+    col = mix(col, pL, smoothstep(.66 + oThr - w, .66 + oThr + w, Y));
+  } else {
+    col = mix(pS, pM, smoothstep(.25 + oThr - w, .25 + oThr + w, Y));
+    col = mix(col, pA, smoothstep(.5 + oThr - w, .5 + oThr + w, Y));
+    col = mix(col, pL, smoothstep(.75 + oThr - w, .75 + oThr + w, Y));
+  }
+
+  // ---- halo: las luces se esparcen alrededor con el color de acento ----
+  float R = oHaloR*.1;
+  float H = 0.;
+  for(int i=0;i<16;i++){
+    float r = sqrt((float(i) + .5)/16.)*R, an = float(i)*2.39996;
+    vec2 off = vec2(cos(an)*1.5/aspect, sin(an))*r;
+    H += smoothstep(.55, .9, nrm(lumAt(M + off)));
+  }
+  H /= 16.;
+  float ha = clamp(H*oHalo*1.6, 0., 1.) * (1. - smoothstep(.55, .85, Y));
+  col = mix(col, pA, ha);
+
+  // ---- borde de color: franja fina junto a los negros, cálida de un lado y fría del otro ----
+  float d = .002 + oEdgeW*.012;
+  vec2 ex = vec2(d/aspect, 0.), ey = vec2(0., d);
+  float gx = nrm(lumAt(M + ex)) - nrm(lumAt(M - ex));
+  float gy = nrm(lumAt(M + ey)) - nrm(lumAt(M - ey));
+  float mag = clamp(abs(gx) + abs(gy)*.7, 0., 1.);
+  float rim = smoothstep(.12, .45, mag) * (1. - smoothstep(.3, .6, y0)) * oEdge;
+  col = mix(col, (gx + gy*.5) > 0. ? pA : pC, clamp(rim, 0., 1.));
+
+  // ---- grano uniforme, más marcado en medios tonos ----
+  float cell = max(1., mix(1., 3.5, oGrainS) * uRes.y/1200.);
+  vec2 gp = floor(gl_FragCoord.xy/cell);
+  vec3 gg = vec3(hash(gp + seed), hash(gp + vec2(7.1, 3.3) + seed), hash(gp + vec2(1.9, 9.7) + seed)) - .5;
+  float lo = dot(col, vec3(.3, .59, .11));
+  float amt = oGrain*.5*(.45 + .55*(1. - abs(2.*lo - 1.)));
+  col += (gg.x*.75 + gg*.25) * amt;
+
+  gl_FragColor = vec4(clamp(col, 0., 1.), 1.);
+}`;
+
 const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
-const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
+const state = { size: 2, dir: 1, dup: 1, seed: 1.0, tool: 0, effect: 0, oPal: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
-let gl, prog, prog2, pushProg, tex, maskTex, U = {}, U2 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
 
 function makeProgram(fragSrc) {
   const sh = (t, src) => {
@@ -431,7 +550,16 @@ function makeProgram(fragSrc) {
 const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
 const MIN_IDS = ["mRet", "mPose", "mHue", "mTwist", "mEro", "mCov", "mScale", "mVHue", "mVTone", "mVCon"];
 const PAL_IDS = ["palD", "palL", "pal0", "pal1", "pal2"];
-const COMMON_U = [...PAL_IDS, "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const OX_IDS = ["oLen", "oRough", "oReach", "oThr", "oSoft", "oHalo", "oHaloR", "oEdge", "oEdgeW", "oGrain", "oGrainS"];
+const OX_PAL = ["pS", "pM", "pL", "pA", "pC"];
+// paletas fijas (colores tomados a ojo de las referencias): sombra, medio, luz, acento, borde frío
+const PALETTES = [
+  ["#0f1d33", "#c4602e", "#f2ecd8", "#f5a23a", "#2f9bb5"],   // naranja y azul
+  ["#0b1d12", "#2f6b2a", "#9fd0e8", "#3a9fd0", "#8fb8ff"],   // verde y cian
+  ["#3a0f0f", "#8c2a22", "#bcd6c8", "#e8956e", "#7fc9b8"],   // rojo y menta
+  ["#0a2530", "#2a7f8c", "#efe3c8", "#e8702a", "#5fd0d8"],   // verde azulado y naranja
+].map(p => p.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)));
+const COMMON_U = [...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -439,6 +567,7 @@ function initGL() {
   try {
     prog = makeProgram(FRAG);
     prog2 = makeProgram(FRAG2);
+    prog3 = makeProgram(FRAG3);
     pushProg = makeProgram(PUSH);
   } catch (e) { errEl.textContent = "Error de shader: " + e.message; return false; }
   const buf = gl.createBuffer();
@@ -448,6 +577,7 @@ function initGL() {
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   U = locs(prog, [...COMMON_U, "tex", "showOrig", "hasGel"]);
   U2 = locs(prog2, [...COMMON_U, "tex", "showOrig", "hasGel"]);
+  U3 = locs(prog3, [...COMMON_U, "tex", "showOrig", "hasGel"]);
   PL = locs(pushProg, [...COMMON_U, "pc", "pv", "pr"]);
   tex = gl.createTexture();
   maskTex = gl.createTexture();
@@ -497,6 +627,11 @@ function setCommon(L) {
   gl.uniform1f(L.dupAmt, state.dup);
   for (const id of MIN_IDS) gl.uniform1f(L[id], +$(id).value);
   PAL_IDS.forEach((id, i) => gl.uniform3fv(L[id], state.pal[i]));
+  for (const id of OX_IDS) gl.uniform1f(L[id], +$(id).value);
+  OX_PAL.forEach((id, i) => gl.uniform3fv(L[id], PALETTES[state.oPal][i]));
+  gl.uniform1f(L.oTones, state.oTones); gl.uniform1f(L.oDir, state.oDir);
+  gl.uniform2f(L.uRes, imgW, imgH);
+  gl.uniform1f(L.uLo, state.lum[0]); gl.uniform1f(L.uHi, state.lum[1]);
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
   gl.uniform2f(L.uTexel, 1 / uw, 1 / uh);
@@ -541,6 +676,7 @@ function extractPalette(cnv) {
   const avg = arr => arr.reduce((s, p) => [s[0] + p[0], s[1] + p[1], s[2] + p[2]], [0, 0, 0]).map(v => v / arr.length);
   const k = Math.max(1, Math.round(px.length * .08));
   const dark = avg(sorted.slice(0, k)), light = avg(sorted.slice(-k));
+  state.lum = [lum(sorted[Math.floor(px.length * .03)]), lum(sorted[Math.floor(px.length * .97)])];
   const bins = new Map();
   for (const p of px) {
     const key = p.map(v => Math.min(3, Math.floor(v * 4))).join();
@@ -616,8 +752,8 @@ function render() {
   if (!state.loaded) return;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
-    const L = state.effect ? U2 : U;
-    gl.useProgram(state.effect ? prog2 : prog);
+    const L = [U, U2, U3][state.effect];
+    gl.useProgram([prog, prog2, prog3][state.effect]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, imgW, imgH);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
@@ -649,6 +785,11 @@ $("vCov").textContent = (+$("cov").value).toFixed(2);
 $("vRad").textContent = (+$("rad").value).toFixed(2);
 $("vGrad").textContent = (+$("grad").value).toFixed(2);
 $("vStr").textContent = (+$("gstr").value).toFixed(2);
+for (const id of OX_IDS) {
+  const sp = $("v" + id), inp = $(id);
+  sp.textContent = (+inp.value).toFixed(2);
+  inp.addEventListener("input", () => { sp.textContent = (+inp.value).toFixed(2); render(); });
+}
 for (const id of MIN_IDS) {
   const sp = $("v" + id), inp = $(id);
   const show = () => { sp.textContent = (id === "mHue" || id === "mVHue") ? Math.round(+inp.value) + "°" : (+inp.value).toFixed(2); };
@@ -659,6 +800,7 @@ document.querySelector('.seg[data-key="effect"]').addEventListener("click", e =>
   const bt = e.target.closest("button"); if (!bt) return;
   $("fxLiquid").hidden = +bt.dataset.v !== 0;
   $("fxMineral").hidden = +bt.dataset.v !== 1;
+  $("fxOxido").hidden = +bt.dataset.v !== 2;
 });
 for (const id of ["int", "cov", "rad", "grad", "gstr"]) {
   $(id).addEventListener("input", () => {
@@ -797,7 +939,7 @@ $("dl").addEventListener("click", () => {
   if (gl.isContextLost()) { errEl.textContent = "La GPU se reinició. Recarga la página y vuelve a cargar la imagen."; return; }
   const save = url => {
     const a = document.createElement("a");
-    a.href = url; a.download = (state.effect ? "memoria-mineral" : "sesgo-liquido") + ".png";
+    a.href = url; a.download = ["sesgo-liquido", "memoria-mineral", "oxido-solar"][state.effect] + ".png";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
