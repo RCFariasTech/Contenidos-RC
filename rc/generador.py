@@ -36,6 +36,19 @@ def _sumar_uso(total: dict, uso) -> None:
     total["web_search_requests"] = total.get("web_search_requests", 0) + busquedas
 
 
+def _pista_clave(clave: str) -> str:
+    """Datos no secretos para diagnosticar una clave mal pegada: tipo (prefijo fijo) y largo."""
+    if clave.startswith("sk-ant-api"):
+        tipo = "es una clave de API (correcto)"
+    elif clave.startswith("sk-ant-admin"):
+        tipo = "es una clave de ADMINISTRACIÓN, que no sirve para generar: crea una clave de API normal"
+    elif clave.startswith("sk-ant-"):
+        tipo = "es una clave de Anthropic de otro tipo (no de API)"
+    else:
+        tipo = "no tiene el formato de una clave de API de Anthropic (debe empezar con sk-ant-api)"
+    return f"La clave guardada {tipo} y tiene {len(clave)} caracteres (una clave de API completa tiene alrededor de 100)."
+
+
 def verificar_clave() -> dict:
     """Comprueba la clave de Anthropic listando un modelo (no genera texto ni consume tokens)."""
     if not env("ANTHROPIC_API_KEY", False):
@@ -43,7 +56,8 @@ def verificar_clave() -> dict:
     try:
         _cliente().models.list(limit=1)
     except anthropic.AuthenticationError:
-        return {"ok": False, "detalle": "Anthropic no reconoce la clave: revisa que se haya copiado completa y que no esté borrada en la consola."}
+        return {"ok": False, "detalle": "Anthropic no reconoce la clave: revisa que se haya copiado completa y que no esté borrada en la consola. "
+                + _pista_clave(env("ANTHROPIC_API_KEY", False).strip())}
     except anthropic.PermissionDeniedError:
         return {"ok": False, "detalle": "La clave existe pero no tiene permisos para usar la API."}
     except anthropic.APIConnectionError:

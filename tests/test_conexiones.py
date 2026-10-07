@@ -15,6 +15,15 @@ def _error(clase, codigo):
 
 
 class TestVerificarClave(unittest.TestCase):
+    def test_pista_sin_revelar_la_clave(self):
+        clave = "sk-ant-api03-" + "x" * 90
+        pista = generador._pista_clave(clave)
+        self.assertIn("clave de API (correcto)", pista)
+        self.assertIn(str(len(clave)), pista)
+        self.assertNotIn("xxxx", pista)
+        self.assertIn("ADMINISTRACIÓN", generador._pista_clave("sk-ant-admin01-abc"))
+        self.assertIn("no tiene el formato", generador._pista_clave("krea-token"))
+
     def test_sin_clave(self):
         with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}):
             self.assertEqual(generador.verificar_clave()["ok"], False)
