@@ -20,9 +20,13 @@ class ErrorGeneracion(Exception):
     pass
 
 
+def clave_anthropic() -> str:
+    """Clave de Anthropic: ANTHROPIC_API_KEY2 (si existe) o ANTHROPIC_API_KEY, sin espacios ni saltos de línea."""
+    return (env("ANTHROPIC_API_KEY2", False) or env("ANTHROPIC_API_KEY", False)).strip()
+
+
 def _cliente() -> anthropic.Anthropic:
-    # Se limpia la clave: un espacio o salto de línea al pegarla en Vercel la invalida.
-    return anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY", False).strip() or None)
+    return anthropic.Anthropic(api_key=clave_anthropic() or None)
 
 
 def _sumar_uso(total: dict, uso) -> None:
@@ -51,13 +55,13 @@ def _pista_clave(clave: str) -> str:
 
 def verificar_clave() -> dict:
     """Comprueba la clave de Anthropic listando un modelo (no genera texto ni consume tokens)."""
-    if not env("ANTHROPIC_API_KEY", False):
-        return {"ok": False, "detalle": "Falta ANTHROPIC_API_KEY en Vercel."}
+    if not clave_anthropic():
+        return {"ok": False, "detalle": "Falta la clave de Anthropic en Vercel (ANTHROPIC_API_KEY2 o ANTHROPIC_API_KEY)."}
     try:
         _cliente().models.list(limit=1)
     except anthropic.AuthenticationError:
         return {"ok": False, "detalle": "Anthropic no reconoce la clave: revisa que se haya copiado completa y que no esté borrada en la consola. "
-                + _pista_clave(env("ANTHROPIC_API_KEY", False).strip())}
+                + _pista_clave(clave_anthropic())}
     except anthropic.PermissionDeniedError:
         return {"ok": False, "detalle": "La clave existe pero no tiene permisos para usar la API."}
     except anthropic.APIConnectionError:

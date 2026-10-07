@@ -31,7 +31,7 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | `OWNER_EMAIL` | `reini@rcfarias.com` | Ya configurada |
 | `CRON_SECRET` | secreto aleatorio (tipo Sensitive) | Ya configurada |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (o una clave `sb_secret_…`). Tipo **Sensitive** | Dueño del proyecto |
-| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys. Tipo **Sensitive** | Dueño del proyecto |
+| `ANTHROPIC_API_KEY2` (o `ANTHROPIC_API_KEY`) | console.anthropic.com → API Keys. Tipo **Sensitive**. Si existen las dos, se usa `ANTHROPIC_API_KEY2` | Dueño del proyecto |
 
 ### Envío del PowerPoint por correo (opcional)
 

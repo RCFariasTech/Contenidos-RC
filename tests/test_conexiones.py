@@ -25,7 +25,7 @@ class TestVerificarClave(unittest.TestCase):
         self.assertIn("no tiene el formato", generador._pista_clave("krea-token"))
 
     def test_sin_clave(self):
-        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "", "ANTHROPIC_API_KEY2": ""}):
             self.assertEqual(generador.verificar_clave()["ok"], False)
 
     def test_clave_valida_solo_lista_modelos(self):
@@ -36,8 +36,14 @@ class TestVerificarClave(unittest.TestCase):
         cliente.messages.create.assert_not_called()
 
     def test_la_clave_se_usa_sin_espacios_ni_saltos_de_linea(self):
-        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "  sk-ant-prueba\n"}):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "  sk-ant-prueba\n", "ANTHROPIC_API_KEY2": ""}):
             self.assertEqual(generador._cliente().api_key, "sk-ant-prueba")
+
+    def test_prefiere_ANTHROPIC_API_KEY2(self):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "vieja", "ANTHROPIC_API_KEY2": " nueva\n"}):
+            self.assertEqual(generador._cliente().api_key, "nueva")
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "vieja", "ANTHROPIC_API_KEY2": ""}):
+            self.assertEqual(generador._cliente().api_key, "vieja")
 
     def test_clave_invalida(self):
         cliente = mock.MagicMock()
