@@ -54,7 +54,12 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
             raise ErrorNegocio("El saldo de API de Krea está en cero. Agrega saldo en Krea (sección API); es distinto de los créditos de la aplicación.") from e
         if e.code == 429:
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
-        raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code}).") from e
+        try:  # el motivo que da Krea (sin datos sensibles) ayuda a diagnosticar
+            motivo = json.loads(detalle).get("error")
+        except (ValueError, AttributeError):
+            motivo = detalle
+        motivo = " ".join(str(motivo or "").split())[:200]
+        raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code})" + (f": {motivo}" if motivo else ".")) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise ErrorNegocio("No se pudo conectar con Krea.") from e
 

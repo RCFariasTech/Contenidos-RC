@@ -57,6 +57,14 @@ class TestKrea(unittest.TestCase):
                     krea.crear_trabajo("p", 512, 512)
             self.assertIn(texto, str(ctx.exception))
 
+    def test_el_error_400_incluye_el_motivo_de_krea(self):
+        def urlopen(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, 400, "x", {}, io.BytesIO(b'{"error": "style kq4b7fium not found"}'))
+        with mock.patch.dict("os.environ", {"KREA_API_TOKEN": "tok"}), mock.patch("urllib.request.urlopen", urlopen):
+            with self.assertRaises(ErrorNegocio) as ctx:
+                krea.crear_trabajo("p", 512, 512)
+        self.assertEqual(str(ctx.exception), "Krea rechazó la solicitud (400): style kq4b7fium not found")
+
     def test_sin_token_no_llama_a_krea(self):
         with mock.patch.dict("os.environ", {"KREA_API_TOKEN": ""}):
             self.assertFalse(krea.configurado())
