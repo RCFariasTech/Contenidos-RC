@@ -280,6 +280,8 @@
     </div>
     <p class="hint" id="stackInfo" style="margin:-2px 0 8px"></p>
     <button class="btn" id="cmp">Mantén pulsado: ver original</button>
+    <div class="ctl" style="margin-bottom:8px"><label for="dlScale">Resolución de descarga <span id="dlSize"></span></label>
+      <select id="dlScale" aria-label="Resolución de descarga"><option value="1">1× (tamaño de la vista)</option><option value="2">2×</option><option value="4" selected>4×</option><option value="8">8× (máximo del equipo)</option></select></div>
     <button class="btn primary" id="dl" disabled>Descargar PNG</button>
     <p class="hint" id="info"></p>
     <p class="err" id="err"></p>
@@ -663,7 +665,7 @@ const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
 const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 2, effect: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
-let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, raf = 0;
+let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, renderW = 0, renderH = 0, raf = 0;      // render* = tamaño real del dibujo (mayor que img* al exportar en alta resolución)
 
 function makeProgram(fragSrc) {
   const sh = (t, src) => {
@@ -766,7 +768,7 @@ function setCommon(L) {
   for (const id of OX_IDS) gl.uniform1f(L[id], +$(id).value);
   OX_PAL.forEach((id, i) => gl.uniform3fv(L[id], oxColors()[i]));
   gl.uniform1f(L.oTones, state.oTones); gl.uniform1f(L.oDir, state.oDir);
-  gl.uniform2f(L.uRes, imgW, imgH);
+  gl.uniform2f(L.uRes, renderW, renderH);
   gl.uniform1f(L.uLo, state.lum[0]); gl.uniform1f(L.uHi, state.lum[1]);
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
@@ -787,7 +789,7 @@ function pushField(sel, mode, cx, cy, vx, vy, r) {
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   if (sel) eCur = dst; else gelCur = dst;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, imgW, imgH);
+  gl.viewport(0, 0, renderW, renderH);
   gl.activeTexture(gl.TEXTURE0);
 }
 // Mover gel en Memoria mineral y Óxido solar: arrastra la imagen (campo O); los pliegues van con ella
@@ -878,7 +880,7 @@ async function loadImage(file) {
     const tmp = document.createElement("canvas"); tmp.width = w; tmp.height = h;
     tmp.getContext("2d").drawImage(src, 0, 0, w, h);
     if (src.close) src.close();
-    imgW = w; imgH = h; cv.width = w; cv.height = h;
+    imgW = renderW = w; imgH = renderH = h; cv.width = w; cv.height = h;
     gl.viewport(0, 0, w, h);
     uploadBase(tmp);
     baseStack.length = 0; syncStack();
@@ -886,7 +888,7 @@ async function loadImage(file) {
     state.loaded = true;
     for (const id of ["clearP", "clearG"]) $(id).disabled = false;
     drop.style.display = "none"; wrap.classList.add("on");
-    $("dl").disabled = false; $("apply").disabled = false;
+    $("dl").disabled = false; $("apply").disabled = false; updateDlInfo();
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
     render();
   } catch (e) { errEl.textContent = e.message; }
@@ -968,7 +970,7 @@ function drawNow() {
     const L = [U, U2, U3, U][state.effect];            // efecto 3 = ninguno (muestra la imagen base)
     gl.useProgram([prog, prog2, prog3, prog][state.effect]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, imgW, imgH);
+    gl.viewport(0, 0, renderW, renderH);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gelTex[gelCur]);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, eTex[eCur]);
     gl.activeTexture(gl.TEXTURE0);
@@ -983,10 +985,10 @@ function drawNow() {
 // Dibuja por franjas de ~1 Mpx con finish() entre cada una: así ninguna llamada a la GPU dura lo
 // bastante como para que el navegador la considere colgada y reinicie el contexto (pantalla blanca).
 function drawTiled() {
-  const rows = Math.max(16, Math.floor(1e6 / imgW));
+  const rows = Math.max(16, Math.floor(1e6 / renderW));
   gl.enable(gl.SCISSOR_TEST);
-  for (let y = 0; y < imgH; y += rows) {
-    gl.scissor(0, y, imgW, Math.min(rows, imgH - y));
+  for (let y = 0; y < renderH; y += rows) {
+    gl.scissor(0, y, renderW, Math.min(rows, renderH - y));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.finish();
   }
@@ -1416,21 +1418,55 @@ document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
 });
 
-$("dl").addEventListener("click", () => {
+// ---- descarga en alta resolución: el efecto es procedural, así que se vuelve a dibujar a mayor tamaño (no es un simple ampliado) ----
+const MAX_EXPORT_PIXELS = 64e6;                    // ~8000 × 8000: más que eso suele fallar al codificar el PNG
+function exportFactor(scale) {
+  if (!gl || !imgW) return 1;
+  const lim = Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), gl.getParameter(gl.MAX_VIEWPORT_DIMS)[0], gl.getParameter(gl.MAX_TEXTURE_SIZE), 16384);
+  return Math.max(1, Math.min(scale, lim / Math.max(imgW, imgH), Math.sqrt(MAX_EXPORT_PIXELS / (imgW * imgH))));
+}
+function exportSize() { const f = exportFactor(+$("dlScale").value); return { f, W: Math.round(imgW * f), H: Math.round(imgH * f) }; }
+function updateDlInfo() {
+  if (!state.loaded) { $("dlSize").textContent = ""; return; }
+  const { f, W, H } = exportSize(), want = +$("dlScale").value;
+  $("dlSize").textContent = W + " × " + H + (f < want - 1e-6 ? " (límite)" : "");
+}
+$("dlScale").addEventListener("change", updateDlInfo);
+const dlName = () => ["sesgo-liquido", "memoria-mineral", "oxido-solar", "imagen"][state.effect];
+$("dl").addEventListener("click", async () => {
   errEl.textContent = "";
   if (gl.isContextLost()) { errEl.textContent = "La GPU se reinició. Recarga la página y vuelve a cargar la imagen."; return; }
-  const save = url => {
-    const a = document.createElement("a");
-    a.href = url; a.download = ["sesgo-liquido", "memoria-mineral", "oxido-solar", "imagen"][state.effect] + ".png";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  };
+  const { f, W, H } = exportSize(), big = W > imgW;
+  const btn = $("dl"), label = btn.textContent;
+  btn.disabled = true;
+  let blob = null;
   try {
-    cv.toBlob(b => {
-      if (b) save(URL.createObjectURL(b));
-      else errEl.textContent = "No se pudo generar el PNG (imagen demasiado grande para este navegador).";
-    }, "image/png");
+    if (big) {
+      btn.textContent = "Generando " + W + " × " + H + "…";
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));       // deja pintar el aviso
+      const rect = cv.getBoundingClientRect();
+      cv.style.width = rect.width + "px"; cv.style.height = rect.height + "px";      // la vista no cambia de tamaño
+      cv.width = W; cv.height = H; renderW = W; renderH = H;
+      if (gl.drawingBufferWidth !== W || gl.drawingBufferHeight !== H) throw new Error("este equipo no permite dibujar a " + W + " × " + H);
+      cancelAnimationFrame(raf); drawNow();
+    }
+    blob = await new Promise(res => cv.toBlob(res, "image/png"));
+    if (!blob) throw new Error("no se pudo generar el PNG (imagen demasiado grande para este navegador). Prueba con una resolución menor");
   } catch (e) { errEl.textContent = "No se pudo descargar: " + e.message; }
+  finally {
+    if (big) {                                                                         // vuelve a la vista normal
+      cv.width = imgW; cv.height = imgH; renderW = imgW; renderH = imgH;
+      cv.style.width = cv.style.height = "";
+      gl.viewport(0, 0, imgW, imgH); render();
+    }
+    btn.textContent = label; btn.disabled = false;
+  }
+  if (!blob) return;
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = dlName() + (big ? "-" + W + "x" + H : "") + ".png";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
+  $("info").textContent = "Descargado: " + W + " × " + H + " px" + (f < +$("dlScale").value - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
 });
 
 const fileIn = $("file");
