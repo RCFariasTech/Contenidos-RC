@@ -180,6 +180,7 @@
           <button class="btn" id="favYes">Sí, borrar</button>
           <button class="btn" id="favNo">Cancelar</button>
         </div>
+        <button class="btn" id="favFile" style="margin-top:2px" title="Baja una copia de esta app con tus paletas grabadas dentro: úsala como tu archivo y las paletas ya no dependen del navegador">Grabar paletas en el archivo</button>
         <p class="hint" id="favMsg" style="margin:4px 0 0"></p>
       </div>
       <div class="grid2">
@@ -285,8 +286,11 @@
   </aside>
 </div>
 
+<script type="application/json" id="embeddedData">{"palettes":[]}</script>
 <script>
 "use strict";
+// Copia del HTML tal como llegó (antes de que la app lo modifique): sirve para guardar las paletas dentro del archivo.
+const SRC_HTML = "<!doctype html>\n" + document.documentElement.outerHTML;
 const MASK_SIDE = 768;   // resolución de la máscara del pincel
 const MAX_UNDO = 40;
 const MAX_SIDE = 3072;
@@ -1044,8 +1048,14 @@ for (const k of OX_KEYS) {
 }
 // ---- paletas favoritas (máx. 10, con nombre); se guardan en el navegador ----
 const FAV_KEY = "efectos-paletas-favoritas", MAX_FAVS = 10;
-let favs = [];
-try { const v = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); if (Array.isArray(v)) favs = v.filter(f => f && f.name && Array.isArray(f.c) && f.c.length === 5).slice(0, MAX_FAVS); } catch (e) {}
+const validFav = f => f && typeof f.name === "string" && f.name && Array.isArray(f.c) && f.c.length === 5 && f.c.every(c => /^#[0-9a-fA-F]{6}$/.test(c));
+let favs = [], embeddedFavs = [];
+try { const e = JSON.parse($("embeddedData").textContent); if (e && Array.isArray(e.palettes)) embeddedFavs = e.palettes.filter(validFav).slice(0, MAX_FAVS); } catch (e) {}
+favs = embeddedFavs.slice();                                   // paletas grabadas en el archivo
+try {
+  const raw = localStorage.getItem(FAV_KEY);                  // si este navegador ya tiene su propia lista, manda esa
+  if (raw !== null) { const v = JSON.parse(raw); if (Array.isArray(v)) favs = v.filter(validFav).slice(0, MAX_FAVS); }
+} catch (e) {}
 function persistFavs() { try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); return true; } catch (e) { return false; } }
 function favMsg(t) { $("favMsg").textContent = t; }
 function renderFavs(sel_) {
@@ -1092,6 +1102,21 @@ $("favNo").addEventListener("click", () => { $("favConfirm").hidden = true; favM
 $("favYes").addEventListener("click", () => {
   const i = +$("favList").value; if (!favs[i]) return;
   const n = favs[i].name; favs.splice(i, 1); persistFavs(); renderFavs(); favMsg("Paleta «" + n + "» borrada.");
+});
+$("favFile").addEventListener("click", () => {
+  if (!favs.length) { favMsg("Guarda al menos una paleta antes de grabarla en el archivo."); return; }
+  try {
+    const json = JSON.stringify({ palettes: favs }).replace(/</g, "\\u003c");
+    const open = '<script type="application/json" id="embeddedData">', close = "<" + "/script>";
+    const i = SRC_HTML.indexOf(open); const j = i < 0 ? -1 : SRC_HTML.indexOf(close, i);
+    if (i < 0 || j < 0) throw new Error("no se encontró el bloque de datos");
+    const html = SRC_HTML.slice(0, i + open.length) + json + SRC_HTML.slice(j);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    a.download = "efectos-de-imagen.html";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    favMsg(favs.length + " paleta" + (favs.length === 1 ? "" : "s") + " grabada" + (favs.length === 1 ? "" : "s") + " en efectos-de-imagen.html. Usa ese archivo de ahora en adelante.");
+  } catch (e) { favMsg("No se pudo grabar: " + e.message); }
 });
 renderFavs();
 // ---- ajustes guardados por filtro (máx. 3 por filtro): deslizadores, menús, colores y patrón ----
