@@ -70,6 +70,10 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
         if e.code == 429:
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
         motivo = _motivo(detalle)
+        if e.code == 400 and ("no access" in motivo.lower() or "invalid ids" in motivo.lower()):
+            raise ErrorNegocio("La clave de API de Krea no tiene acceso al modelo «3d characters in red and blue». "
+                               "Crea una clave de tipo PERSONAL (no de servicio) con el usuario dueño del modelo y "
+                               "reemplaza KREA_API_TOKEN en Vercel.") from e
         raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code})" + (f": {motivo}" if motivo else ".")) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise ErrorNegocio("No se pudo conectar con Krea.") from e
