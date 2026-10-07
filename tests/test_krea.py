@@ -65,6 +65,15 @@ class TestKrea(unittest.TestCase):
                 krea.crear_trabajo("p", 512, 512)
         self.assertEqual(str(ctx.exception), "Krea rechazó la solicitud (400): style kq4b7fium not found")
 
+    def test_motivo_de_rechazo_en_cualquier_formato(self):
+        self.assertEqual(krea._motivo('{"error": "estilo no encontrado"}'), "estilo no encontrado")
+        self.assertEqual(krea._motivo('{"message": "bad width"}'), "bad width")
+        self.assertEqual(krea._motivo('{"detail": [{"loc": ["body", "styles"], "msg": "invalid"}]}'),
+                         '[{"loc": ["body", "styles"], "msg": "invalid"}]')
+        self.assertEqual(krea._motivo('{"otra": 1}'), '{"otra": 1}')
+        self.assertEqual(krea._motivo("texto plano\ncon saltos"), "texto plano con saltos")
+        self.assertEqual(krea._motivo(""), "")
+
     def test_sin_token_no_llama_a_krea(self):
         with mock.patch.dict("os.environ", {"KREA_API_TOKEN": ""}):
             self.assertFalse(krea.configurado())

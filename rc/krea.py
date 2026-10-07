@@ -35,6 +35,21 @@ def construir_prompt(descripcion: str, color: str, hex_fondo: str) -> str:
     )[:1800]
 
 
+def _motivo(cuerpo: str) -> str:
+    """Texto breve con el motivo del rechazo, sea cual sea el formato de la respuesta de Krea."""
+    try:
+        datos = json.loads(cuerpo)
+    except ValueError:
+        return " ".join(cuerpo.split())[:200]
+    if isinstance(datos, dict):
+        for clave in ("error", "message", "detail", "details", "errors"):
+            if datos.get(clave):
+                datos = datos[clave]
+                break
+    texto = datos if isinstance(datos, str) else json.dumps(datos, ensure_ascii=False)
+    return " ".join(texto.split())[:200]
+
+
 def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
     token = env("KREA_API_TOKEN", False)
     if not token:
@@ -54,11 +69,7 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
             raise ErrorNegocio("El saldo de API de Krea está en cero. Agrega saldo en Krea (sección API); es distinto de los créditos de la aplicación.") from e
         if e.code == 429:
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
-        try:  # el motivo que da Krea (sin datos sensibles) ayuda a diagnosticar
-            motivo = json.loads(detalle).get("error")
-        except (ValueError, AttributeError):
-            motivo = detalle
-        motivo = " ".join(str(motivo or "").split())[:200]
+        motivo = _motivo(detalle)
         raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code})" + (f": {motivo}" if motivo else ".")) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise ErrorNegocio("No se pudo conectar con Krea.") from e
