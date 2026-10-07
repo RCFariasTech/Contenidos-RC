@@ -49,7 +49,7 @@
   ],
   "krea": {
     "modelo": "bfl/flux-1-dev",
-    "style_id": "kq4b7fium",
+    "style_id": "8trtqxi8x",
     "style_strength": 1,
     "pasos": 28,
     "variantes_por_clic": 3,
@@ -60,6 +60,6 @@
       "https://gen.krea.ai/images/f84f2b71-e33d-4c55-864a-4968e0e88f79.png",
       "https://gen.krea.ai/images/09ee73c3-76d4-4ec8-856e-a4d5d6e3e877.png"
     ],
-    "fuerza_referencias": 0.6
+    "fuerza_referencias": 0.3
   }
 }

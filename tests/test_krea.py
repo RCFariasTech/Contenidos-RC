@@ -32,7 +32,7 @@ class TestKrea(unittest.TestCase):
         self.assertEqual(capturado["auth"], "Bearer tok")
         c = capturado["cuerpo"]
         self.assertEqual((c["width"], c["height"], c["prompt"]), (1216, 864, "un prompt"))
-        self.assertEqual(c["styles"], [{"id": "kq4b7fium", "strength": 1}])
+        self.assertEqual(c["styles"], [{"id": "8trtqxi8x", "strength": 1}])
 
     def test_parametros_para_krea_2(self):
         from rc.config import ajustes
@@ -41,7 +41,7 @@ class TestKrea(unittest.TestCase):
             c = krea.cuerpo_generacion("p", 1216, 848)
         self.assertEqual((c["aspect_ratio"], c["resolution"], c["creativity"]), ("3:2", "1K", "raw"))
         self.assertNotIn("width", c)
-        self.assertEqual(c["styles"], [{"id": "kq4b7fium", "strength": 1}])
+        self.assertEqual(c["styles"], [{"id": "8trtqxi8x", "strength": 1}])
         self.assertEqual(krea.proporcion_cercana(410, 880), "9:16")
 
     def test_consultar_interpreta_los_estados(self):
