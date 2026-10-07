@@ -179,6 +179,31 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     }
 
 
+SISTEMA_ILUSTRACION = (
+    "You write short scene descriptions for a text-to-image model that renders friendly 3D characters in red and blue. "
+    "Given the text of one Instagram carousel card (in Spanish), describe in ENGLISH, in at most 50 words, ONE concrete "
+    "scene that illustrates exactly that card's idea: which 3D characters, what they are doing, and which objects. "
+    "No text, letters, numbers, logos or brand names in the image; do not mention background colors or art style. "
+    "Answer with the description only."
+)
+
+
+def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "") -> str:
+    """Escena en inglés para Krea, a partir del texto de la tarjeta (sin búsqueda web; respuesta corta)."""
+    usuario = (f"Carousel topic: {tema}\nCard headline: {titular}\nCard text: {texto}\n"
+               + (f"Designer note (Spanish): {nota}\n" if nota else ""))
+    try:
+        respuesta = _cliente().messages.create(
+            model=ajustes()["modelo"], max_tokens=600, system=SISTEMA_ILUSTRACION,
+            messages=[{"role": "user", "content": usuario}], output_config={"effort": "low"})
+    except anthropic.APIError as e:
+        raise ErrorGeneracion(f"No se pudo describir la ilustración: {e}") from e
+    descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
+    if not descripcion:
+        raise ErrorGeneracion("El modelo no devolvió la descripción de la ilustración.")
+    return " ".join(descripcion.split())[:500]
+
+
 def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> dict:
     usuario = prompts.generar(slot, historial, hermanas, descartados)
     return llamar(usuario, slot["formato"], ajustes()["web_search_max_uses_generar"])

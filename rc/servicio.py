@@ -333,8 +333,9 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
     mes, variante = _variante(pieza)
     contenido = pieza["contenido"]
     modulo, rotulo = (reels, "Reel") if pieza["formato"] == "Reel" else (tarjetas, "Carrusel")
+    extra = {"imagenes": _imagenes_elegidas(pieza["id"])} if modulo is tarjetas else {}
     pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante,
-                             semilla=max(0, int(semilla)), guias=guias)
+                             semilla=max(0, int(semilla)), guias=guias, **extra)
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
@@ -353,26 +354,46 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
 MINUTOS_MAX_ILUSTRACION = 10
 
 
-def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0) -> list[dict]:
-    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters in red and blue»)."""
+def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
+    """Titular, texto y nota de la tarjeta (usa `diseno` o, en contenidos viejos, la división automática)."""
+    from rc import tarjetas
+    return tarjetas.datos_tarjetas(contenido)[tarjeta - 1]
+
+
+def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None) -> dict:
+    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters in red and blue»).
+
+    La escena sale, en este orden, de: la descripción que escribió el usuario, el `prompt_krea` de esa tarjeta o,
+    si no hay, una descripción que Claude escribe a partir del texto de ESA tarjeta (para que cada ilustración
+    corresponda a su tarjeta). Devuelve {"items": [...], "descripcion": str}.
+    """
     from rc import tarjetas
     pieza = _pieza(int(pieza_id))
+    tarjeta = int(tarjeta)
     if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
         raise ErrorNegocio("Las ilustraciones son para tarjetas de carruseles con contenido.")
-    if int(tarjeta) not in (1, 2):
+    if tarjeta not in (1, 2):
         raise ErrorNegocio("Solo las tarjetas 1 y 2 llevan ilustración.")
     if not krea.configurado():
         raise ErrorNegocio("Las ilustraciones no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
     _mes, variante = _variante(pieza)
     semilla = max(0, int(semilla))
-    estilo = tarjetas.estilo_de_tarjeta(int(tarjeta), variante, semilla)
-    clave, hex_fondo = tarjetas.fondo_de_tarjeta(int(tarjeta), variante, semilla)
+    estilo = tarjetas.estilo_de_tarjeta(tarjeta, variante, semilla)
+    clave, hex_fondo = tarjetas.fondo_de_tarjeta(tarjeta, variante, semilla)
     k = ajustes()["krea"]
     ancho, alto = tarjetas.tamano_ilustracion(estilo, k["lado_largo"])
     contenido = pieza["contenido"]
-    diseno = (contenido.get("diseno") or [])
-    d = diseno[int(tarjeta) - 1] if len(diseno) >= int(tarjeta) else {}
-    descripcion = d.get("prompt_krea") or d.get("ilustracion") or contenido.get("tema_especifico", "")
+    descripcion = " ".join((descripcion or "").split())[:500]
+    if not descripcion:
+        diseno = contenido.get("diseno") or []
+        descripcion = (diseno[tarjeta - 1].get("prompt_krea") if len(diseno) >= tarjeta else "") or ""
+    if not descripcion:
+        t = _texto_tarjeta(contenido, tarjeta)
+        try:
+            descripcion = generador.describir_ilustracion(contenido.get("tema_especifico", ""), t["titular"],
+                                                          t["texto"], t.get("nota", ""))
+        except generador.ErrorGeneracion as e:
+            raise ErrorNegocio(str(e)) from e
     prompt = krea.construir_prompt(descripcion, clave, hex_fondo)
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
@@ -382,11 +403,47 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0) -> list
             fallo = e
             break
         filas.append(db.insertar("ilustraciones", {
-            "pieza_id": pieza["id"], "tarjeta": int(tarjeta), "job_id": job_id, "prompt": prompt,
-            "fondo": hex_fondo, "ancho": ancho, "alto": alto})[0])
+            "pieza_id": pieza["id"], "tarjeta": tarjeta, "job_id": job_id, "prompt": prompt,
+            "descripcion": descripcion, "fondo": hex_fondo, "ancho": ancho, "alto": alto})[0])
     if fallo and not filas:
         raise fallo
-    return filas
+    return {"items": filas, "descripcion": descripcion}
+
+
+def elegir_ilustracion(ilustracion_id: int, elegida: bool = True) -> dict:
+    """Marca una variante lista como la que se monta en su tarjeta (solo una por tarjeta), o la quita."""
+    filas = db.seleccionar("ilustraciones", select="*", id=f"eq.{int(ilustracion_id)}")
+    if not filas:
+        raise ErrorNegocio("La ilustración no existe.")
+    fila = filas[0]
+    if elegida and (fila["estado"] != "lista" or not str(fila.get("url") or "").startswith("https://")):
+        raise ErrorNegocio("Solo se puede usar una ilustración que ya terminó de generarse.")
+    db.actualizar("ilustraciones", {"elegida": False}, pieza_id=f"eq.{fila['pieza_id']}",
+                  tarjeta=f"eq.{fila['tarjeta']}", elegida="is.true")
+    if elegida:
+        db.actualizar("ilustraciones", {"elegida": True}, id=f"eq.{fila['id']}")
+    return {**fila, "elegida": bool(elegida)}
+
+
+MAX_BYTES_ILUSTRACION = 15 * 1024 * 1024
+
+
+def _imagenes_elegidas(pieza_id: int) -> dict[int, bytes]:
+    """{tarjeta: bytes} de las ilustraciones elegidas, descargadas de Krea. Si una falla, esa tarjeta queda sin imagen."""
+    import urllib.request
+    imagenes = {}
+    for f in db.seleccionar("ilustraciones", select="tarjeta,url", pieza_id=f"eq.{int(pieza_id)}", elegida="is.true"):
+        url = str(f.get("url") or "")
+        if not url.startswith("https://"):
+            continue
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "contenidos-rc"}), timeout=20) as r:
+                datos = r.read(MAX_BYTES_ILUSTRACION + 1)
+            if len(datos) <= MAX_BYTES_ILUSTRACION:
+                imagenes[int(f["tarjeta"])] = datos
+        except Exception:
+            log.warning("No se pudo descargar la ilustración elegida de la tarjeta %s", f["tarjeta"], exc_info=True)
+    return imagenes
 
 
 def ilustraciones(pieza_id: int) -> dict:

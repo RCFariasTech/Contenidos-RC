@@ -75,9 +75,11 @@ def ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter):
 
 
 class Lienzo:
-    def __init__(self, c, col, alto=H, ancho=W, guias=True):
+    def __init__(self, c, col, alto=H, ancho=W, guias=True, imagenes=None):
         # guias=False (PDF que se descarga): se omiten los recuadros y notas que solo sirven en la vista previa.
+        # imagenes: {tarjeta: bytes} con la ilustración elegida, que ocupa el lugar del recuadro en esa tarjeta.
         self.c, self.col, self.alto, self.ancho, self.guias = c, col, alto, ancho, guias
+        self.imagenes, self.tarjeta = imagenes or {}, 0
 
     def bloque(self, texto, fuente, color, x, y_sup, ancho, alto, tam_max, alinear="izq", inter=1.2, tam_min=34):
         """Texto con el borde superior en y_sup (medido desde arriba). Devuelve el alto usado."""
@@ -100,7 +102,13 @@ class Lienzo:
         self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
 
     def marcador(self, x, y_sup, ancho, alto, nota, claro=True):
-        """Espacio reservado para la ilustración 3D de Krea, con la nota de qué ilustrar (solo en la vista previa)."""
+        """Espacio de la ilustración 3D: la imagen elegida (si hay) o el recuadro con la nota (solo en la vista previa)."""
+        if self.imagenes.get(self.tarjeta):
+            try:
+                self.ilustracion(self.imagenes[self.tarjeta], x, y_sup, ancho, alto)
+                return
+            except Exception:  # imagen dañada: se cae al recuadro
+                pass
         if not self.guias:
             return
         c = self.c
@@ -122,6 +130,12 @@ class Lienzo:
         c.setFont(NORMAL, tam)
         for i, ln in enumerate(lineas):
             c.drawCentredString(x + ancho / 2, y + alto / 2 - 14 - i * tam * 1.35, ln)
+
+    def ilustracion(self, datos: bytes, x, y_sup, ancho, alto):
+        """Imagen recortada a la proporción del recuadro (como object-fit: cover) con los bordes difuminados."""
+        from reportlab.lib.utils import ImageReader
+        self.c.drawImage(ImageReader(io.BytesIO(imagen_difuminada(datos, ancho, alto))), x, self.alto - y_sup - alto,
+                         width=ancho, height=alto, mask="auto")
 
     def flecha(self, x, y_sup, escala=1.0):
         """Punto + flecha coral de las tarjetas publicadas."""
@@ -147,6 +161,24 @@ class Lienzo:
         k = ancho / dib.width
         dib.scale(k, k)
         renderPDF.draw(dib, self.c, cx - ancho / 2, cy - dib.height * k / 2)
+
+
+def imagen_difuminada(datos: bytes, ancho: float, alto: float, escala: float = 1.5) -> bytes:
+    """PNG con canal alfa: la imagen recortada a ancho×alto (×escala) y un borde que se desvanece (~6 % del lado menor)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    img = Image.open(io.BytesIO(datos)).convert("RGB")
+    w, h = max(1, round(ancho * escala)), max(1, round(alto * escala))
+    k = max(w / img.width, h / img.height)
+    img = img.resize((max(w, round(img.width * k)), max(h, round(img.height * k))), Image.LANCZOS)
+    izq, arr = (img.width - w) // 2, (img.height - h) // 2
+    img = img.crop((izq, arr, izq + w, arr + h))
+    borde = max(2, round(min(w, h) * 0.06))
+    mascara = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mascara).rectangle((borde, borde, w - borde - 1, h - borde - 1), fill=255)
+    img.putalpha(mascara.filter(ImageFilter.GaussianBlur(borde / 2)))
+    salida = io.BytesIO()
+    img.save(salida, "PNG", optimize=True)
+    return salida.getvalue()
 
 
 @lru_cache(maxsize=None)
@@ -349,7 +381,7 @@ def tamano_ilustracion(estilo: int, lado_largo: int = 1216) -> tuple[int, int]:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
-                guias: bool = False) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None) -> bytes:
     """guias=True dibuja los recuadros de ilustración con su nota (vista previa); False los omite (descarga)."""
     _registrar_fuentes()
     col = _colores()
@@ -357,8 +389,9 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     c = canvas.Canvas(buffer, pagesize=(W, H))
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
-    L = Lienzo(c, col, guias=guias)
-    for estilo, datos in zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)):
+    L = Lienzo(c, col, guias=guias, imagenes=imagenes)
+    for numero, (estilo, datos) in enumerate(zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)), 1):
+        L.tarjeta = numero
         ESTILOS[estilo](L, {**datos, "variante": variante + semilla})
         c.showPage()
     c.save()

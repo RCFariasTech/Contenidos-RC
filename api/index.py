@@ -253,9 +253,15 @@ def ruta_ilustraciones_listar(req):
 def ruta_ilustraciones_generar(req):
     _dueno(req)
     cuerpo = req["cuerpo"]
-    filas = _servicio().generar_ilustraciones(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"),
-                                              int(cuerpo.get("semilla") or 0))
-    return 200, {"items": filas}
+    return 200, _servicio().generar_ilustraciones(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"),
+                                                  int(cuerpo.get("semilla") or 0),
+                                                  str(cuerpo.get("descripcion") or "")[:500])
+
+
+def ruta_ilustracion_elegir(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    return 200, _servicio().elegir_ilustracion(_entero(cuerpo, "id"), bool(cuerpo.get("elegida", True)))
 
 
 def ruta_verificar_conexiones(req):
@@ -338,6 +344,7 @@ RUTAS = {
     ("GET", "verificar-conexiones"): ruta_verificar_conexiones,
     ("GET", "ilustraciones"): ruta_ilustraciones_listar,
     ("POST", "ilustraciones"): ruta_ilustraciones_generar,
+    ("POST", "ilustracion-elegir"): ruta_ilustracion_elegir,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,

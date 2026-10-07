@@ -270,3 +270,9 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .conexion { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .conexion--ok > span { color: #1E7B34; font-weight: bold; }
 .conexion--falla > span { color: var(--error-texto); font-weight: bold; }
+.ilus-tarjeta { margin: 0; padding: 10px 12px; background: var(--fondo); border-radius: 8px; font-size: .95rem; }
+.ilus-tarjeta__rotulo { font-weight: bold; color: var(--azul-marino); }
+.ilus-etiqueta { font-weight: bold; }
+#ilus-descripcion { width: 100%; resize: vertical; min-height: 64px; }
+.galeria__item--elegida .galeria__marco { outline: 4px solid var(--azul-medio); outline-offset: -4px; }
+.galeria__acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

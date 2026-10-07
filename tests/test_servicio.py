@@ -40,7 +40,7 @@ class BDFalsa:
         if op == "in":
             return str(valor) in arg.strip("()").split(",")
         if op == "is":
-            return valor is None
+            return valor is {"null": None, "true": True, "false": False}[arg]
         if op == "not":
             op2, _, arg2 = arg.partition(".")
             if op2 == "is":
@@ -93,7 +93,7 @@ class BDFalsa:
             if tabla == "comentarios":
                 fila = {"aplicado_en": None, "version_resultante": None, **fila}
             if tabla == "ilustraciones":
-                fila = {"estado": "en_cola", "url": None, "error": None,
+                fila = {"estado": "en_cola", "url": None, "error": None, "elegida": False, "descripcion": None,
                         "creado_en": datetime.now(timezone.utc).isoformat(), **fila}
             self.tablas[tabla].append(fila)
             nuevas.append(copy.deepcopy(fila))
@@ -364,7 +364,7 @@ class TestFlujo(unittest.TestCase):
 
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=crear):
-            filas = servicio.generar_ilustraciones(carrusel["id"], 1)
+            filas = servicio.generar_ilustraciones(carrusel["id"], 1)["items"]
             self.assertEqual(len(filas), 3)
             self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2", "job-3"})
             self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
@@ -374,7 +374,7 @@ class TestFlujo(unittest.TestCase):
             self.assertRegex(prompt, r"#[0-9A-Fa-f]{6}")                        # color de fondo de la tarjeta
             self.assertEqual((ancho, alto), (1216, 848))                        # recuadro de la portada
             self.assertEqual(filas[0]["fondo"][0], "#")
-            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)), 3)
+            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
             for caso in ((carrusel["id"], 3), (reel["id"], 1)):
                 with self.assertRaises(servicio.ErrorNegocio):
                     servicio.generar_ilustraciones(*caso)
@@ -383,12 +383,67 @@ class TestFlujo(unittest.TestCase):
                 servicio.generar_ilustraciones(carrusel["id"], 1)
         self.assertIn("KREA_API_TOKEN", str(ctx.exception))
 
+    def test_cada_ilustracion_se_describe_con_el_texto_de_su_tarjeta(self):
+        carrusel, _ = self._mes_generado()
+        pieza = servicio._pieza(carrusel["id"])
+        for d in pieza["contenido"]["diseno"]:
+            d["prompt_krea"] = ""          # como un carrusel generado antes de existir prompt_krea
+        self.bd.tablas["piezas"][[p["id"] for p in self.bd.tablas["piezas"]].index(carrusel["id"])]["contenido"] = pieza["contenido"]
+        pedidas, enviados = [], []
+
+        def describir(tema, titular, texto, nota=""):
+            pedidas.append((titular, texto))
+            return f"Scene for {titular}"
+
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, h: enviados.append(p) or f"j{len(enviados)}"), \
+                mock.patch.object(servicio.generador, "describir_ilustracion", side_effect=describir):
+            r2 = servicio.generar_ilustraciones(carrusel["id"], 2)
+            r_user = servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="Two 3D robots shaking hands")
+        t2 = servicio._texto_tarjeta(pieza["contenido"], 2)
+        self.assertEqual(pedidas, [(t2["titular"], t2["texto"])])            # Claude recibe el texto de la tarjeta 2
+        self.assertEqual(r2["descripcion"], f"Scene for {t2['titular']}")
+        self.assertIn(f"Scene for {t2['titular']}", enviados[0])
+        self.assertEqual(r_user["descripcion"], "Two 3D robots shaking hands")  # la del usuario manda y no llama a Claude
+        self.assertTrue(all(f["descripcion"] == "Two 3D robots shaking hands" for f in r_user["items"]))
+
+    def test_elegir_una_ilustracion_por_tarjeta_y_montarla_en_el_pdf(self):
+        import pymupdf
+        from rc import tarjetas
+        carrusel, _ = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["a", "b", "c"]):
+            filas = servicio.generar_ilustraciones(carrusel["id"], 1)["items"]
+        with self.assertRaises(servicio.ErrorNegocio):           # aún en cola: no se puede usar
+            servicio.elegir_ilustracion(filas[0]["id"])
+        for f in self.bd.tablas["ilustraciones"]:
+            f.update(estado="lista", url=f"https://gen.krea.ai/images/{f['job_id']}.png")
+        servicio.elegir_ilustracion(filas[0]["id"])
+        servicio.elegir_ilustracion(filas[1]["id"])
+        elegidas = [f["job_id"] for f in self.bd.tablas["ilustraciones"] if f["elegida"]]
+        self.assertEqual(elegidas, ["b"])                         # solo una por tarjeta
+        png = tarjetas.imagenes_png(tarjetas.generar_pdf({"slide_1_gancho": "x"}), 400)[0]
+
+        class Resp:
+            def __init__(self, datos): self.datos = datos
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=-1): return self.datos
+
+        with mock.patch("urllib.request.urlopen", lambda req, timeout=None: Resp(png)):
+            _, pdf = servicio.tarjetas_pdf(carrusel["id"])
+        doc = pymupdf.open(stream=pdf, filetype="pdf")
+        self.assertTrue(doc[0].get_images())                      # tarjeta 1 con la ilustración montada
+        self.assertNotIn("ILUSTRACIÓN 3D", doc[0].get_text())
+        servicio.elegir_ilustracion(filas[1]["id"], False)        # quitarla
+        self.assertFalse(any(f["elegida"] for f in self.bd.tablas["ilustraciones"]))
+
     def test_ilustraciones_falla_a_medias_conserva_las_que_si_salieron(self):
         carrusel, _ = self._mes_generado()
         respuestas = [lambda: "job-a", lambda: (_ for _ in ()).throw(servicio.ErrorNegocio("Krea tiene demasiados trabajos"))]
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=lambda *a: respuestas.pop(0)()):
-            filas = servicio.generar_ilustraciones(carrusel["id"], 1)
+            filas = servicio.generar_ilustraciones(carrusel["id"], 1)["items"]
         self.assertEqual([f["job_id"] for f in filas], ["job-a"])
 
     def test_ilustraciones_consulta_y_actualiza_el_estado(self):
