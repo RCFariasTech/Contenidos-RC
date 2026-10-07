@@ -26,6 +26,10 @@ class TestVerificarClave(unittest.TestCase):
         cliente.models.list.assert_called_once_with(limit=1)
         cliente.messages.create.assert_not_called()
 
+    def test_la_clave_se_usa_sin_espacios_ni_saltos_de_linea(self):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "  sk-ant-prueba\n"}):
+            self.assertEqual(generador._cliente().api_key, "sk-ant-prueba")
+
     def test_clave_invalida(self):
         cliente = mock.MagicMock()
         cliente.models.list.side_effect = _error(anthropic.AuthenticationError, 401)

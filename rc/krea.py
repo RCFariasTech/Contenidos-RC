@@ -51,7 +51,7 @@ def _motivo(cuerpo: str) -> str:
 
 
 def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
-    token = env("KREA_API_TOKEN", False)
+    token = env("KREA_API_TOKEN", False).strip()
     if not token:
         raise ErrorNegocio("Las ilustraciones no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
     datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None

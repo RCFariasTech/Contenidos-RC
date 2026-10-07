@@ -21,7 +21,8 @@ class ErrorGeneracion(Exception):
 
 
 def _cliente() -> anthropic.Anthropic:
-    return anthropic.Anthropic()  # lee ANTHROPIC_API_KEY
+    # Se limpia la clave: un espacio o salto de línea al pegarla en Vercel la invalida.
+    return anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY", False).strip() or None)
 
 
 def _sumar_uso(total: dict, uso) -> None:
