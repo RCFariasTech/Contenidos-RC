@@ -1,5 +1,5 @@
 """Cliente mínimo de la API pública de Krea (solo librería estándar) para generar ilustraciones 3D con el LoRA
-«3d characters in red and blue». Las imágenes viven en Krea: aquí solo se envían trabajos y se consulta su estado.
+«3d characters Flux». Las imágenes viven en Krea: aquí solo se envían trabajos y se consulta su estado.
 """
 
 import json
@@ -76,7 +76,7 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
         motivo = _motivo(detalle)
         if e.code == 400 and ("no access" in motivo.lower() or "invalid ids" in motivo.lower()):
-            raise ErrorNegocio("La clave de API de Krea no tiene acceso al modelo «3d characters in red and blue». "
+            raise ErrorNegocio("La clave de API de Krea no tiene acceso al modelo «3d characters Flux». "
                                "Crea una clave de tipo PERSONAL (no de servicio) con el usuario dueño del modelo y "
                                "reemplaza KREA_API_TOKEN en Vercel.") from e
         raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code})" + (f": {motivo}" if motivo else ".")) from e

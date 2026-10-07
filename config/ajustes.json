@@ -49,17 +49,12 @@
   ],
   "krea": {
     "modelo": "bfl/flux-1-dev",
-    "style_id": "8trtqxi8x",
+    "style_id": "p19ubhgd5",
     "style_strength": 1,
     "pasos": 28,
     "variantes_por_clic": 3,
     "lado_largo": 1216,
-    "referencias_estilo": [
-      "https://gen.krea.ai/images/134bc6a6-780a-42b2-bf4e-034920aef404.png",
-      "https://gen.krea.ai/images/10c442a8-19d4-49e0-b3c7-e705982f9907.png",
-      "https://gen.krea.ai/images/f84f2b71-e33d-4c55-864a-4968e0e88f79.png",
-      "https://gen.krea.ai/images/09ee73c3-76d4-4ec8-856e-a4d5d6e3e877.png"
-    ],
+    "referencias_estilo": [],
     "fuerza_referencias": 0.3
   }
 }

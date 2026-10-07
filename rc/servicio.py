@@ -361,7 +361,7 @@ def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
 
 
 def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None) -> dict:
-    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters in red and blue»).
+    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters Flux»).
 
     La escena sale, en este orden, de: la descripción que escribió el usuario, el `prompt_krea` de esa tarjeta o,
     si no hay, una descripción que Claude escribe a partir del texto de ESA tarjeta (para que cada ilustración
