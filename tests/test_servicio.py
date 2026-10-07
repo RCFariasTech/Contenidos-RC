@@ -369,9 +369,8 @@ class TestFlujo(unittest.TestCase):
             self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2", "job-3"})
             self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
             prompt, ancho, alto = enviados[0]
-            self.assertIn("A 3D character pushing a shopping cart", prompt)     # el prompt_krea de la tarjeta
-            self.assertIn("edges of the image blur softly", prompt)             # bordes difuminados
-            self.assertRegex(prompt, r"#[0-9A-Fa-f]{6}")                        # color de fondo de la tarjeta
+            self.assertIn("3d of a 3D character pushing a shopping cart", prompt)  # el prompt_krea de la tarjeta
+            self.assertRegex(prompt, r", isolated in a [a-z ]+ background$")       # fondo de la tarjeta, al estilo RC
             self.assertEqual((ancho, alto), (1216, 848))                        # recuadro de la portada
             self.assertEqual(filas[0]["fondo"][0], "#")
             self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
@@ -393,7 +392,7 @@ class TestFlujo(unittest.TestCase):
 
         def describir(tema, titular, texto, nota=""):
             pedidas.append((titular, texto))
-            return f"Scene for {titular}"
+            return f"3d of a scene for {titular}"
 
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, h: enviados.append(p) or f"j{len(enviados)}"), \
@@ -402,8 +401,8 @@ class TestFlujo(unittest.TestCase):
             r_user = servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="Two 3D robots shaking hands")
         t2 = servicio._texto_tarjeta(pieza["contenido"], 2)
         self.assertEqual(pedidas, [(t2["titular"], t2["texto"])])            # Claude recibe el texto de la tarjeta 2
-        self.assertEqual(r2["descripcion"], f"Scene for {t2['titular']}")
-        self.assertIn(f"Scene for {t2['titular']}", enviados[0])
+        self.assertEqual(r2["descripcion"], f"3d of a scene for {t2['titular']}")
+        self.assertIn(f"3d of a scene for {t2['titular']}", enviados[0])
         self.assertEqual(r_user["descripcion"], "Two 3D robots shaking hands")  # la del usuario manda y no llama a Claude
         self.assertTrue(all(f["descripcion"] == "Two 3D robots shaking hands" for f in r_user["items"]))
 

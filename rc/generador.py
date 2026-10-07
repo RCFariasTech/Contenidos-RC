@@ -180,11 +180,19 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
 
 
 SISTEMA_ILUSTRACION = (
-    "You write short scene descriptions for a text-to-image model that renders friendly 3D characters in red and blue. "
-    "Given the text of one Instagram carousel card (in Spanish), describe in ENGLISH, in at most 50 words, ONE concrete "
-    "scene that illustrates exactly that card's idea: which 3D characters, what they are doing, and which objects. "
-    "No text, letters, numbers, logos or brand names in the image; do not mention background colors or art style. "
-    "Answer with the description only."
+    "You write prompts for a text-to-image model trained on RC Farias' 3D characters. Given the text of ONE Instagram "
+    "carousel card (in Spanish), write ONE short English prompt (8 to 25 words) that illustrates exactly that card's idea.\n"
+    "Format: start with \"3d of\" or \"3d character of\" / \"3d characters of\", then the subject and what it is doing, "
+    "with one or two concrete objects. You may describe clothes in red, white or blue. Keep it simple and literal: one "
+    "clear scene, no metaphors, no text, letters, numbers, logos or brand names, no art-style words, and do NOT mention "
+    "the background (it is added later).\n"
+    "Examples of the expected style:\n"
+    "- 3d character of a person inside a giant backpack, the backpack has different pockets\n"
+    "- 3d characters of scientists standing in a laboratory\n"
+    "- 3d of a robot waving his hand on top of a red modern platform\n"
+    "- 3d of a character consulting a laptop\n"
+    "- 3d of a kid looking at a cellphone wearing a white shirt, red shorts, white boots and a blue backpack, with dark brown hair\n"
+    "Answer with the prompt only."
 )
 
 
@@ -201,7 +209,7 @@ def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "") -
     descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
     if not descripcion:
         raise ErrorGeneracion("El modelo no devolvió la descripción de la ilustración.")
-    return " ".join(descripcion.split())[:500]
+    return " ".join(descripcion.split()).strip('"').strip()[:500]
 
 
 def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> dict:

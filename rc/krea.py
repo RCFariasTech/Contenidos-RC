@@ -15,9 +15,11 @@ log = logging.getLogger(__name__)
 
 URL_BASE = "https://api.krea.ai"
 TIMEOUT_S = 25
+# Nombres simples de fondo, como en los prompts que mejor le funcionan al equipo en Krea
+# («isolated in a red background», «isolated in a light gray background»).
 NOMBRES_COLOR = {
-    "coral": "coral red", "celeste": "light sky blue", "azul_medio": "medium royal blue",
-    "gris_claro": "light warm gray", "azul_marino": "deep navy blue", "blanco": "pure white",
+    "coral": "red", "celeste": "light blue", "azul_medio": "blue",
+    "gris_claro": "light gray", "azul_marino": "dark navy blue", "blanco": "white",
 }
 
 
@@ -25,14 +27,17 @@ def configurado() -> bool:
     return bool(env("KREA_API_TOKEN", False))
 
 
-def construir_prompt(descripcion: str, color: str, hex_fondo: str) -> str:
-    """Prompt en inglés: la escena que pide el modelo + estilo + fondo del color de la tarjeta con bordes difuminados."""
-    return (
-        f"krea, high resolution. {descripcion.strip().rstrip('.')}. "
-        "Friendly 3D rendered characters in red and blue, smooth glossy toy-like 3D style, soft studio lighting. "
-        f"Solid flat {NOMBRES_COLOR.get(color, color)} ({hex_fondo}) background filling the whole frame, no gradients, "
-        "no text, no logos; the edges of the image blur softly and fade into the background color."
-    )[:1800]
+def construir_prompt(descripcion: str, color: str, hex_fondo: str = "") -> str:
+    """Prompt corto al estilo de las sesiones de RC en Krea: «3d of <escena>, isolated in a <color> background».
+
+    Sin adornos de estilo ni códigos de color: el LoRA aporta el estilo y los prompts largos lo diluyen. El difuminado
+    de bordes lo hace la app al montar la imagen en la tarjeta.
+    """
+    escena = " ".join(descripcion.split()).rstrip(" .")
+    if not escena.lower().startswith("3d"):
+        escena = f"3d of {escena[0].lower() + escena[1:]}" if escena else "3d character"
+    escena = escena.split(", isolated in")[0]  # si ya traía fondo, se reemplaza por el de la tarjeta
+    return f"{escena}, isolated in a {NOMBRES_COLOR.get(color, color)} background"[:1800]
 
 
 def _motivo(cuerpo: str) -> str:
@@ -79,14 +84,29 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
         raise ErrorNegocio("No se pudo conectar con Krea.") from e
 
 
+PROPORCIONES_KREA2 = {"1:1": 1, "4:3": 4 / 3, "3:2": 3 / 2, "16:9": 16 / 9, "4:5": 4 / 5, "3:4": 3 / 4, "2:3": 2 / 3, "9:16": 9 / 16}
+
+
+def proporcion_cercana(ancho: int, alto: int) -> str:
+    """La proporción admitida por Krea 2 más parecida a ancho/alto."""
+    r = ancho / alto
+    return min(PROPORCIONES_KREA2, key=lambda k: abs(PROPORCIONES_KREA2[k] - r))
+
+
+def cuerpo_generacion(prompt: str, ancho: int, alto: int) -> dict:
+    """Parámetros según el modelo configurado: Flux (ancho/alto en px) o Krea 2 (proporción y resolución)."""
+    k = ajustes()["krea"]
+    base = {"prompt": prompt, "seed": random.randint(1, 2**31 - 1),
+            "styles": [{"id": k["style_id"], "strength": k["style_strength"]}]}
+    if k["modelo"].startswith("krea/krea-2"):
+        return {**base, "aspect_ratio": proporcion_cercana(ancho, alto), "resolution": "1K",
+                "creativity": k.get("creatividad", "raw")}
+    return {**base, "width": ancho, "height": alto, "steps": k["pasos"]}
+
+
 def crear_trabajo(prompt: str, ancho: int, alto: int) -> str:
     """Envía una generación con el LoRA y devuelve el id del trabajo."""
-    k = ajustes()["krea"]
-    resp = _peticion("POST", f"/generate/image/{k['modelo']}", {
-        "prompt": prompt, "width": ancho, "height": alto, "steps": k["pasos"],
-        "seed": random.randint(1, 2**31 - 1),
-        "styles": [{"id": k["style_id"], "strength": k["style_strength"]}],
-    })
+    resp = _peticion("POST", f"/generate/image/{ajustes()['krea']['modelo']}", cuerpo_generacion(prompt, ancho, alto))
     job_id = resp.get("job_id")
     if not job_id:
         raise ErrorNegocio("Krea no devolvió el id del trabajo.")

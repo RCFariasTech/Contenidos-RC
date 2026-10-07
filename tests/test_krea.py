@@ -34,6 +34,16 @@ class TestKrea(unittest.TestCase):
         self.assertEqual((c["width"], c["height"], c["prompt"]), (1216, 864, "un prompt"))
         self.assertEqual(c["styles"], [{"id": "kq4b7fium", "strength": 1}])
 
+    def test_parametros_para_krea_2(self):
+        from rc.config import ajustes
+        k = dict(ajustes()["krea"], modelo="krea/krea-2/medium")
+        with mock.patch.dict(ajustes(), {"krea": k}):
+            c = krea.cuerpo_generacion("p", 1216, 848)
+        self.assertEqual((c["aspect_ratio"], c["resolution"], c["creativity"]), ("3:2", "1K", "raw"))
+        self.assertNotIn("width", c)
+        self.assertEqual(c["styles"], [{"id": "kq4b7fium", "strength": 1}])
+        self.assertEqual(krea.proporcion_cercana(410, 880), "9:16")
+
     def test_consultar_interpreta_los_estados(self):
         def respuesta(cuerpo):
             return mock.patch("urllib.request.urlopen", lambda req, timeout=None: Resp(json.dumps(cuerpo).encode()))
@@ -88,11 +98,14 @@ class TestKrea(unittest.TestCase):
             with self.assertRaises(ErrorNegocio):
                 krea.crear_trabajo("p", 512, 512)
 
-    def test_prompt_incluye_fondo_y_bordes_difuminados(self):
-        p = krea.construir_prompt("Two 3D characters shaking hands.", "azul_marino", "#1F3864")
-        self.assertIn("deep navy blue (#1F3864)", p)
-        self.assertIn("edges of the image blur softly and fade into the background color", p)
-        self.assertLessEqual(len(p), 1800)
+    def test_prompt_corto_al_estilo_de_las_sesiones_de_rc(self):
+        self.assertEqual(krea.construir_prompt("3d of a robot waving his hand.", "gris_claro"),
+                         "3d of a robot waving his hand, isolated in a light gray background")
+        self.assertEqual(krea.construir_prompt("A character consulting a laptop", "coral"),
+                         "3d of a character consulting a laptop, isolated in a red background")
+        # si la escena ya traía un fondo, manda el de la tarjeta
+        self.assertEqual(krea.construir_prompt("3d of a kid, isolated in a white background", "azul_medio"),
+                         "3d of a kid, isolated in a blue background")
 
 
 class TestTamanosYFondos(unittest.TestCase):
