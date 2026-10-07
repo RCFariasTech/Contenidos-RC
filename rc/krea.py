@@ -98,6 +98,10 @@ def cuerpo_generacion(prompt: str, ancho: int, alto: int) -> dict:
     k = ajustes()["krea"]
     base = {"prompt": prompt, "seed": random.randint(1, 2**31 - 1),
             "styles": [{"id": k["style_id"], "strength": k["style_strength"]}]}
+    # Imágenes buenas del equipo (sesión «Character Choosing») como referencia de estilo, además del LoRA.
+    referencias = [u for u in k.get("referencias_estilo", []) if str(u).startswith("https://")][:10]
+    if referencias:
+        base["image_style_references"] = [{"url": u, "strength": k.get("fuerza_referencias", 0.6)} for u in referencias]
     if k["modelo"].startswith("krea/krea-2"):
         return {**base, "aspect_ratio": proporcion_cercana(ancho, alto), "resolution": "1K",
                 "creativity": k.get("creatividad", "raw")}
