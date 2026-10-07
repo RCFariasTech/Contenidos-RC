@@ -258,6 +258,18 @@ def ruta_ilustraciones_generar(req):
     return 200, {"items": filas}
 
 
+def ruta_verificar_conexiones(req):
+    """Estado de las claves e integraciones, sin generar contenido."""
+    _dueno(req)
+    from rc import correos, generador, krea, teams
+    return 200, {
+        "anthropic": generador.verificar_clave(),
+        "krea": {"ok": krea.configurado(), "detalle": "Clave configurada." if krea.configurado() else "Falta KREA_API_TOKEN."},
+        "correo": {"ok": correos.configurado(), "detalle": "SMTP configurado." if correos.configurado() else "Faltan SMTP_USER y SMTP_PASSWORD."},
+        "teams": {"ok": teams.configurado(), "detalle": "Webhook configurado." if teams.configurado() else "Falta TEAMS_WEBHOOK_URL."},
+    }
+
+
 def ruta_probar_teams(req):
     _dueno(req)
     from rc import teams
@@ -323,6 +335,7 @@ RUTAS = {
     ("GET", "tarjetas-vista"): ruta_tarjetas_vista,
     ("GET", "configuracion"): ruta_configuracion,
     ("POST", "probar-teams"): ruta_probar_teams,
+    ("GET", "verificar-conexiones"): ruta_verificar_conexiones,
     ("GET", "ilustraciones"): ruta_ilustraciones_listar,
     ("POST", "ilustraciones"): ruta_ilustraciones_generar,
     ("POST", "fuentes"): ruta_fuente_agregar,

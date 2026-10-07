@@ -8,7 +8,7 @@ import anthropic
 
 from rc import prompts
 from rc import fuentes
-from rc.config import ajustes
+from rc.config import ajustes, env
 from rc.esquema import ESQUEMA_PIEZA
 
 log = logging.getLogger(__name__)
@@ -33,6 +33,23 @@ def _sumar_uso(total: dict, uso) -> None:
         total[clave] = total.get(clave, 0) + (datos.get(clave) or 0)
     busquedas = (datos.get("server_tool_use") or {}).get("web_search_requests") or 0
     total["web_search_requests"] = total.get("web_search_requests", 0) + busquedas
+
+
+def verificar_clave() -> dict:
+    """Comprueba la clave de Anthropic listando un modelo (no genera texto ni consume tokens)."""
+    if not env("ANTHROPIC_API_KEY", False):
+        return {"ok": False, "detalle": "Falta ANTHROPIC_API_KEY en Vercel."}
+    try:
+        _cliente().models.list(limit=1)
+    except anthropic.AuthenticationError:
+        return {"ok": False, "detalle": "Anthropic no reconoce la clave: revisa que se haya copiado completa y que no esté borrada en la consola."}
+    except anthropic.PermissionDeniedError:
+        return {"ok": False, "detalle": "La clave existe pero no tiene permisos para usar la API."}
+    except anthropic.APIConnectionError:
+        return {"ok": False, "detalle": "No se pudo conectar con Anthropic; intenta de nuevo."}
+    except anthropic.APIStatusError as e:
+        return {"ok": False, "detalle": f"Anthropic respondió con error {e.status_code}."}
+    return {"ok": True, "detalle": "Clave válida."}
 
 
 def urls_de_busqueda(contenido) -> list[str]:

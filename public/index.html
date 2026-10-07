@@ -137,6 +137,12 @@
           <p id="estado-teams" class="alerta alerta--aviso" hidden></p>
           <div><button id="btn-probar-teams" class="btn btn--secundario" type="button">Enviar mensaje de prueba</button></div>
         </section>
+        <section class="tarjeta config-bloque" aria-labelledby="h-conexiones">
+          <h2 id="h-conexiones">Estado de las conexiones</h2>
+          <p class="ayuda">Revisa que las claves configuradas en Vercel funcionen. La clave de Anthropic se valida de verdad sin generar contenido (no gasta tokens); las demás solo se revisa que estén configuradas.</p>
+          <div><button id="btn-verificar" class="btn btn--secundario" type="button">Verificar conexiones</button></div>
+          <ul id="lista-conexiones" class="lista-conexiones" aria-live="polite"></ul>
+        </section>
         <p id="mensaje-config" class="mensaje" role="status"></p>
       </div>
     </section>

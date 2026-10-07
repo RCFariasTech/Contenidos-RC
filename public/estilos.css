@@ -264,3 +264,9 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .galeria__marco--fallida { outline: 2px solid var(--error-texto); outline-offset: -2px; }
 .galeria__pie { font-size: .8rem; color: var(--texto-suave); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) { .galeria__marco--cargando { animation: none; } }
+
+/* Estado de las conexiones (Configuración) */
+.lista-conexiones { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.conexion { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.conexion--ok > span { color: #1E7B34; font-weight: bold; }
+.conexion--falla > span { color: var(--error-texto); font-weight: bold; }

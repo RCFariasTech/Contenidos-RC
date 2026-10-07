@@ -920,6 +920,23 @@ function renderConfig() {
   $("estado-teams").textContent = "El aviso a Teams aún no está activado: falta configurar TEAMS_WEBHOOK_URL en Vercel (ver README).";
 }
 
+$("btn-verificar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  boton.disabled = true;
+  $("lista-conexiones").replaceChildren(el("li", { clase: "ayuda" }, "Verificando…"));
+  try {
+    const d = await api("verificar-conexiones");
+    const nombres = { anthropic: "Anthropic (generación de contenido)", krea: "Krea (ilustraciones)", correo: "Correo (envío del PowerPoint)", teams: "Microsoft Teams (aviso del día 15)" };
+    $("lista-conexiones").replaceChildren(...Object.entries(nombres).map(([clave, nombre]) => el("li", { clase: `conexion conexion--${d[clave]?.ok ? "ok" : "falla"}` },
+      el("span", { "aria-hidden": "true" }, d[clave]?.ok ? "✓" : "✕"),
+      el("strong", {}, nombre), " — ", d[clave]?.detalle || "Sin datos")));
+  } catch (e) {
+    $("lista-conexiones").replaceChildren(el("li", { clase: "conexion conexion--falla" }, `No se pudo verificar: ${e.message}`));
+  } finally {
+    boton.disabled = false;
+  }
+});
+
 $("btn-probar-teams").addEventListener("click", async (ev) => {
   ev.currentTarget.disabled = true;
   try {
