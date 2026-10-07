@@ -117,12 +117,16 @@ class TestKrea(unittest.TestCase):
 
 
 class TestTamanosYFondos(unittest.TestCase):
-    def test_tamanos_multiplos_de_16_dentro_del_rango_de_krea(self):
-        for estilo in tarjetas.AREA_ILUSTRACION:
-            ancho, alto = tarjetas.tamano_ilustracion(estilo)
-            self.assertTrue(ancho % 16 == 0 and alto % 16 == 0 and 512 <= min(ancho, alto) and max(ancho, alto) <= 2368)
-            w, h = tarjetas.AREA_ILUSTRACION[estilo]
-            self.assertAlmostEqual(ancho / alto, w / h, delta=0.05)
+    def test_la_ilustracion_se_genera_del_tamano_de_la_tarjeta(self):
+        ancho, alto = tarjetas.tamano_ilustracion()
+        self.assertEqual((ancho, alto), (912, 1216))                      # 3:4, múltiplos de 16
+        self.assertAlmostEqual(ancho / alto, tarjetas.W / tarjetas.H, delta=0.01)
+
+    def test_composicion_deja_libre_la_zona_del_texto(self):
+        p = krea.construir_prompt("3d of a robot", "coral", composicion=tarjetas.COMPOSICION[1])
+        self.assertEqual(p, "3d of a robot, with the characters in the upper half of the image and the bottom half "
+                            "of the image empty, isolated in a red background")
+        self.assertEqual(set(tarjetas.COMPOSICION), set(tarjetas.ZONAS_TEXTO))
 
     def test_el_fondo_pedido_coincide_con_el_de_la_tarjeta(self):
         for variante in range(6):

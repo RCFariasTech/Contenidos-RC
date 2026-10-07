@@ -371,7 +371,7 @@ class TestFlujo(unittest.TestCase):
             prompt, ancho, alto = enviados[0]
             self.assertIn("3d of a 3D character pushing a shopping cart", prompt)  # el prompt_krea de la tarjeta
             self.assertRegex(prompt, r", isolated in a [a-z ]+ background$")       # fondo de la tarjeta, al estilo RC
-            self.assertEqual((ancho, alto), (1216, 848))                        # recuadro de la portada
+            self.assertEqual((ancho, alto), (912, 1216))                        # tarjeta completa 3:4
             self.assertEqual(filas[0]["fondo"][0], "#")
             self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
             for caso in ((carrusel["id"], 3), (reel["id"], 1)):

@@ -27,7 +27,7 @@ def configurado() -> bool:
     return bool(env("KREA_API_TOKEN", False))
 
 
-def construir_prompt(descripcion: str, color: str, hex_fondo: str = "") -> str:
+def construir_prompt(descripcion: str, color: str, hex_fondo: str = "", composicion: str = "") -> str:
     """Prompt corto al estilo de las sesiones de RC en Krea: «3d of <escena>, isolated in a <color> background».
 
     Sin adornos de estilo ni códigos de color: el LoRA aporta el estilo y los prompts largos lo diluyen. El difuminado
@@ -37,7 +37,8 @@ def construir_prompt(descripcion: str, color: str, hex_fondo: str = "") -> str:
     if not escena.lower().startswith("3d"):
         escena = f"3d of {escena[0].lower() + escena[1:]}" if escena else "3d character"
     escena = escena.split(", isolated in")[0]  # si ya traía fondo, se reemplaza por el de la tarjeta
-    return f"{escena}, isolated in a {NOMBRES_COLOR.get(color, color)} background"[:1800]
+    partes = [escena, composicion] if composicion else [escena]
+    return ", ".join(partes + [f"isolated in a {NOMBRES_COLOR.get(color, color)} background"])[:1800]
 
 
 def _motivo(cuerpo: str) -> str:

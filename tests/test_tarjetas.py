@@ -133,6 +133,38 @@ class TestTarjetas(unittest.TestCase):
         tit, texto = tarjetas._separar("Una sola oración sin corte natural que sigue y sigue")
         self.assertEqual(texto, "")
 
+    def test_ilustracion_a_sangre_se_funde_con_el_color_bajo_el_texto(self):
+        import io
+        from PIL import Image
+        foto = Image.new("RGB", (912, 1216), (200, 30, 30))   # imagen de un color muy distinto al de la tarjeta
+        buf = io.BytesIO()
+        foto.save(buf, "PNG")
+        compuesto = Image.open(io.BytesIO(tarjetas.fondo_con_ilustracion(buf.getvalue(), "#0069D1", tarjetas.ZONAS_TEXTO[1], escala=0.5)))
+        w, h = compuesto.size
+        self.assertEqual((w, h), (540, 720))                          # tarjeta completa
+        arriba, abajo = compuesto.getpixel((w // 2, int(h * 0.2))), compuesto.getpixel((w // 2, int(h * 0.8)))
+        self.assertGreater(arriba[0], 150)                            # arriba se ve la ilustración
+        self.assertTrue(abs(abajo[0] - 0x00) < 12 and abs(abajo[2] - 0xD1) < 12)  # bajo el texto: color de la tarjeta
+
+    def test_el_fondo_de_la_imagen_se_empata_con_el_color_de_la_tarjeta(self):
+        from PIL import Image
+        img = Image.new("RGB", (100, 100), (240, 85, 90))           # casi coral
+        corregida = tarjetas._empatar_fondo(img, "#F65155")
+        self.assertEqual(corregida.getpixel((50, 50)), (0xF6, 0x51, 0x55))
+        lejos = Image.new("RGB", (100, 100), (250, 250, 250))       # fondo blanco en tarjeta coral: no se toca
+        self.assertEqual(tarjetas._empatar_fondo(lejos, "#F65155").getpixel((5, 5)), (250, 250, 250))
+
+    def test_tarjeta_con_ilustracion_no_dibuja_recuadro(self):
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (912, 1216), (240, 240, 240)).save(buf, "PNG")
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True, imagenes={1: buf.getvalue()}), filetype="pdf")
+        self.assertTrue(doc[0].get_images())
+        self.assertNotIn("ILUSTRACIÓN 3D", doc[0].get_text())
+        self.assertIn("ILUSTRACIÓN 3D", doc[1].get_text())           # la tarjeta 2 sin imagen conserva su guía
+        self.assertIn("Tu góndola", " ".join(doc[0].get_text().split()))
+
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),
                          "tarjetas-2026-11-retail-media-ya.pdf")

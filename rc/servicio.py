@@ -394,7 +394,7 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
                                                           t["texto"], t.get("nota", ""))
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
-    prompt = krea.construir_prompt(descripcion, clave, hex_fondo)
+    prompt = krea.construir_prompt(descripcion, clave, hex_fondo, tarjetas.COMPOSICION.get(estilo, ""))
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
         try:
