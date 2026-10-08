@@ -33,7 +33,14 @@
   h1 { font-size: 17px; margin: 0 0 14px; }
   .ctl { margin-bottom: 14px; }
   .ctl label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type=range] { width: 100%; }
+  /* barras (color #cd7542): la parte llena en naranja y el resto en beige, igual en todos los navegadores */
+  input[type=range] { width: 100%; height: 20px; accent-color: #cd7542; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, #cd7542 var(--p, 50%), #d9cfba var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -5px; border-radius: 50%; background: #cd7542; border: 2px solid #f0ede5; box-shadow: 0 0 0 1px #cd7542; }
+  input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: #d9cfba; }
+  input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: #cd7542; }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #cd7542; border: 2px solid #f0ede5; box-shadow: 0 0 0 1px #cd7542; }
+  input[type=range]:focus-visible { outline: 2px solid #cd7542; outline-offset: 3px; border-radius: 4px; }
   .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { flex: 1; border: 0; background: transparent; color: var(--text); padding: 7px 4px; font: inherit; font-size: 13px; cursor: pointer; }
   .seg button + button { border-left: 1px solid var(--line); }
@@ -361,10 +368,12 @@ const uiFromRaw = (id, raw) => { const el = document.getElementById(id); return 
     if (panelId === "fxLiquid") panel.prepend(...made); else panel.append(...made);
   }
   // barras del pincel: horizontales, pero también 0-100 con número
+  const paint = el => el.style.setProperty("--p", (+el.value - +el.min) / (+el.max - +el.min) * 100 + "%");
   for (const id of ["rad", "gstr"]) {
     const el = D.getElementById(id); toUi(el);
     const slot = el.closest(".ctl").querySelector(".numslot"), num = mkNum(); link(el, num); slot.replaceWith(num);
   }
+  D.querySelectorAll("aside input[type=range]").forEach(el => { paint(el); el.addEventListener("input", () => paint(el)); });
 })();
 const MASK_SIDE = 768;   // resolución de la máscara del pincel
 const MAX_UNDO = 40;
