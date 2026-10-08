@@ -276,6 +276,22 @@ def ruta_verificar_conexiones(req):
     }
 
 
+def ruta_guia_composicion(req):
+    """Boceto público (sin datos) que Krea descarga como imagen de partida: fondo plano y silueta del personaje."""
+    import re
+    from rc import tarjetas
+    q = req["query"]
+    try:
+        estilo, ancho, alto = int(q.get("estilo", "")), int(q.get("w", "912")), int(q.get("h", "1216"))
+    except ValueError:
+        raise ErrorCliente(400, "Parámetros inválidos.")
+    color = q.get("color", "")
+    if estilo not in tarjetas.ESPACIO_PERSONAJE or not re.fullmatch(r"[0-9A-Fa-f]{6}", color) \
+            or not (256 <= ancho <= 2368 and 256 <= alto <= 2368):
+        raise ErrorCliente(400, "Parámetros inválidos.")
+    return 200, Archivo("guia.png", tarjetas.guia_composicion(estilo, "#" + color, ancho, alto), "image/png")
+
+
 def ruta_probar_teams(req):
     _dueno(req)
     from rc import teams
@@ -344,6 +360,7 @@ RUTAS = {
     ("GET", "verificar-conexiones"): ruta_verificar_conexiones,
     ("GET", "ilustraciones"): ruta_ilustraciones_listar,
     ("POST", "ilustraciones"): ruta_ilustraciones_generar,
+    ("GET", "guia-composicion"): ruta_guia_composicion,
     ("POST", "ilustracion-elegir"): ruta_ilustracion_elegir,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,

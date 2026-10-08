@@ -52,6 +52,25 @@ class TestKrea(unittest.TestCase):
             refs = krea.cuerpo_generacion("p", 1216, 848)["image_style_references"]
         self.assertEqual(refs, [{"url": "https://gen.krea.ai/images/a.png", "strength": 0.3}])
 
+    def test_envia_la_guia_de_composicion(self):
+        c = krea.cuerpo_generacion("p", 912, 1216, guia="https://app/api/guia-composicion?estilo=1")
+        self.assertEqual(c["image_url"], "https://app/api/guia-composicion?estilo=1")
+        self.assertEqual(c["strength"], 0.88)
+        self.assertNotIn("image_url", krea.cuerpo_generacion("p", 912, 1216))
+
+    def test_si_krea_rechaza_el_boceto_reintenta_sin_el(self):
+        cuerpos = []
+
+        def urlopen(req, timeout=None):
+            cuerpos.append(json.loads(req.data))
+            if "image_url" in cuerpos[-1]:
+                raise urllib.error.HTTPError(req.full_url, 400, "x", {}, io.BytesIO(b'{"error": "bad image"}'))
+            return Resp(json.dumps({"job_id": "ok"}).encode())
+
+        with mock.patch.dict("os.environ", {"KREA_API_TOKEN": "tok"}), mock.patch("urllib.request.urlopen", urlopen):
+            self.assertEqual(krea.crear_trabajo("p", 912, 1216, "https://app/guia.png"), "ok")
+        self.assertEqual(["image_url" in c for c in cuerpos], [True, False])
+
     def test_consultar_interpreta_los_estados(self):
         def respuesta(cuerpo):
             return mock.patch("urllib.request.urlopen", lambda req, timeout=None: Resp(json.dumps(cuerpo).encode()))
@@ -107,13 +126,13 @@ class TestKrea(unittest.TestCase):
                 krea.crear_trabajo("p", 512, 512)
 
     def test_prompt_corto_al_estilo_de_las_sesiones_de_rc(self):
-        self.assertEqual(krea.construir_prompt("3d of a robot waving his hand.", "gris_claro"),
-                         "3d of a robot waving his hand, isolated in a light gray background")
-        self.assertEqual(krea.construir_prompt("A character consulting a laptop", "coral"),
-                         "3d of a character consulting a laptop, isolated in a red background")
+        self.assertTrue(krea.construir_prompt("3d of a robot waving his hand.", "gris_claro")
+                        .startswith("3d of a robot waving his hand, isolated in a flat solid light gray background"))
+        self.assertTrue(krea.construir_prompt("A character consulting a laptop", "coral")
+                        .startswith("3d of a character consulting a laptop, isolated in a flat solid red background"))
         # si la escena ya traía un fondo, manda el de la tarjeta
-        self.assertEqual(krea.construir_prompt("3d of a kid, isolated in a white background", "azul_medio"),
-                         "3d of a kid, isolated in a blue background")
+        self.assertTrue(krea.construir_prompt("3d of a kid, isolated in a white background", "azul_medio")
+                        .startswith("3d of a kid, isolated in a flat solid blue background"))
 
 
 class TestTamanosYFondos(unittest.TestCase):
@@ -124,8 +143,10 @@ class TestTamanosYFondos(unittest.TestCase):
 
     def test_composicion_deja_libre_la_zona_del_texto(self):
         p = krea.construir_prompt("3d of a robot", "coral", composicion=tarjetas.COMPOSICION[1])
-        self.assertEqual(p, "3d of a robot, with the characters in the upper half of the image and the bottom half "
-                            "of the image empty, isolated in a red background")
+        self.assertTrue(p.startswith("3d of a robot, with the characters in the upper half of the image and the bottom "
+                                     "half of the image empty, isolated in a flat solid red background"))
+        self.assertIn("no floor line", p)
+        self.assertIn("minimal soft contact shadow", p)
         self.assertEqual(set(tarjetas.COMPOSICION), set(tarjetas.ZONAS_TEXTO))
 
     def test_el_fondo_pedido_coincide_con_el_de_la_tarjeta(self):

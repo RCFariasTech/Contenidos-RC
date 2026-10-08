@@ -104,7 +104,7 @@ class Lienzo:
         if datos and self.estilo in ZONAS_TEXTO:
             try:
                 from reportlab.lib.utils import ImageReader
-                compuesto = fondo_con_ilustracion(datos, marca()["paleta"][color], ZONAS_TEXTO[self.estilo])
+                compuesto = fondo_ilustracion(datos)
                 self.c.drawImage(ImageReader(io.BytesIO(compuesto)), 0, 0, width=self.ancho, height=self.alto)
                 return
             except Exception:  # imagen dañada: se usa el color liso
@@ -162,82 +162,96 @@ class Lienzo:
         renderPDF.draw(dib, self.c, cx - ancho / 2, cy - dib.height * k / 2)
 
 
-# Dónde va el texto en cada estilo con ilustración, como fracción de la tarjeta: la ilustración ocupa todo el fondo
-# y en estas zonas se funde con el color de la tarjeta (de "desde" a "hasta" el color pasa de transparente a sólido).
-#   ("abajo", desde, hasta): texto en la parte de abajo · ("arriba", desde, hasta): texto arriba
-#   ("derecha", desde, hasta): texto a la derecha
-ZONAS_TEXTO = {
-    1: [("abajo", 0.42, 0.53)],                          # portada: titular grande abajo
-    2: [("abajo", 0.56, 0.66)],                          # azul marino: titular y texto abajo
-    3: [("arriba", 0.40, 0.47), ("derecha", 0.40, 0.49)],  # coral partido: titular arriba, texto a la derecha
-    4: [("derecha", 0.38, 0.47)],                        # blanco lateral: texto a la derecha
+# Zonas de la tarjeta (fracciones x0, y0, x1, y1) en cada estilo con ilustración:
+#   ESPACIO_PERSONAJE: donde debe quedar el personaje (se le indica a Krea con un boceto de composición).
+#   ZONAS_TEXTO: donde va el texto; si el personaje generado las invade, la tarjeta cambia a un estilo compatible.
+ESPACIO_PERSONAJE = {
+    1: (0.18, 0.05, 0.82, 0.48),
+    2: (0.22, 0.20, 0.78, 0.60),
+    3: (0.04, 0.46, 0.46, 0.96),
+    4: (0.04, 0.14, 0.44, 0.86),
 }
-# Composición que se le pide a Krea para que el personaje quede donde no hay texto.
+ZONAS_TEXTO = {
+    1: [(0.0, 0.53, 1.0, 1.0)],
+    2: [(0.0, 0.66, 1.0, 1.0)],
+    3: [(0.0, 0.0, 1.0, 0.40), (0.49, 0.40, 1.0, 1.0)],
+    4: [(0.47, 0.0, 1.0, 1.0)],
+}
 COMPOSICION = {
     1: "with the characters in the upper half of the image and the bottom half of the image empty",
-    2: "with the characters in the upper half of the image and the bottom third of the image empty",
+    2: "with the characters in the center of the image and the bottom third of the image empty",
     3: "with the characters in the bottom left corner and the top and right side of the image empty",
     4: "with the characters on the left side and the right half of the image empty",
 }
 
 
-def _rampa(n: int, desde: float, hasta: float, invertir: bool = False) -> bytes:
-    """n valores 0-255 que suben linealmente de 0 (antes de `desde`) a 255 (después de `hasta`)."""
-    valores = []
-    for i in range(n):
-        t = (i / max(1, n - 1) - desde) / max(1e-6, hasta - desde)
-        v = round(255 * min(1.0, max(0.0, t)))
-        valores.append(255 - v if invertir else v)
-    return bytes(valores)
+def guia_composicion(estilo: int, color_hex: str, ancho: int = 912, alto: int = 1216) -> bytes:
+    """Boceto para Krea (imagen a imagen): fondo plano del color de la tarjeta y una silueta gris donde debe ir el
+    personaje, para que la ilustración nazca ubicada en su espacio y no invada el texto."""
+    from PIL import Image, ImageDraw, ImageFilter
+    img = Image.new("RGB", (ancho, alto), color_hex)
+    x0, y0, x1, y1 = ESPACIO_PERSONAJE[estilo]
+    caja = (x0 * ancho, y0 * alto, x1 * ancho, y1 * alto)
+    ImageDraw.Draw(img).ellipse(caja, fill=(150, 150, 150))
+    salida = io.BytesIO()
+    img.filter(ImageFilter.GaussianBlur(min(ancho, alto) // 40)).save(salida, "PNG")
+    return salida.getvalue()
 
 
-def _empatar_fondo(img, color_hex: str, max_diferencia: int = 70):
-    """Corrige el tono de la imagen para que su fondo (estimado en las esquinas) coincida con el color de la tarjeta.
-
-    Krea no clava el color pedido; un desfase pequeño se nota como una franja donde la imagen se funde con el color.
-    Si la diferencia es grande (el fondo no es del color pedido), no se toca para no alterar al personaje.
-    """
-    w, h = img.size
-    lado = max(4, min(w, h) // 20)
-    muestras = [img.crop(caja).resize((1, 1)).getpixel((0, 0)) for caja in
-                ((0, 0, lado, lado), (w - lado, 0, w, lado), (0, h - lado, lado, h), (w - lado, h - lado, w, h))]
-    fondo = [sorted(m[i] for m in muestras)[1:3] for i in range(3)]   # mediana de las 4 esquinas por canal
-    fondo = [sum(v) / 2 for v in fondo]
-    objetivo = [int(color_hex[i:i + 2], 16) for i in (1, 3, 5)]
-    delta = [o - f for o, f in zip(objetivo, fondo)]
-    if max(abs(d) for d in delta) > max_diferencia:
-        return img
-    canales = [c.point(lambda v, d=round(d): max(0, min(255, v + d))) for c, d in zip(img.split(), delta)]
+def _abrir(datos: bytes):
     from PIL import Image
-    return Image.merge("RGB", canales)
+    return Image.open(io.BytesIO(datos)).convert("RGB")
 
 
-def fondo_con_ilustracion(datos: bytes, color_hex: str, zonas: list, escala: float = 1.5) -> bytes:
-    """JPEG del tamaño de la tarjeta: la ilustración a sangre (recortada como object-fit: cover) que se funde con el
-    color de la tarjeta en las zonas de texto, para que no haya corte entre imagen y fondo y el texto siempre se lea."""
-    from PIL import Image, ImageChops
+def caja_personaje(datos: bytes) -> tuple[float, float, float, float] | None:
+    """Caja (fracciones) de lo que no es fondo en una ilustración de fondo plano (fondo = color de las esquinas)."""
+    from PIL import ImageChops
+    img = _abrir(datos)
+    img.thumbnail((240, 320))
+    w, h = img.size
+    esquinas = [img.getpixel(p) for p in ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3))]
+    fondo = tuple(sorted(c[i] for c in esquinas)[1] for i in range(3))
+    from PIL import Image
+    dif = ImageChops.difference(img, Image.new("RGB", (w, h), fondo)).convert("L").point(lambda v: 255 if v > 40 else 0)
+    caja = dif.getbbox()
+    return (caja[0] / w, caja[1] / h, caja[2] / w, caja[3] / h) if caja else None
+
+
+def _invade(caja, zonas, tolerancia: float = 0.08) -> bool:
+    if not caja:
+        return False
+    area = max(1e-6, (caja[2] - caja[0]) * (caja[3] - caja[1]))
+    for zx0, zy0, zx1, zy1 in zonas:
+        ix = max(0.0, min(caja[2], zx1) - max(caja[0], zx0))
+        iy = max(0.0, min(caja[3], zy1) - max(caja[1], zy0))
+        if ix * iy / area > tolerancia:
+            return True
+    return False
+
+
+def estilo_compatible(datos: bytes | None, estilo: int, candidatos: tuple[int, ...]) -> int:
+    """Si el personaje de la ilustración invade el texto del estilo, devuelve un estilo candidato donde no lo hace."""
+    if not datos or estilo not in ZONAS_TEXTO:
+        return estilo
+    try:
+        caja = caja_personaje(datos)
+    except Exception:
+        return estilo
+    if not _invade(caja, ZONAS_TEXTO[estilo]):
+        return estilo
+    return next((e for e in candidatos if e != estilo and not _invade(caja, ZONAS_TEXTO[e])), estilo)
+
+
+def fondo_ilustracion(datos: bytes, escala: float = 1.5) -> bytes:
+    """JPEG del tamaño de la tarjeta con la ilustración a sangre (recortada como object-fit: cover), sin capas encima."""
+    from PIL import Image
     w, h = round(W * escala), round(H * escala)
-    img = Image.open(io.BytesIO(datos)).convert("RGB")
+    img = _abrir(datos)
     k = max(w / img.width, h / img.height)
     img = img.resize((max(w, round(img.width * k)), max(h, round(img.height * k))), Image.LANCZOS)
     izq, arr = (img.width - w) // 2, (img.height - h) // 2
-    img = img.crop((izq, arr, izq + w, arr + h))
-    mascara = Image.new("L", (w, h), 0)
-    for lado, desde, hasta in zonas:
-        if lado in ("abajo", "arriba"):
-            tira = Image.frombytes("L", (1, h), _rampa(h, desde, hasta) if lado == "abajo"
-                                   else _rampa(h, desde, hasta, invertir=True))
-        else:  # derecha
-            tira = Image.frombytes("L", (w, 1), _rampa(w, desde, hasta))
-        mascara = ImageChops.lighter(mascara, tira.resize((w, h)))
-    # Bajo el texto la imagen se funde con SU PROPIO color de fondo (promedio de la zona de texto), no con el color
-    # plano de la tarjeta: así el fondo se siente una sola imagen, con sus luces y sombras, sin parche ni recuadro.
-    from PIL import ImageStat
-    propio = tuple(round(v) for v in ImageStat.Stat(img, mascara.point(lambda v: 255 if v > 200 else 0)).mean[:3]) \
-        if mascara.getbbox() else None
-    color = Image.new("RGB", (w, h), propio or color_hex)
     salida = io.BytesIO()
-    Image.composite(color, img, mascara).save(salida, "JPEG", quality=90)
+    img.crop((izq, arr, izq + w, arr + h)).save(salida, "JPEG", quality=90)
     return salida.getvalue()
 
 
@@ -449,6 +463,8 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     c.setAuthor("RC Farías")
     L = Lienzo(c, col, guias=guias, imagenes=imagenes)
     for numero, (estilo, datos) in enumerate(zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)), 1):
+        if numero == 2:  # si la ilustración elegida invade el texto, se usa un estilo donde no lo haga
+            estilo = estilo_compatible((imagenes or {}).get(2), estilo, ESTILOS_TARJETA_2)
         L.tarjeta, L.estilo = numero, estilo
         ESTILOS[estilo](L, {**datos, "variante": variante + semilla})
         c.showPage()

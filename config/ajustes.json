@@ -55,6 +55,7 @@
     "variantes_por_clic": 3,
     "lado_largo": 1216,
     "referencias_estilo": [],
-    "fuerza_referencias": 0.3
+    "fuerza_referencias": 0.3,
+    "fuerza_guia": 0.88
   }
 }

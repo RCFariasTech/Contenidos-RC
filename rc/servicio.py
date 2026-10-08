@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from rc import correos, db, fuentes, generador, krea, planificador, teams, validador
-from rc.config import ajustes, pilares
+from rc.config import ajustes, env, pilares
 from rc.errores import ErrorNegocio  # noqa: F401 (se reexporta: servicio.ErrorNegocio)
 
 log = logging.getLogger(__name__)
@@ -395,10 +395,12 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
     prompt = krea.construir_prompt(descripcion, clave, hex_fondo, tarjetas.COMPOSICION.get(estilo, ""))
+    base = (env("APP_URL", False) or teams.APP_URL_POR_DEFECTO).rstrip("/")
+    guia = f"{base}/api/guia-composicion?estilo={estilo}&color={hex_fondo.lstrip('#')}&w={ancho}&h={alto}"
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
         try:
-            job_id = krea.crear_trabajo(prompt, ancho, alto)
+            job_id = krea.crear_trabajo(prompt, ancho, alto, guia)
         except ErrorNegocio as e:
             fallo = e
             break
