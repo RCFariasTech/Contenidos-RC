@@ -136,6 +136,11 @@
       <p class="hint" id="prMsg" style="margin:4px 0 0"></p>
     </details>
     <button class="btn" id="open">Cambiar imagen</button>
+    <div class="row">
+      <button class="btn" id="projSave" disabled title="Descarga un archivo .json con la imagen, los filtros aplicados, todos los ajustes, las pinceladas, tus paletas y tus ajustes guardados">Guardar proyecto</button>
+      <button class="btn" id="projOpen" title="Abre un proyecto guardado. También puedes arrastrar el archivo a la ventana, como una imagen">Abrir proyecto</button>
+      <input type="file" id="projPick" accept=".json,application/json" hidden>
+    </div>
 
     <div id="fxLiquid">
     <div class="ctl"><label>Intensidad <span id="vInt"></span></label>
@@ -900,7 +905,7 @@ async function loadImage(file) {
     state.loaded = true;
     for (const id of ["clearP", "clearG"]) $(id).disabled = false;
     drop.style.display = "none"; wrap.classList.add("on");
-    $("dl").disabled = false; $("apply").disabled = false; updateDlInfo();
+    $("dl").disabled = false; $("apply").disabled = false; $("projSave").disabled = false; updateDlInfo();
     $("info").textContent = `${w} × ${h} px` + (k < 1 ? " (reducida al límite del navegador)" : "");
     render();
   } catch (e) { errEl.textContent = e.message; }
@@ -908,6 +913,7 @@ async function loadImage(file) {
 
 // ---- apilar filtros: 'Aplicar filtro' fija el resultado como nueva imagen base ----
 const MAX_STACK = 6;
+let srcName = "";                   // nombre del archivo de imagen cargado (para nombrar el proyecto)
 const baseStack = [];                 // imágenes base anteriores (canvas), la última es la inmediata
 let baseCanvas = null;
 function uploadBase(src) {
@@ -1128,26 +1134,33 @@ $("favExport").addEventListener("click", () => {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   favMsg(favs.length + " paleta" + (favs.length === 1 ? "" : "s") + " descargada" + (favs.length === 1 ? "" : "s") + " en mis-paletas.json.");
 });
-async function importPaletteFile(file) {
-  try {
-    const d = JSON.parse(await file.text());
-    if (!d || d.app !== "efectos-de-imagen" || !Array.isArray(d.palettes)) throw new Error("formato");
-    let added = 0, updated = 0, skipped = 0;
-    for (const p of d.palettes) {
-      if (!validFav(p)) { skipped++; continue; }
-      const item = { name: p.name.trim().slice(0, 24), c: p.c.map(c => c.toLowerCase()) };
-      if (!item.name) { skipped++; continue; }
-      const i = favs.findIndex(f => f.name.toLowerCase() === item.name.toLowerCase());
-      if (i >= 0) { favs[i] = item; updated++; }
-      else if (favs.length < MAX_FAVS) { favs.push(item); added++; }
-      else skipped++;
-    }
-    persistFavs(); renderFavs();
-    favMsg(added + " nueva" + (added === 1 ? "" : "s") + (updated ? ", " + updated + " actualizada" + (updated === 1 ? "" : "s") : "") + (skipped ? " · " + skipped + " no cupieron o no eran válidas (máx. 10)" : "") + ".");
-  } catch (e) { favMsg("No se pudo cargar: el archivo no es un archivo de paletas de esta app."); }
+function mergeFavs(list) {
+  let added = 0, updated = 0, skipped = 0;
+  for (const p of Array.isArray(list) ? list : []) {
+    if (!validFav(p)) { skipped++; continue; }
+    const item = { name: p.name.trim().slice(0, 24), c: p.c.map(c => c.toLowerCase()) };
+    if (!item.name) { skipped++; continue; }
+    const i = favs.findIndex(f => f.name.toLowerCase() === item.name.toLowerCase());
+    if (i >= 0) { favs[i] = item; updated++; }
+    else if (favs.length < MAX_FAVS) { favs.push(item); added++; }
+    else skipped++;
+  }
+  persistFavs(); renderFavs();
+  return { added, updated, skipped };
+}
+const favSummary = r => r.added + " nueva" + (r.added === 1 ? "" : "s") + (r.updated ? ", " + r.updated + " actualizada" + (r.updated === 1 ? "" : "s") : "") + (r.skipped ? " · " + r.skipped + " no cupieron o no eran válidas (máx. 10)" : "");
+// Un solo punto de entrada para los .json: paletas o proyecto completo
+async function openJsonFile(file) {
+  let d;
+  try { d = JSON.parse(await file.text()); } catch (e) { d = null; }
+  if (!d || d.app !== "efectos-de-imagen") { const m = "El archivo no es un archivo de esta app (paletas o proyecto)."; favMsg(m); errEl.textContent = m; return; }
+  errEl.textContent = "";
+  if (d.tipo === "proyecto") return loadProject(d);
+  if (Array.isArray(d.palettes)) { const m = favSummary(mergeFavs(d.palettes)) + "."; favMsg(m); $("info").textContent = "Paletas: " + m; return; }
+  const m = "El archivo no contiene paletas ni un proyecto."; favMsg(m); errEl.textContent = m;
 }
 $("favImport").addEventListener("click", () => $("favPick").click());
-$("favPick").addEventListener("change", () => { const f = $("favPick").files[0]; $("favPick").value = ""; if (f) importPaletteFile(f); });
+$("favPick").addEventListener("change", () => { const f = $("favPick").files[0]; $("favPick").value = ""; if (f) openJsonFile(f); });
 $("favFile").addEventListener("click", () => {
   if (!favs.length) { favMsg("Guarda al menos una paleta antes de grabarla en el archivo."); return; }
   try {
@@ -1569,12 +1582,117 @@ $("dl").addEventListener("click", async () => {
   $("info").textContent = "Descargado: " + W + " × " + H + " px" + (f < want - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
 });
 
+// ---- proyecto completo: imagen, filtros aplicados, ajustes, pinceladas, paletas y ajustes guardados en un solo .json ----
+const u8ToB64 = u => { let t = ""; for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(t); };
+const b64ToU8 = b => { const t = atob(b), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u; };
+async function packBytes(u) {
+  if (typeof CompressionStream === "undefined") return { enc: "raw", data: u8ToB64(u) };
+  const cs = new CompressionStream("gzip"), w = cs.writable.getWriter(); w.write(u); w.close();
+  return { enc: "gzip", data: u8ToB64(new Uint8Array(await new Response(cs.readable).arrayBuffer())) };
+}
+async function unpackBytes(o) {
+  const u = b64ToU8(o.data);
+  if (o.enc !== "gzip") return u;
+  if (typeof DecompressionStream === "undefined") throw new Error("este navegador no puede descomprimir el proyecto (usa uno más reciente)");
+  return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+}
+const loadImg = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("imagen del proyecto dañada")); i.src = url; });
+const uiFields = () => [...document.querySelectorAll("aside input[type=range], aside input[type=color], aside select[data-key], #dlScale")];
+function mergePresets(lists) {
+  let n = 0;
+  if (!Array.isArray(lists) || lists.length !== 3) return n;
+  lists.forEach((list, fx) => (Array.isArray(list) ? list : []).forEach(p => {
+    if (!p || typeof p.name !== "string" || !p.name.trim() || !p.v || typeof p.v !== "object") return;
+    const clean = { name: p.name.trim().slice(0, 24), v: {}, seed: typeof p.seed === "number" ? p.seed : state.seed };
+    if (p.tool === 1 || p.tool === 2) clean.tool = p.tool;
+    for (const [k, val] of Object.entries(p.v)) if (typeof val === "string" && val.length < 12) clean.v[k] = val;
+    const i = presets[fx].findIndex(q => q.name.toLowerCase() === clean.name.toLowerCase());
+    if (i >= 0) { presets[fx][i] = clean; n++; } else if (presets[fx].length < PR_MAX) { presets[fx].push(clean); n++; }
+  }));
+  persistPresets(); renderPresets();
+  return n;
+}
+async function saveProject() {
+  const btn = $("projSave"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "Preparando proyecto…"; errEl.textContent = "";
+  try {
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));
+    const ui = {}; uiFields().forEach(el => { ui[el.id] = el.value; });
+    const capas = [...baseStack, baseCanvas].map(c => c.toDataURL("image/png"));   // la primera es la imagen original; la última, la base actual
+    const project = {
+      app: "efectos-de-imagen", tipo: "proyecto", version: 1, guardado: new Date().toISOString(), nombreImagen: srcName,
+      imagen: { w: imgW, h: imgH, capas },
+      ajustes: { ui, efecto: state.effect, herramienta: selTool, semilla: state.seed, historialSemillas: seedHist, indiceSemilla: seedIdx },
+      gel: { activo: state.hasGel, w: uw, h: uh, o: await packBytes(snapField(0)), e: await packBytes(snapField(1)) },
+      mascara: mk.toDataURL("image/png"),
+      paletas: favs, ajustesGuardados: presets
+    };
+    const json = JSON.stringify(project);
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ((srcName || "imagen").replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "_") || "imagen") + "-proyecto.json";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 15000);
+    $("info").textContent = "Proyecto guardado: " + a.download + " (" + (blob.size / 1048576).toFixed(1) + " MB, " + capas.length + " imagen" + (capas.length === 1 ? "" : "es") + ").";
+  } catch (e) { errEl.textContent = "No se pudo guardar el proyecto: " + e.message; }
+  finally { btn.textContent = label; btn.disabled = !state.loaded; }
+}
+async function loadProject(d) {
+  try {
+    if (!gl) throw new Error("WebGL no está disponible");
+    if (d.version !== 1 || !d.imagen || !Array.isArray(d.imagen.capas) || !d.imagen.capas.length || !d.ajustes) throw new Error("el proyecto está incompleto o es de otra versión");
+    $("info").textContent = "Abriendo proyecto…";
+    const layers = [];
+    for (const u of d.imagen.capas) {
+      const im = await loadImg(u), c = document.createElement("canvas");
+      c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext("2d").drawImage(im, 0, 0); layers.push(c);
+    }
+    const w = layers[0].width, h = layers[0].height;
+    if (!layers.every(c => c.width === w && c.height === h)) throw new Error("las imágenes del proyecto no tienen el mismo tamaño");
+    if (Math.max(w, h) > gl.getParameter(gl.MAX_TEXTURE_SIZE)) throw new Error("la imagen del proyecto es más grande de lo que admite este equipo");
+    // imagen y pila de filtros
+    imgW = renderW = w; imgH = renderH = h; cv.width = w; cv.height = h; gl.viewport(0, 0, w, h);
+    baseStack.length = 0; for (const c of layers.slice(0, -1)) baseStack.push(c);
+    uploadBase(layers[layers.length - 1]);
+    resetMask(w, h); initGel(w, h);
+    state.loaded = true;
+    for (const id of ["clearP", "clearG"]) $(id).disabled = false;
+    drop.style.display = "none"; wrap.classList.add("on");
+    $("dl").disabled = false; $("apply").disabled = false; $("projSave").disabled = false;
+    srcName = d.nombreImagen || "";
+    // ajustes
+    const A = d.ajustes;
+    uiFields().forEach(el => {
+      if (!(el.id in A.ui)) return;
+      el.value = A.ui[el.id];
+      if (el.type === "color") $("h" + el.id.slice(1)).value = el.value;
+      else el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input"));
+    });
+    seedHist.length = 0; (Array.isArray(A.historialSemillas) && A.historialSemillas.length ? A.historialSemillas : [A.semilla]).forEach(v => seedHist.push(+v));
+    seedIdx = Math.min(Math.max(0, +A.indiceSemilla || 0), seedHist.length - 1); state.seed = seedHist[seedIdx]; syncSeedBtns();
+    if (A.efecto >= 0 && A.efecto <= 2) document.querySelector('.seg[data-key="effect"] button[data-v="' + A.efecto + '"]').click();
+    else { state.effect = 3; document.querySelectorAll('.seg[data-key="effect"] button').forEach(x => x.classList.remove("on")); }
+    if (A.herramienta === 1 || A.herramienta === 2) { selTool = A.herramienta; if (state.effect < 2) setTool(selTool); else document.querySelectorAll(".tbtn").forEach(x => x.classList.toggle("on", +x.dataset.v === selTool)); }
+    // pinceladas: zona protegida y gel
+    if (d.mascara) { const mi = await loadImg(d.mascara); mctx.clearRect(0, 0, mk.width, mk.height); mctx.drawImage(mi, 0, 0, mk.width, mk.height); uploadMask(); }
+    if (d.gel && d.gel.w === uw && d.gel.h === uh) {
+      restoreField(0, await unpackBytes(d.gel.o)); restoreField(1, await unpackBytes(d.gel.e)); state.hasGel = !!d.gel.activo;
+    }
+    syncStack(); updateDlInfo(); render();
+    const fr = mergeFavs(d.paletas), pn = mergePresets(d.ajustesGuardados);
+    $("info").textContent = "Proyecto abierto: " + w + " × " + h + " px, " + (layers.length - 1) + " filtro" + (layers.length === 2 ? "" : "s") + " aplicado" + (layers.length === 2 ? "" : "s") + ". Paletas: " + favSummary(fr) + ". Ajustes guardados: " + pn + " incorporado" + (pn === 1 ? "" : "s") + ".";
+  } catch (e) { errEl.textContent = "No se pudo abrir el proyecto: " + e.message; $("info").textContent = ""; }
+}
+$("projSave").addEventListener("click", saveProject);
+$("projOpen").addEventListener("click", () => $("projPick").click());
+$("projPick").addEventListener("change", () => { const f = $("projPick").files[0]; $("projPick").value = ""; if (f) openJsonFile(f); });
+
 const fileIn = $("file");
 const pick = () => fileIn.click();
 $("open").addEventListener("click", pick);
 drop.addEventListener("click", pick);
 drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") pick(); });
-fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (!f) return; if (isPaletteFile(f)) { importPaletteFile(f); fileIn.value = ""; } else loadImage(f); });
+fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (!f) return; if (isPaletteFile(f)) { openJsonFile(f); fileIn.value = ""; } else { srcName = f.name; loadImage(f); } });
 for (const t of [document.body]) {
   t.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
   t.addEventListener("dragleave", () => drop.classList.remove("over"));
@@ -1582,7 +1700,7 @@ for (const t of [document.body]) {
     e.preventDefault(); drop.classList.remove("over");
     const f = e.dataTransfer.files[0];
     if (!f) return;
-    if (isPaletteFile(f)) importPaletteFile(f); else loadImage(f);
+    if (isPaletteFile(f)) openJsonFile(f); else { srcName = f.name; loadImage(f); }
   });
 }
 
