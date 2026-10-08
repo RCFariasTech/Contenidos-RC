@@ -72,6 +72,8 @@
   .favrow[hidden] { display: none; }
   .favrow input[type=text] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
   .favrow select { flex: 1; min-width: 0; }
+  .favrow .btn.grow, .favs .favrow > .btn:only-child { flex: 1; }
+  #favExport, #favImport { flex: 1; }
   .favrow .btn { width: auto; margin: 0; padding: 6px 10px; font-size: 13px; }
   .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
   .tcol { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -179,6 +181,11 @@
           <span id="favAsk" style="flex:1;font-size:13px;align-self:center"></span>
           <button class="btn" id="favYes">Sí, borrar</button>
           <button class="btn" id="favNo">Cancelar</button>
+        </div>
+        <div class="favrow">
+          <button class="btn" id="favExport" title="Baja un archivo .json solo con tus paletas favoritas">Descargar paletas</button>
+          <button class="btn" id="favImport" title="Carga paletas desde un archivo .json. También puedes arrastrarlo a la ventana, como una imagen">Cargar paletas</button>
+          <input type="file" id="favPick" accept=".json,application/json" hidden>
         </div>
         <button class="btn" id="favFile" style="margin-top:2px" title="Baja una copia de esta app con tus paletas grabadas dentro: úsala como tu archivo y las paletas ya no dependen del navegador">Grabar paletas en el archivo</button>
         <p class="hint" id="favMsg" style="margin:4px 0 0"></p>
@@ -1110,6 +1117,37 @@ $("favYes").addEventListener("click", () => {
   const i = +$("favList").value; if (!favs[i]) return;
   const n = favs[i].name; favs.splice(i, 1); persistFavs(); renderFavs(); favMsg("Paleta «" + n + "» borrada.");
 });
+// ---- archivo con solo las paletas: se descarga y se carga después (también arrastrándolo a la ventana, como una imagen) ----
+const isPaletteFile = f => /\.json$/i.test(f.name) || f.type === "application/json";
+$("favExport").addEventListener("click", () => {
+  if (!favs.length) { favMsg("Guarda al menos una paleta antes de descargarlas."); return; }
+  const data = { app: "efectos-de-imagen", tipo: "paletas", version: 1, palettes: favs };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
+  a.download = "mis-paletas.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  favMsg(favs.length + " paleta" + (favs.length === 1 ? "" : "s") + " descargada" + (favs.length === 1 ? "" : "s") + " en mis-paletas.json.");
+});
+async function importPaletteFile(file) {
+  try {
+    const d = JSON.parse(await file.text());
+    if (!d || d.app !== "efectos-de-imagen" || !Array.isArray(d.palettes)) throw new Error("formato");
+    let added = 0, updated = 0, skipped = 0;
+    for (const p of d.palettes) {
+      if (!validFav(p)) { skipped++; continue; }
+      const item = { name: p.name.trim().slice(0, 24), c: p.c.map(c => c.toLowerCase()) };
+      if (!item.name) { skipped++; continue; }
+      const i = favs.findIndex(f => f.name.toLowerCase() === item.name.toLowerCase());
+      if (i >= 0) { favs[i] = item; updated++; }
+      else if (favs.length < MAX_FAVS) { favs.push(item); added++; }
+      else skipped++;
+    }
+    persistFavs(); renderFavs();
+    favMsg(added + " nueva" + (added === 1 ? "" : "s") + (updated ? ", " + updated + " actualizada" + (updated === 1 ? "" : "s") : "") + (skipped ? " · " + skipped + " no cupieron o no eran válidas (máx. 10)" : "") + ".");
+  } catch (e) { favMsg("No se pudo cargar: el archivo no es un archivo de paletas de esta app."); }
+}
+$("favImport").addEventListener("click", () => $("favPick").click());
+$("favPick").addEventListener("change", () => { const f = $("favPick").files[0]; $("favPick").value = ""; if (f) importPaletteFile(f); });
 $("favFile").addEventListener("click", () => {
   if (!favs.length) { favMsg("Guarda al menos una paleta antes de grabarla en el archivo."); return; }
   try {
@@ -1536,14 +1574,15 @@ const pick = () => fileIn.click();
 $("open").addEventListener("click", pick);
 drop.addEventListener("click", pick);
 drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") pick(); });
-fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (f) loadImage(f); });
+fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (!f) return; if (isPaletteFile(f)) { importPaletteFile(f); fileIn.value = ""; } else loadImage(f); });
 for (const t of [document.body]) {
   t.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
   t.addEventListener("dragleave", () => drop.classList.remove("over"));
   t.addEventListener("drop", e => {
     e.preventDefault(); drop.classList.remove("over");
     const f = e.dataTransfer.files[0];
-    if (f) loadImage(f);
+    if (!f) return;
+    if (isPaletteFile(f)) importPaletteFile(f); else loadImage(f);
   });
 }
 
