@@ -133,18 +133,19 @@ class TestTarjetas(unittest.TestCase):
         tit, texto = tarjetas._separar("Una sola oración sin corte natural que sigue y sigue")
         self.assertEqual(texto, "")
 
-    def test_ilustracion_a_sangre_se_funde_con_el_color_bajo_el_texto(self):
+    def test_ilustracion_a_sangre_se_funde_con_su_propio_fondo(self):
         import io
-        from PIL import Image
-        foto = Image.new("RGB", (912, 1216), (200, 30, 30))   # imagen de un color muy distinto al de la tarjeta
+        from PIL import Image, ImageDraw
+        foto = Image.new("RGB", (912, 1216), (120, 180, 230))     # fondo celeste propio de la imagen
+        ImageDraw.Draw(foto).rectangle((400, 200, 500, 500), fill=(220, 40, 40))  # personaje arriba
         buf = io.BytesIO()
         foto.save(buf, "PNG")
         compuesto = Image.open(io.BytesIO(tarjetas.fondo_con_ilustracion(buf.getvalue(), "#0069D1", tarjetas.ZONAS_TEXTO[1], escala=0.5)))
         w, h = compuesto.size
-        self.assertEqual((w, h), (540, 720))                          # tarjeta completa
-        arriba, abajo = compuesto.getpixel((w // 2, int(h * 0.2))), compuesto.getpixel((w // 2, int(h * 0.8)))
-        self.assertGreater(arriba[0], 150)                            # arriba se ve la ilustración
-        self.assertTrue(abs(abajo[0] - 0x00) < 12 and abs(abajo[2] - 0xD1) < 12)  # bajo el texto: color de la tarjeta
+        self.assertEqual((w, h), (540, 720))
+        self.assertGreater(compuesto.getpixel((w // 2, int(h * 0.25)))[0], 150)      # el personaje sigue arriba
+        abajo = compuesto.getpixel((w // 2, int(h * 0.85)))
+        self.assertTrue(all(abs(a - b) < 12 for a, b in zip(abajo, (120, 180, 230))))  # su propio fondo, no el azul plano
 
     def test_el_fondo_de_la_imagen_se_empata_con_el_color_de_la_tarjeta(self):
         from PIL import Image

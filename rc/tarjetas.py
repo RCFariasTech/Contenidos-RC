@@ -222,7 +222,6 @@ def fondo_con_ilustracion(datos: bytes, color_hex: str, zonas: list, escala: flo
     img = img.resize((max(w, round(img.width * k)), max(h, round(img.height * k))), Image.LANCZOS)
     izq, arr = (img.width - w) // 2, (img.height - h) // 2
     img = img.crop((izq, arr, izq + w, arr + h))
-    img = _empatar_fondo(img, color_hex)
     mascara = Image.new("L", (w, h), 0)
     for lado, desde, hasta in zonas:
         if lado in ("abajo", "arriba"):
@@ -231,7 +230,12 @@ def fondo_con_ilustracion(datos: bytes, color_hex: str, zonas: list, escala: flo
         else:  # derecha
             tira = Image.frombytes("L", (w, 1), _rampa(w, desde, hasta))
         mascara = ImageChops.lighter(mascara, tira.resize((w, h)))
-    color = Image.new("RGB", (w, h), color_hex)
+    # Bajo el texto la imagen se funde con SU PROPIO color de fondo (promedio de la zona de texto), no con el color
+    # plano de la tarjeta: así el fondo se siente una sola imagen, con sus luces y sombras, sin parche ni recuadro.
+    from PIL import ImageStat
+    propio = tuple(round(v) for v in ImageStat.Stat(img, mascara.point(lambda v: 255 if v > 200 else 0)).mean[:3]) \
+        if mascara.getbbox() else None
+    color = Image.new("RGB", (w, h), propio or color_hex)
     salida = io.BytesIO()
     Image.composite(color, img, mascara).save(salida, "JPEG", quality=90)
     return salida.getvalue()
