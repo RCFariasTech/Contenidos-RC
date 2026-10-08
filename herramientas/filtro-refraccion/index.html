@@ -264,19 +264,19 @@
         <button class="tbtn" data-v="1" title="Restaurar: pinta para devolver una zona a su estado original (sin distorsión) y empujar los pliegues fuera de ella">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 3.5 11.5 12"/><path d="M11.5 12c-2.4-.6-4.2.8-4.2 2.8 0 1.4-1 2.4-2.8 2.9 3.3 1.4 7.6-.4 7-5.7z"/><path d="M18.5 13.5a4.8 4.8 0 1 1-2.2 6.4"/><path d="M18.8 10.2v3.6h-3.6"/></svg>
           Restaurar</button>
-        <div class="ctl" title="Diámetro del pincel Restaurar"><label>Diámetro <span id="vRad"></span></label>
-          <input type="range" id="rad" min="0.02" max="0.6" step="0.005" value="0.05"></div>
       </div>
       <div class="tcol">
         <button class="tbtn on" data-v="2" title="Modelar: arrastra el dedo para empujar y estirar los pliegues como un gel (en los otros filtros arrastra la imagen)">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11.5V4.8a1.6 1.6 0 0 1 3.2 0v6.2"/><path d="M12.2 10.6a1.5 1.5 0 0 1 3 .2v1.1a1.5 1.5 0 0 1 3 .3V15a6.5 6.5 0 0 1-6.5 6.5h-.4a5.5 5.5 0 0 1-4.3-2l-3.1-3.9a1.5 1.5 0 0 1 2.3-1.9L9 15.2"/></svg>
           Modelar</button>
-        <div class="ctl" title="Diámetro del dedo al modelar"><label>Diámetro <span id="vGrad"></span></label>
-          <input type="range" id="grad" min="0.04" max="0.8" step="0.005" value="0.10"></div>
       </div>
     </div>
-    <div class="ctl" title="Fuerza del dedo al modelar y del empuje al restaurar. Menos de 1: parcial. Más de 1: más lejos"><label>Fuerza <span id="vStr"></span></label>
-      <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
+    <div class="grid2">
+      <div class="ctl" title="Diámetro del pincel: el mismo para Restaurar y Modelar"><label>Diámetro <span id="vRad"></span></label>
+        <input type="range" id="rad" min="0.02" max="0.8" step="0.005" value="0.08"></div>
+      <div class="ctl" title="Fuerza al modelar y al restaurar. Menos de 1: parcial. Más de 1: más lejos"><label>Fuerza <span id="vStr"></span></label>
+        <input type="range" id="gstr" min="0.2" max="2" step="0.05" value="1"></div>
+    </div>
 
     <div class="row"><button class="btn" id="undo" disabled>Deshacer (Ctrl/Cmd+Z)</button></div>
     <div class="row">
@@ -938,7 +938,7 @@ function copyCanvas(c) {
   return t;
 }
 function resetControls() {          // vuelve los ajustes de los filtros a sus valores iniciales (no toca el pincel)
-  const keep = new Set(["rad", "grad", "gstr"]);
+  const keep = new Set(["rad", "gstr"]);
   document.querySelectorAll("aside input[type=range]").forEach(el => {
     if (keep.has(el.id) || +el.value === +el.defaultValue) return;
     el.value = el.defaultValue; el.dispatchEvent(new Event("input"));
@@ -1020,7 +1020,6 @@ $("vsDesp").textContent = (+$("sDesp").value).toFixed(2);
 $("vsShine").textContent = (+$("sShine").value).toFixed(2);
 $("vsShade").textContent = (+$("sShade").value).toFixed(2);
 $("vRad").textContent = (+$("rad").value).toFixed(2);
-$("vGrad").textContent = (+$("grad").value).toFixed(2);
 $("vStr").textContent = (+$("gstr").value).toFixed(2);
 for (const id of OX_IDS) {
   const sp = $("v" + id), inp = $(id);
@@ -1043,9 +1042,9 @@ document.querySelector('.seg[data-key="effect"]').addEventListener("click", e =>
     state.tool = 0; cv.classList.remove("brush"); ring.style.display = "none";   // Óxido solar no usa pincel
   } else if (!state.tool) setTool(selTool);
 });
-for (const id of ["int", "cov", "sDesp", "sShine", "sShade", "rad", "grad", "gstr"]) {
+for (const id of ["int", "cov", "sDesp", "sShine", "sShade", "rad", "gstr"]) {
   $(id).addEventListener("input", () => {
-    $({int:"vInt", cov:"vCov", sDesp:"vsDesp", sShine:"vsShine", sShade:"vsShade", rad:"vRad", grad:"vGrad", gstr:"vStr"}[id]).textContent = (+$(id).value).toFixed(2);
+    $({int:"vInt", cov:"vCov", sDesp:"vsDesp", sShine:"vsShine", sShade:"vsShade", rad:"vRad", gstr:"vStr"}[id]).textContent = (+$(id).value).toFixed(2);
     render();
   });
 }
@@ -1187,7 +1186,7 @@ try {
 } catch (e) {}
 function persistPresets() { try { localStorage.setItem(PR_KEY, JSON.stringify(presets)); return true; } catch (e) { return false; } }
 const prMsg = t => { $("prMsg").textContent = t; };
-const BRUSH_IDS = ["grad", "rad", "gstr"];                       // Modelar (dedo), Restaurar (zona) y Fuerza
+const BRUSH_IDS = ["rad", "gstr"];                               // diámetro (común a Restaurar y Modelar) y Fuerza
 const panelFields = fx => [...$(PANELS[fx]).querySelectorAll("input[type=range], input[type=color], select[data-key]"), ...(fx < 2 ? BRUSH_IDS.map($) : [])];
 function captureSettings(fx) {
   const v = {}; panelFields(fx).forEach(el => { v[el.id] = el.value; });
@@ -1305,7 +1304,7 @@ const mk = $("mk"), mctx = mk.getContext("2d", { willReadFrequently: true }), ri
 const history = [];                 // { kind: "mask" | "gel", snap }
 let stroking = false, last = null, lastPtr = null;
 const protectR = () => +$("rad").value / 2;     // los deslizadores son diámetros (fracción del alto)
-const gelR = () => +$("grad").value / 2;
+const gelR = () => protectR();                        // un solo diámetro para los dos pinceles
 const toolR = () => state.tool === 2 ? gelR() : protectR();
 
 function resetMask(w, h) {
@@ -1429,7 +1428,6 @@ function placeRing(e) {
 }
 function refreshRing() { if (state.tool && lastPtr) placeRing(lastPtr); }
 $("rad").addEventListener("input", refreshRing);
-$("grad").addEventListener("input", refreshRing);
 
 let selTool = 2;                       // herramienta elegida: 1 = restaurar, 2 = modelar (siempre hay una)
 function setTool(v) {
