@@ -43,7 +43,7 @@
   /* barras verticales: una columna por valor, con su número editable */
   .strip { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; margin-bottom: 12px; }
   .vcol { display: flex; flex-direction: column; align-items: center; min-width: 0; gap: 4px; }
-  .vl { font-size: 10px; line-height: 1.15; color: var(--muted); text-align: center; min-height: 2.3em; display: flex; align-items: flex-end; justify-content: center; width: 100%; word-break: break-word; }
+  .vl { font-size: 10px; line-height: 1.15; color: var(--muted); text-align: center; min-height: 2.3em; display: flex; align-items: flex-end; justify-content: center; width: 100%; }
   .vbar { position: relative; width: 26px; height: 112px; }
   .vbar input[type=range] { position: absolute; left: 50%; top: 50%; width: 112px; height: 20px; margin: -10px 0 0 -56px; transform: rotate(-90deg); }
   input.num { width: 100%; max-width: 42px; padding: 3px 2px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--text); font: 12px ui-monospace, monospace; text-align: center; -moz-appearance: textfield; }
@@ -316,8 +316,8 @@ const rv = id => { const el = document.getElementById(id), lo = +el.dataset.lo, 
 const uiFromRaw = (id, raw) => { const el = document.getElementById(id); return Math.min(100, Math.max(0, Math.round((raw - +el.dataset.lo) / (+el.dataset.hi - +el.dataset.lo) * 100))); };
 (function buildSliders() {
   const D = document;
-  const LABELS = { int: "Intensidad", cov: "Cobertura", sSize: "Pliegue", sDup: "Duplicación", sDesp: "Desplaz.", sShine: "Brillo", sShade: "Sombra",
-    mRet: "Fractura", mPose: "Desplaz.", mTwist: "Flujo", mEro: "Ramific.", mCov: "Vetas", mScale: "Bandas", mHue: "Matiz", mVHue: "Matiz vetas", mVTone: "Tono vetas", mVCon: "Contr. vetas",
+  const LABELS = { int: "Intens.", cov: "Cobert.", sSize: "Pliegue", sDup: "Duplic.", sDesp: "Despl.", sShine: "Brillo", sShade: "Sombra",
+    mRet: "Fractura", mPose: "Despl.", mTwist: "Flujo", mEro: "Ramific.", mCov: "Vetas", mScale: "Bandas", mHue: "Matiz", mVHue: "Matiz vetas", mVTone: "Tono vetas", mVCon: "Contr. vetas",
     oLen: "Longitud", oRough: "Aspereza", oReach: "Alcance", oThr: "Umbral", oSoft: "Suavidad", oHalo: "Halo", oHaloR: "R. halo", oEdgeS: "Suav. borde", oEdge: "Borde", oEdgeW: "Grosor", oGrain: "Grano", oGrainS: "Tam. grano" };
   const STRIPS = {
     fxLiquid: [["int", "cov", "sSize", "sDup", "sDesp", "sShine", "sShade"]],
@@ -1227,14 +1227,26 @@ function persistPresets() { try { localStorage.setItem(PR_KEY, JSON.stringify(pr
 const prMsg = t => { $("prMsg").textContent = t; };
 const BRUSH_IDS = ["rad", "gstr"];                               // diámetro (común a Restaurar y Modelar) y Fuerza
 const panelFields = fx => [...$(PANELS[fx]).querySelectorAll("input[type=range], input[type=color], select[data-key]"), ...(fx < 2 ? BRUSH_IDS.map($) : [])];
+// Los ajustes y proyectos guardados antes de las barras 0-100 traían los valores reales; aquí se convierten
+function migrateOld(v) {
+  const out = {};
+  for (const [id, val] of Object.entries(v || {})) {
+    if (id === "selSize") out.sSize = { 0: 0, 1: 100, 2: 50 }[val] ?? 0;
+    else if (id === "selDup") out.sDup = { 0: 0, 1: 50, 2: 100 }[val] ?? 50;
+    else if (id === "grad") continue;
+    else { const el = document.getElementById(id); out[id] = el && el.type === "range" && el.dataset.lo !== undefined ? uiFromRaw(id, +val) : val; }
+  }
+  return out;
+}
 function captureSettings(fx) {
   const v = {}; panelFields(fx).forEach(el => { v[el.id] = el.value; });
-  return { v, seed: state.seed, ...(fx < 2 ? { tool: selTool } : {}) };
+  return { v, ver: 2, seed: state.seed, ...(fx < 2 ? { tool: selTool } : {}) };
 }
 function applySettings(fx, p) {
+  const V = p.ver === 2 ? p.v : migrateOld(p.v);
   panelFields(fx).forEach(el => {
-    if (!(el.id in p.v)) return;
-    el.value = p.v[el.id];
+    if (!(el.id in V)) return;
+    el.value = V[el.id];
     if (el.type === "color") $("h" + el.id.slice(1)).value = el.value;
     else el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input"));
   });
@@ -1301,6 +1313,7 @@ $("prFile").addEventListener("change", async () => {
     d.presets.forEach((list, fx) => (Array.isArray(list) ? list : []).forEach(p => {
       if (!p || typeof p.name !== "string" || !p.name.trim() || typeof p.v !== "object" || !p.v) return;
       const clean = { name: p.name.trim().slice(0, 24), v: {}, seed: typeof p.seed === "number" ? p.seed : state.seed };
+      if (p.ver === 2) clean.ver = 2;
       if (p.tool === 1 || p.tool === 2) clean.tool = p.tool;
       for (const [k, val] of Object.entries(p.v)) if (typeof val === "string" && val.length < 12) clean.v[k] = val;
       const i = presets[fx].findIndex(q => q.name.toLowerCase() === clean.name.toLowerCase());
@@ -1476,22 +1489,32 @@ function setTool(v) {
 }
 document.querySelectorAll(".tbtn").forEach(x => x.addEventListener("click", () => setTool(+x.dataset.v)));
 setTool(2);
+let sizing = null;                       // Option/Alt + Shift + arrastrar: arriba = más diámetro, abajo = menos
 cv.addEventListener("pointerdown", e => {
   if (!state.tool || !state.loaded || e.button > 0) return;
   e.preventDefault();
+  if (e.altKey && e.shiftKey) {
+    cv.setPointerCapture(e.pointerId); sizing = { y0: e.clientY, v0: +$("rad").value }; lastPtr = e; ring.style.display = "block"; placeRing(e);
+    return;
+  }
   cv.setPointerCapture(e.pointerId);
   last = uvPos(e); stroking = true;
   if (state.tool === 1) { pushHistory("mask"); beginStroke(); paintTo(last); }
   else pushHistory("gel");
 });
 cv.addEventListener("pointermove", e => {
+  if (sizing) {
+    const v = Math.min(100, Math.max(0, Math.round(sizing.v0 + (sizing.y0 - e.clientY) * 0.35)));
+    const r = $("rad"); if (+r.value !== v) { r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); }
+    return;
+  }
   lastPtr = e;
   if (!state.tool) return;
   ring.style.display = "block"; placeRing(e);
   if (!stroking) return;
   if (state.tool === 1) paintTo(uvPos(e)); else dragGel(uvPos(e));
 });
-const endStroke = () => { stroking = false; };
+const endStroke = () => { stroking = false; sizing = null; };
 cv.addEventListener("pointerup", endStroke);
 cv.addEventListener("pointercancel", endStroke);
 cv.addEventListener("pointerleave", () => { if (!stroking) ring.style.display = "none"; });
@@ -1598,6 +1621,9 @@ $("dl").addEventListener("click", async () => {
   errEl.textContent = "";
   if (gl.isContextLost()) { errEl.textContent = "La GPU se reinició. Recarga la página y vuelve a cargar la imagen."; return; }
   let { f, W, H } = exportSize(); const big = W > imgW, want = +$("dlScale").value;
+  const pngName = () => dlName() + (big ? "-" + W + "x" + H : "") + ".png";
+  const pick = await pickSaveHandle(pngName(), "image/png", ".png", "Imagen PNG");     // se pide primero, mientras el clic sigue activo
+  if (pick.cancelled) return;
   const btn = $("dl"), label = btn.textContent;
   btn.disabled = true;
   let blob = null;
@@ -1612,11 +1638,9 @@ $("dl").addEventListener("click", async () => {
   } catch (e) { errEl.textContent = "No se pudo descargar: " + e.message; blob = null; }
   finally { render(); btn.textContent = label; btn.disabled = false; }
   if (!blob) return;
-  const url = URL.createObjectURL(blob), a = document.createElement("a");
-  a.href = url; a.download = dlName() + (big ? "-" + W + "x" + H : "") + ".png";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 15000);
-  $("info").textContent = "Descargado: " + W + " × " + H + " px" + (f < want - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
+  let where;
+  try { where = await writeOut(pick, blob, pngName()); } catch (e) { errEl.textContent = "No se pudo guardar el archivo: " + e.message; return; }
+  $("info").textContent = "Guardado " + where + ": " + W + " × " + H + " px" + (f < want - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
 });
 
 // ---- proyecto completo: imagen, filtros aplicados, ajustes, pinceladas, paletas y ajustes guardados en un solo .json ----
@@ -1641,6 +1665,7 @@ function mergePresets(lists) {
   lists.forEach((list, fx) => (Array.isArray(list) ? list : []).forEach(p => {
     if (!p || typeof p.name !== "string" || !p.name.trim() || !p.v || typeof p.v !== "object") return;
     const clean = { name: p.name.trim().slice(0, 24), v: {}, seed: typeof p.seed === "number" ? p.seed : state.seed };
+    if (p.ver === 2) clean.ver = 2;
     if (p.tool === 1 || p.tool === 2) clean.tool = p.tool;
     for (const [k, val] of Object.entries(p.v)) if (typeof val === "string" && val.length < 12) clean.v[k] = val;
     const i = presets[fx].findIndex(q => q.name.toLowerCase() === clean.name.toLowerCase());
@@ -1649,7 +1674,22 @@ function mergePresets(lists) {
   persistPresets(); renderPresets();
   return n;
 }
+// Elegir carpeta y nombre al guardar (Chrome, Edge, Brave). En otros navegadores se descarga a la carpeta de Descargas.
+async function pickSaveHandle(name, mime, ext, desc) {
+  if (!window.showSaveFilePicker) return { unsupported: true };
+  try { return { handle: await showSaveFilePicker({ suggestedName: name, types: [{ description: desc, accept: { [mime]: [ext] } }] }) }; }
+  catch (e) { return e && e.name === "AbortError" ? { cancelled: true } : { unsupported: true }; }
+}
+async function writeOut(pick, blob, name) {
+  if (pick.handle) { const w = await pick.handle.createWritable(); await w.write(blob); await w.close(); return "en la carpeta que elegiste (" + pick.handle.name + ")"; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 15000);
+  return "en Descargas (este navegador no permite elegir la carpeta)";
+}
 async function saveProject() {
+  const pname = ((srcName || "imagen").replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "_") || "imagen") + "-proyecto.json";
+  const pick = await pickSaveHandle(pname, "application/json", ".json", "Proyecto de efectos");
+  if (pick.cancelled) return;
   const btn = $("projSave"), label = btn.textContent;
   btn.disabled = true; btn.textContent = "Preparando proyecto…"; errEl.textContent = "";
   try {
@@ -1659,18 +1699,15 @@ async function saveProject() {
     const project = {
       app: "efectos-de-imagen", tipo: "proyecto", version: 1, guardado: new Date().toISOString(), nombreImagen: srcName,
       imagen: { w: imgW, h: imgH, capas },
-      ajustes: { ui, efecto: state.effect, herramienta: selTool, semilla: state.seed, historialSemillas: seedHist, indiceSemilla: seedIdx },
+      ajustes: { ui, escala: 2, efecto: state.effect, herramienta: selTool, semilla: state.seed, historialSemillas: seedHist, indiceSemilla: seedIdx },
       gel: { activo: state.hasGel, w: uw, h: uh, o: await packBytes(snapField(0)), e: await packBytes(snapField(1)) },
       mascara: mk.toDataURL("image/png"),
       paletas: favs, ajustesGuardados: presets
     };
     const json = JSON.stringify(project);
     const blob = new Blob([json], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = ((srcName || "imagen").replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "_") || "imagen") + "-proyecto.json";
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 15000);
-    $("info").textContent = "Proyecto guardado: " + a.download + " (" + (blob.size / 1048576).toFixed(1) + " MB, " + capas.length + " imagen" + (capas.length === 1 ? "" : "es") + ").";
+    const where = await writeOut(pick, blob, pname);
+    $("info").textContent = "Proyecto guardado " + where + ": " + pname + " (" + (blob.size / 1048576).toFixed(1) + " MB, " + capas.length + " imagen" + (capas.length === 1 ? "" : "es") + ").";
   } catch (e) { errEl.textContent = "No se pudo guardar el proyecto: " + e.message; }
   finally { btn.textContent = label; btn.disabled = !state.loaded; }
 }
@@ -1699,9 +1736,10 @@ async function loadProject(d) {
     srcName = d.nombreImagen || "";
     // ajustes
     const A = d.ajustes;
+    const UIV = A.escala === 2 ? A.ui : migrateOld(A.ui);
     uiFields().forEach(el => {
-      if (!(el.id in A.ui)) return;
-      el.value = A.ui[el.id];
+      if (!(el.id in UIV)) return;
+      el.value = UIV[el.id];
       if (el.type === "color") $("h" + el.id.slice(1)).value = el.value;
       else el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input"));
     });
