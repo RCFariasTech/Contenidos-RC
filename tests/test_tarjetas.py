@@ -142,33 +142,20 @@ class TestTarjetas(unittest.TestCase):
         img.save(buf, "PNG")
         return buf.getvalue()
 
-    def test_detecta_donde_esta_el_personaje(self):
-        caja = tarjetas.caja_personaje(self._foto((0.1, 0.5, 0.4, 0.9)))
-        self.assertTrue(all(abs(a - b) < 0.03 for a, b in zip(caja, (0.1, 0.5, 0.4, 0.9))), caja)
+    def test_la_tarjeta_toma_el_color_real_del_fondo_de_la_imagen(self):
+        foto = self._foto((0.3, 0.3, 0.7, 0.7), fondo=(240, 85, 90))   # Krea no clava el coral exacto
+        self.assertEqual(tarjetas.color_fondo_imagen(foto), "#F0555A")
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=0, imagenes={1: foto}), filetype="pdf")
+        pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2))
+        self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), (240, 85, 90))))     # fondo = fondo de la imagen
+        self.assertTrue(all(abs(a - b) <= 4 for a, b in zip(pix.pixel(17, 80), (240, 85, 90))))   # borde izquierdo del recuadro: sin parche
 
-    def test_cambia_de_estilo_si_el_personaje_invade_el_texto(self):
-        abajo_izq = self._foto((0.05, 0.5, 0.42, 0.95))
-        self.assertEqual(tarjetas.estilo_compatible(abajo_izq, 2, (2, 3, 4)), 3)
-        self.assertEqual(tarjetas.estilo_compatible(abajo_izq, 3, (2, 3, 4)), 3)
-        arriba = self._foto((0.25, 0.08, 0.75, 0.5))
-        self.assertEqual(tarjetas.estilo_compatible(arriba, 4, (2, 3, 4)), 2)
-        self.assertEqual(tarjetas.estilo_compatible(None, 4, (2, 3, 4)), 4)
-
-    def test_guia_de_composicion_pone_la_silueta_en_el_espacio_reservado(self):
+    def test_ilustracion_se_recorta_al_espacio_de_la_tarjeta(self):
         import io
         from PIL import Image
-        guia = Image.open(io.BytesIO(tarjetas.guia_composicion(3, "#F65155")))
-        self.assertEqual(guia.size, (912, 1216))
-        self.assertLess(guia.getpixel((int(912 * 0.25), int(1216 * 0.71)))[0], 200)
-        self.assertEqual(guia.getpixel((int(912 * 0.8), int(1216 * 0.2))), (0xF6, 0x51, 0x55))
-
-    def test_fondo_ilustracion_sin_capas(self):
-        import io
-        from PIL import Image
-        img = Image.open(io.BytesIO(tarjetas.fondo_ilustracion(self._foto((0.2, 0.1, 0.8, 0.5)), escala=0.5)))
-        self.assertEqual(img.size, (540, 720))
-        self.assertLess(img.getpixel((270, 200))[0], 80)
-        self.assertGreater(img.getpixel((270, 600))[0], 200)
+        img = Image.open(io.BytesIO(tarjetas.ilustracion_en_recuadro(self._foto((0.2, 0.2, 0.8, 0.8)), 410, 880, escala=1)))
+        self.assertEqual(img.size, (410, 880))
+        self.assertEqual(img.mode, "RGBA")
 
     def test_tarjeta_con_ilustracion_no_dibuja_recuadro(self):
         import io

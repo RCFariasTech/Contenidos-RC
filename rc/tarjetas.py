@@ -98,23 +98,30 @@ class Lienzo:
         return len(lineas) * tam * inter
 
     def fondo(self, color):
-        """Color de la tarjeta; si la tarjeta tiene ilustración elegida, la ilustración ocupa todo el fondo y se
-        funde con ese color bajo el texto (sin recuadro ni corte entre imagen y fondo)."""
+        """Color de la tarjeta; si la tarjeta tiene ilustración elegida, se usa el color real del fondo de la imagen."""
         datos = self.imagenes.get(self.tarjeta)
-        if datos and self.estilo in ZONAS_TEXTO:
+        if datos:
             try:
-                from reportlab.lib.utils import ImageReader
-                compuesto = fondo_ilustracion(datos)
-                self.c.drawImage(ImageReader(io.BytesIO(compuesto)), 0, 0, width=self.ancho, height=self.alto)
+                self.c.setFillColor(HexColor(color_fondo_imagen(datos)))
+                self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
                 return
-            except Exception:  # imagen dañada: se usa el color liso
+            except Exception:  # imagen dañada: color de la paleta
                 pass
         self.c.setFillColor(self.col[color])
         self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
 
     def marcador(self, x, y_sup, ancho, alto, nota, claro=True):
-        """Recuadro con la nota de qué ilustrar (solo en la vista previa y si la tarjeta aún no tiene ilustración)."""
-        if self.imagenes.get(self.tarjeta) or not self.guias:
+        """Espacio de la ilustración: la imagen elegida o, en la vista previa, el recuadro con la nota de qué ilustrar."""
+        datos = self.imagenes.get(self.tarjeta)
+        if datos:
+            try:
+                from reportlab.lib.utils import ImageReader
+                self.c.drawImage(ImageReader(io.BytesIO(ilustracion_en_recuadro(datos, ancho, alto))), x,
+                                 self.alto - y_sup - alto, width=ancho, height=alto, mask="auto")
+                return
+            except Exception:
+                pass
+        if not self.guias:
             return
         c = self.c
         y = H - y_sup - alto
@@ -162,96 +169,38 @@ class Lienzo:
         renderPDF.draw(dib, self.c, cx - ancho / 2, cy - dib.height * k / 2)
 
 
-# Zonas de la tarjeta (fracciones x0, y0, x1, y1) en cada estilo con ilustración:
-#   ESPACIO_PERSONAJE: donde debe quedar el personaje (se le indica a Krea con un boceto de composición).
-#   ZONAS_TEXTO: donde va el texto; si el personaje generado las invade, la tarjeta cambia a un estilo compatible.
-ESPACIO_PERSONAJE = {
-    1: (0.18, 0.05, 0.82, 0.48),
-    2: (0.22, 0.20, 0.78, 0.60),
-    3: (0.04, 0.46, 0.46, 0.96),
-    4: (0.04, 0.14, 0.44, 0.86),
-}
-ZONAS_TEXTO = {
-    1: [(0.0, 0.53, 1.0, 1.0)],
-    2: [(0.0, 0.66, 1.0, 1.0)],
-    3: [(0.0, 0.0, 1.0, 0.40), (0.49, 0.40, 1.0, 1.0)],
-    4: [(0.47, 0.0, 1.0, 1.0)],
-}
-COMPOSICION = {
-    1: "with the characters in the upper half of the image and the bottom half of the image empty",
-    2: "with the characters in the center of the image and the bottom third of the image empty",
-    3: "with the characters in the bottom left corner and the top and right side of the image empty",
-    4: "with the characters on the left side and the right half of the image empty",
-}
-
-
-def guia_composicion(estilo: int, color_hex: str, ancho: int = 912, alto: int = 1216) -> bytes:
-    """Boceto para Krea (imagen a imagen): fondo plano del color de la tarjeta y una silueta gris donde debe ir el
-    personaje, para que la ilustración nazca ubicada en su espacio y no invada el texto."""
-    from PIL import Image, ImageDraw, ImageFilter
-    img = Image.new("RGB", (ancho, alto), color_hex)
-    x0, y0, x1, y1 = ESPACIO_PERSONAJE[estilo]
-    caja = (x0 * ancho, y0 * alto, x1 * ancho, y1 * alto)
-    ImageDraw.Draw(img).ellipse(caja, fill=(150, 150, 150))
-    salida = io.BytesIO()
-    img.filter(ImageFilter.GaussianBlur(min(ancho, alto) // 40)).save(salida, "PNG")
-    return salida.getvalue()
-
-
 def _abrir(datos: bytes):
     from PIL import Image
     return Image.open(io.BytesIO(datos)).convert("RGB")
 
 
-def caja_personaje(datos: bytes) -> tuple[float, float, float, float] | None:
-    """Caja (fracciones) de lo que no es fondo en una ilustración de fondo plano (fondo = color de las esquinas)."""
-    from PIL import ImageChops
+def color_fondo_imagen(datos: bytes) -> str:
+    """Hex del fondo real de la ilustración (mediana de su borde). La tarjeta se pinta con este color para que la
+    imagen y el fondo sean el mismo tono y no se note el recuadro (Krea nunca clava exactamente el color pedido)."""
     img = _abrir(datos)
-    img.thumbnail((240, 320))
+    img.thumbnail((200, 200))
     w, h = img.size
-    esquinas = [img.getpixel(p) for p in ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3))]
-    fondo = tuple(sorted(c[i] for c in esquinas)[1] for i in range(3))
-    from PIL import Image
-    dif = ImageChops.difference(img, Image.new("RGB", (w, h), fondo)).convert("L").point(lambda v: 255 if v > 40 else 0)
-    caja = dif.getbbox()
-    return (caja[0] / w, caja[1] / h, caja[2] / w, caja[3] / h) if caja else None
+    borde = [img.getpixel((x, y)) for x in range(0, w, 4) for y in (0, 1, h - 2, h - 1)]
+    borde += [img.getpixel((x, y)) for y in range(0, h, 4) for x in (0, 1, w - 2, w - 1)]
+    return "#" + "".join(f"{sorted(c[i] for c in borde)[len(borde) // 2]:02X}" for i in range(3))
 
 
-def _invade(caja, zonas, tolerancia: float = 0.08) -> bool:
-    if not caja:
-        return False
-    area = max(1e-6, (caja[2] - caja[0]) * (caja[3] - caja[1]))
-    for zx0, zy0, zx1, zy1 in zonas:
-        ix = max(0.0, min(caja[2], zx1) - max(caja[0], zx0))
-        iy = max(0.0, min(caja[3], zy1) - max(caja[1], zy0))
-        if ix * iy / area > tolerancia:
-            return True
-    return False
-
-
-def estilo_compatible(datos: bytes | None, estilo: int, candidatos: tuple[int, ...]) -> int:
-    """Si el personaje de la ilustración invade el texto del estilo, devuelve un estilo candidato donde no lo hace."""
-    if not datos or estilo not in ZONAS_TEXTO:
-        return estilo
-    try:
-        caja = caja_personaje(datos)
-    except Exception:
-        return estilo
-    if not _invade(caja, ZONAS_TEXTO[estilo]):
-        return estilo
-    return next((e for e in candidatos if e != estilo and not _invade(caja, ZONAS_TEXTO[e])), estilo)
-
-
-def fondo_ilustracion(datos: bytes, escala: float = 1.5) -> bytes:
-    """JPEG del tamaño de la tarjeta con la ilustración a sangre (recortada como object-fit: cover), sin capas encima."""
-    from PIL import Image
-    w, h = round(W * escala), round(H * escala)
+def ilustracion_en_recuadro(datos: bytes, ancho: float, alto: float, escala: float = 1.5) -> bytes:
+    """PNG con alfa: la ilustración recortada a la proporción del recuadro con un borde apenas difuminado (3 %), que se
+    funde con el fondo de la tarjeta porque éste se pinta con el mismo color de fondo de la imagen."""
+    from PIL import Image, ImageDraw, ImageFilter
     img = _abrir(datos)
+    w, h = max(1, round(ancho * escala)), max(1, round(alto * escala))
     k = max(w / img.width, h / img.height)
     img = img.resize((max(w, round(img.width * k)), max(h, round(img.height * k))), Image.LANCZOS)
     izq, arr = (img.width - w) // 2, (img.height - h) // 2
+    img = img.crop((izq, arr, izq + w, arr + h))
+    borde = max(2, round(min(w, h) * 0.03))
+    mascara = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mascara).rectangle((borde, borde, w - borde - 1, h - borde - 1), fill=255)
+    img.putalpha(mascara.filter(ImageFilter.GaussianBlur(borde / 2)))
     salida = io.BytesIO()
-    img.crop((izq, arr, izq + w, arr + h)).save(salida, "JPEG", quality=90)
+    img.save(salida, "PNG", optimize=True)
     return salida.getvalue()
 
 
@@ -432,7 +381,7 @@ def estilos_sugeridos(variante: int = 0, semilla: int = 0) -> list[int]:
 # Fondo de cada estilo con ilustración y tamaño (px) de su recuadro, para pedirle a Krea una imagen del color y la
 # proporción correctos.
 FONDO_ESTILO = {2: "azul_marino", 3: "coral", 4: "blanco"}
-# La ilustración se genera del tamaño de la tarjeta completa (3:4) porque ocupa todo el fondo.
+AREA_ILUSTRACION = {1: (W - 2 * M, 640), 2: (W - 2 * M - 200, 560), 3: (420, 620), 4: (410, 880)}
 
 
 def estilo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> int:
@@ -447,9 +396,11 @@ def fondo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> tuple[
     return clave, marca()["paleta"][clave]
 
 
-def tamano_ilustracion(estilo: int = 1, lado_largo: int = 1216) -> tuple[int, int]:
-    """(ancho, alto) para generar la imagen: proporción de la tarjeta (3:4), lado largo dado, múltiplos de 16."""
-    return max(512, round(lado_largo * W / H / 16) * 16), max(512, round(lado_largo / 16) * 16)
+def tamano_ilustracion(estilo: int, lado_largo: int = 1216) -> tuple[int, int]:
+    """(ancho, alto) para generar la imagen: la proporción del espacio de ilustración de ese estilo, múltiplos de 16."""
+    ancho, alto = AREA_ILUSTRACION[estilo]
+    k = lado_largo / max(ancho, alto)
+    return max(512, round(ancho * k / 16) * 16), max(512, round(alto * k / 16) * 16)
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
@@ -463,8 +414,6 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     c.setAuthor("RC Farías")
     L = Lienzo(c, col, guias=guias, imagenes=imagenes)
     for numero, (estilo, datos) in enumerate(zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)), 1):
-        if numero == 2:  # si la ilustración elegida invade el texto, se usa un estilo donde no lo haga
-            estilo = estilo_compatible((imagenes or {}).get(2), estilo, ESTILOS_TARJETA_2)
         L.tarjeta, L.estilo = numero, estilo
         ESTILOS[estilo](L, {**datos, "variante": variante + semilla})
         c.showPage()

@@ -39,8 +39,9 @@ def construir_prompt(descripcion: str, color: str, hex_fondo: str = "", composic
     escena = escena.split(", isolated in")[0]  # si ya traía fondo, se reemplaza por el de la tarjeta
     partes = [escena, composicion] if composicion else [escena]
     partes.append(f"isolated in a flat solid {NOMBRES_COLOR.get(color, color)} background")
-    partes.append("seamless backdrop with no floor line and no horizon, only a minimal soft contact shadow where "
-                  "it touches the surface, no long or cast shadows")
+    partes.append("seamless backdrop with no floor line, no horizon and no vignette, even flat lighting on the background, "
+                  "only a minimal soft contact shadow right under the subject so it does not float, no long or cast "
+                  "shadows and no light spots away from the subject")
     return ", ".join(partes)[:1800]
 
 
@@ -97,7 +98,7 @@ def proporcion_cercana(ancho: int, alto: int) -> str:
     return min(PROPORCIONES_KREA2, key=lambda k: abs(PROPORCIONES_KREA2[k] - r))
 
 
-def cuerpo_generacion(prompt: str, ancho: int, alto: int, guia: str | None = None) -> dict:
+def cuerpo_generacion(prompt: str, ancho: int, alto: int) -> dict:
     """Parámetros según el modelo configurado: Flux (ancho/alto en px) o Krea 2 (proporción y resolución)."""
     k = ajustes()["krea"]
     base = {"prompt": prompt, "seed": random.randint(1, 2**31 - 1),
@@ -109,23 +110,12 @@ def cuerpo_generacion(prompt: str, ancho: int, alto: int, guia: str | None = Non
     if k["modelo"].startswith("krea/krea-2"):
         return {**base, "aspect_ratio": proporcion_cercana(ancho, alto), "resolution": "1K",
                 "creativity": k.get("creatividad", "raw")}
-    cuerpo = {**base, "width": ancho, "height": alto, "steps": k["pasos"]}
-    if guia:  # URL del boceto de composición: el personaje nace en su espacio (imagen a imagen)
-        cuerpo["image_url"] = guia
-        cuerpo["strength"] = k.get("fuerza_guia", 0.88)
-    return cuerpo
+    return {**base, "width": ancho, "height": alto, "steps": k["pasos"]}
 
 
-def crear_trabajo(prompt: str, ancho: int, alto: int, guia: str | None = None) -> str:
-    """Envía una generación con el LoRA y devuelve el id del trabajo. Si Krea rechaza el boceto, reintenta sin él."""
-    ruta = f"/generate/image/{ajustes()['krea']['modelo']}"
-    try:
-        resp = _peticion("POST", ruta, cuerpo_generacion(prompt, ancho, alto, guia))
-    except ErrorNegocio as e:
-        if not guia or "(400)" not in str(e):
-            raise
-        log.warning("Krea rechazó el boceto de composición; se genera sin él: %s", e)
-        resp = _peticion("POST", ruta, cuerpo_generacion(prompt, ancho, alto))
+def crear_trabajo(prompt: str, ancho: int, alto: int) -> str:
+    """Envía una generación con el LoRA y devuelve el id del trabajo."""
+    resp = _peticion("POST", f"/generate/image/{ajustes()['krea']['modelo']}", cuerpo_generacion(prompt, ancho, alto))
     job_id = resp.get("job_id")
     if not job_id:
         raise ErrorNegocio("Krea no devolvió el id del trabajo.")

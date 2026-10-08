@@ -52,25 +52,6 @@ class TestKrea(unittest.TestCase):
             refs = krea.cuerpo_generacion("p", 1216, 848)["image_style_references"]
         self.assertEqual(refs, [{"url": "https://gen.krea.ai/images/a.png", "strength": 0.3}])
 
-    def test_envia_la_guia_de_composicion(self):
-        c = krea.cuerpo_generacion("p", 912, 1216, guia="https://app/api/guia-composicion?estilo=1")
-        self.assertEqual(c["image_url"], "https://app/api/guia-composicion?estilo=1")
-        self.assertEqual(c["strength"], 0.88)
-        self.assertNotIn("image_url", krea.cuerpo_generacion("p", 912, 1216))
-
-    def test_si_krea_rechaza_el_boceto_reintenta_sin_el(self):
-        cuerpos = []
-
-        def urlopen(req, timeout=None):
-            cuerpos.append(json.loads(req.data))
-            if "image_url" in cuerpos[-1]:
-                raise urllib.error.HTTPError(req.full_url, 400, "x", {}, io.BytesIO(b'{"error": "bad image"}'))
-            return Resp(json.dumps({"job_id": "ok"}).encode())
-
-        with mock.patch.dict("os.environ", {"KREA_API_TOKEN": "tok"}), mock.patch("urllib.request.urlopen", urlopen):
-            self.assertEqual(krea.crear_trabajo("p", 912, 1216, "https://app/guia.png"), "ok")
-        self.assertEqual(["image_url" in c for c in cuerpos], [True, False])
-
     def test_consultar_interpreta_los_estados(self):
         def respuesta(cuerpo):
             return mock.patch("urllib.request.urlopen", lambda req, timeout=None: Resp(json.dumps(cuerpo).encode()))
@@ -136,18 +117,18 @@ class TestKrea(unittest.TestCase):
 
 
 class TestTamanosYFondos(unittest.TestCase):
-    def test_la_ilustracion_se_genera_del_tamano_de_la_tarjeta(self):
-        ancho, alto = tarjetas.tamano_ilustracion()
-        self.assertEqual((ancho, alto), (912, 1216))                      # 3:4, múltiplos de 16
-        self.assertAlmostEqual(ancho / alto, tarjetas.W / tarjetas.H, delta=0.01)
+    def test_la_ilustracion_se_genera_con_la_proporcion_de_su_espacio(self):
+        for estilo, (w, h) in tarjetas.AREA_ILUSTRACION.items():
+            ancho, alto = tarjetas.tamano_ilustracion(estilo)
+            self.assertTrue(ancho % 16 == 0 and alto % 16 == 0 and max(ancho, alto) <= 2368)
+            self.assertAlmostEqual(ancho / alto, w / h, delta=0.05)
 
-    def test_composicion_deja_libre_la_zona_del_texto(self):
-        p = krea.construir_prompt("3d of a robot", "coral", composicion=tarjetas.COMPOSICION[1])
-        self.assertTrue(p.startswith("3d of a robot, with the characters in the upper half of the image and the bottom "
-                                     "half of the image empty, isolated in a flat solid red background"))
+    def test_prompt_sin_piso_ni_sombras_largas(self):
+        p = krea.construir_prompt("3d of a robot", "coral")
+        self.assertIn("isolated in a flat solid red background", p)
         self.assertIn("no floor line", p)
         self.assertIn("minimal soft contact shadow", p)
-        self.assertEqual(set(tarjetas.COMPOSICION), set(tarjetas.ZONAS_TEXTO))
+        self.assertIn("no long or cast shadows", p)
 
     def test_el_fondo_pedido_coincide_con_el_de_la_tarjeta(self):
         for variante in range(6):

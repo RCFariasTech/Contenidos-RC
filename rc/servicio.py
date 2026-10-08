@@ -394,13 +394,11 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
                                                           t["texto"], t.get("nota", ""))
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
-    prompt = krea.construir_prompt(descripcion, clave, hex_fondo, tarjetas.COMPOSICION.get(estilo, ""))
-    base = (env("APP_URL", False) or teams.APP_URL_POR_DEFECTO).rstrip("/")
-    guia = f"{base}/api/guia-composicion?estilo={estilo}&color={hex_fondo.lstrip('#')}&w={ancho}&h={alto}"
+    prompt = krea.construir_prompt(descripcion, clave, hex_fondo)
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
         try:
-            job_id = krea.crear_trabajo(prompt, ancho, alto, guia)
+            job_id = krea.crear_trabajo(prompt, ancho, alto)
         except ErrorNegocio as e:
             fallo = e
             break

@@ -358,9 +358,8 @@ class TestFlujo(unittest.TestCase):
         trabajos = iter(f"job-{i}" for i in range(1, 20))
         enviados, guias = [], []
 
-        def crear(prompt, ancho, alto, guia=None):
+        def crear(prompt, ancho, alto):
             enviados.append((prompt, ancho, alto))
-            guias.append(guia)
             return next(trabajos)
 
         with mock.patch.object(krea, "configurado", return_value=True), \
@@ -372,9 +371,8 @@ class TestFlujo(unittest.TestCase):
             prompt, ancho, alto = enviados[0]
             self.assertIn("3d of a 3D character pushing a shopping cart", prompt)  # el prompt_krea de la tarjeta
             self.assertRegex(prompt, r", isolated in a flat solid [a-z ]+ background, ")       # fondo de la tarjeta, al estilo RC
-            self.assertEqual((ancho, alto), (912, 1216))                        # tarjeta completa 3:4
+            self.assertEqual((ancho, alto), (1216, 848))                        # espacio de ilustración de la portada
             self.assertEqual(filas[0]["fondo"][0], "#")
-            self.assertRegex(guias[0], r"^https://.+/api/guia-composicion\?estilo=1&color=[0-9A-Fa-f]{6}&w=912&h=1216$")
             self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
             for caso in ((carrusel["id"], 3), (reel["id"], 1)):
                 with self.assertRaises(servicio.ErrorNegocio):
@@ -397,7 +395,7 @@ class TestFlujo(unittest.TestCase):
             return f"3d of a scene for {titular}"
 
         with mock.patch.object(krea, "configurado", return_value=True), \
-                mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, h, g=None: enviados.append(p) or f"j{len(enviados)}"), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, h: enviados.append(p) or f"j{len(enviados)}"), \
                 mock.patch.object(servicio.generador, "describir_ilustracion", side_effect=describir):
             r2 = servicio.generar_ilustraciones(carrusel["id"], 2)
             r_user = servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="Two 3D robots shaking hands")
