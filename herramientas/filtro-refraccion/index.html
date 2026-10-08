@@ -301,7 +301,8 @@ const GEL_SIDE = 512;    // resolución del campo del gel
 const VERT = `
 attribute vec2 a;
 varying vec2 vUv;
-void main(){ vUv = vec2(a.x*0.5+0.5, 0.5-a.y*0.5); gl_Position = vec4(a,0.,1.); }`;
+uniform vec4 uRect;                 // x, y, ancho, alto de la parte de la imagen que se dibuja (0,0,1,1 = todo)
+void main(){ vUv = uRect.xy + vec2(a.x*0.5+0.5, 0.5-a.y*0.5)*uRect.zw; gl_Position = vec4(a,0.,1.); }`;
 
 const COMMON = `
 precision highp float;
@@ -583,7 +584,7 @@ uniform sampler2D tex;
 uniform float showOrig, hasGel;
 uniform float oLen, oRough, oReach, oThr, oSoft, oHalo, oHaloR, oEdge, oEdgeW, oEdgeS, oGrain, oGrainS, oTones, oDir;
 uniform vec3 pS, pM, pL, pA, pC;                // sombra, medio, luz, acento (halo y borde cálido), borde frío
-uniform vec2 uRes;
+uniform vec2 uRes, uPixOff;
 uniform float uLo, uHi;                         // rango de luminosidad de la foto (percentiles 3 y 97)
 
 float lumAt(vec2 uv){ return dot(texture2D(tex, mirror(uv)).rgb, vec3(.2126, .7152, .0722)); }
@@ -652,7 +653,7 @@ void main(){
 
   // ---- grano uniforme, más marcado en medios tonos ----
   float cell = max(1., mix(1., 3.5, oGrainS) * uRes.y/1200.);
-  vec2 gp = floor(gl_FragCoord.xy/cell);
+  vec2 gp = floor((gl_FragCoord.xy + uPixOff)/cell);
   vec3 gg = vec3(hash(gp + seed), hash(gp + vec2(7.1, 3.3) + seed), hash(gp + vec2(1.9, 9.7) + seed)) - .5;
   float lo = dot(col, vec3(.3, .59, .11));
   float amt = oGrain*.5*(.45 + .55*(1. - abs(2.*lo - 1.)));
@@ -665,6 +666,7 @@ const $ = id => document.getElementById(id);
 const cv = $("cv"), wrap = $("wrap"), drop = $("drop"), errEl = $("err");
 const state = { size: 0, dir: 2, dup: 1, seed: 1.0, tool: 2, effect: 0, oTones: 3, oDir: 2, lum: [0, 1], hasGel: false, pal: [[0,0,0],[1,1,1],[.8,.6,.2],[.5,.5,.5],[.7,.3,.2]], loaded: false, showOrig: 0 };
 
+let exportFull = null;                 // durante la exportación por bandas: tamaño total, parte que se dibuja y desfase de píxeles
 let gl, prog, prog2, prog3, pushProg, tex, maskTex, U = {}, U2 = {}, U3 = {}, PL = {}, gelTex = [null, null], gelFbo = [null, null], gelCur = 0, eTex = [null, null], eFbo = [null, null], eCur = 0, uw = 1, uh = 1, imgW = 0, imgH = 0, renderW = 0, renderH = 0, raf = 0;      // render* = tamaño real del dibujo (mayor que img* al exportar en alta resolución)
 
 function makeProgram(fragSrc) {
@@ -690,7 +692,7 @@ const OX_PAL = ["pS", "pM", "pL", "pA", "pC"];
 const OX_KEYS = ["S", "M", "L", "A", "C"];                      // sombra, medio, luz, acento, borde frío
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const oxColors = () => OX_KEYS.map(k => hexRgb($("c" + k).value));
-const COMMON_U = ["shineAmt", "shadeAmt", "efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
+const COMMON_U = ["uRect", "uPixOff", "shineAmt", "shadeAmt", "efield", "uMode", "uSel", "dispAmt", ...PAL_IDS, ...OX_IDS, ...OX_PAL, "oTones", "oDir", "uRes", "uLo", "uHi", "aspect", "aspect","intensity","coverage","seed","sizeMix","dirMode","dupAmt","mask","ufield","uTexel", ...MIN_IDS];
 
 function initGL() {
   gl = cv.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
@@ -768,7 +770,10 @@ function setCommon(L) {
   for (const id of OX_IDS) gl.uniform1f(L[id], +$(id).value);
   OX_PAL.forEach((id, i) => gl.uniform3fv(L[id], oxColors()[i]));
   gl.uniform1f(L.oTones, state.oTones); gl.uniform1f(L.oDir, state.oDir);
-  gl.uniform2f(L.uRes, renderW, renderH);
+  gl.uniform2f(L.uRes, exportFull ? exportFull.W : renderW, exportFull ? exportFull.H : renderH);
+  const R = exportFull ? exportFull.rect : [0, 0, 1, 1];
+  gl.uniform4f(L.uRect, R[0], R[1], R[2], R[3]);
+  gl.uniform2f(L.uPixOff, exportFull ? exportFull.px[0] : 0, exportFull ? exportFull.px[1] : 0);
   gl.uniform1f(L.uLo, state.lum[0]); gl.uniform1f(L.uHi, state.lum[1]);
   gl.uniform1i(L.mask, 1);
   gl.uniform1i(L.ufield, 2);
@@ -1433,10 +1438,78 @@ function updateDlInfo() {
 }
 $("dlScale").addEventListener("change", updateDlInfo);
 const dlName = () => ["sesgo-liquido", "memoria-mineral", "oxido-solar", "imagen"][state.effect];
+// PNG por bandas: se dibuja y codifica franja a franja sin crear nunca un lienzo gigante, así no depende del tamaño máximo de lienzo del navegador
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crcUpd = (c, u8) => { for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return c; };
+const be32 = n => new Uint8Array([n >>> 24, n >>> 16 & 255, n >>> 8 & 255, n & 255]);
+const ascii = t => new Uint8Array([...t].map(ch => ch.charCodeAt(0)));
+function pngChunk(type, data) {
+  const t = ascii(type); let c = crcUpd(0xFFFFFFFF, t); c = crcUpd(c, data);
+  return [be32(data.length), t, data, be32((c ^ 0xFFFFFFFF) >>> 0)];
+}
+async function exportBands(W, H, progress) {
+  const bh = Math.max(16, Math.floor(4e6 / W));                         // franjas de ~4 Mpx
+  const cs = new CompressionStream("deflate"), wr = cs.writable.getWriter(), rd = cs.readable.getReader();
+  const parts = []; let packed = 0;
+  const pump = (async () => { for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); packed += value.length; } })();
+  const rect = cv.getBoundingClientRect();
+  cv.style.width = rect.width + "px"; cv.style.height = rect.height + "px"; cv.style.opacity = ".3";
+  const buf = new Uint8Array(W * bh * 4);
+  try {
+    for (let y0 = 0; y0 < H; y0 += bh) {
+      const h = Math.min(bh, H - y0);
+      if (cv.width !== W || cv.height !== h) { cv.width = W; cv.height = h; }
+      if (gl.drawingBufferWidth !== W || gl.drawingBufferHeight !== h) throw new Error("este equipo no permite dibujar franjas de " + W + " px de ancho");
+      renderW = W; renderH = h;
+      exportFull = { W, H, rect: [0, y0 / H, 1, h / H], px: [0, H - y0 - h] };
+      cancelAnimationFrame(raf); drawNow();
+      gl.readPixels(0, 0, W, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      const raw = new Uint8Array(h * (W * 3 + 1));                       // RGB, filtro "Sub" por fila (readPixels entrega las filas de abajo hacia arriba)
+      let o = 0;
+      for (let r = h - 1; r >= 0; r--) {
+        raw[o++] = 1;
+        let i = r * W * 4, pr = 0, pg = 0, pb = 0;
+        for (let x = 0; x < W; x++, i += 4) {
+          const R = buf[i], G = buf[i + 1], B = buf[i + 2];
+          raw[o++] = (R - pr) & 255; raw[o++] = (G - pg) & 255; raw[o++] = (B - pb) & 255;
+          pr = R; pg = G; pb = B;
+        }
+      }
+      await wr.write(raw);
+      progress(Math.min(99, Math.round((y0 + h) / H * 100)));
+      await new Promise(res => setTimeout(res, 0));                      // deja respirar a la página
+    }
+    await wr.close(); await pump;
+  } finally {
+    exportFull = null; cv.style.opacity = "";
+    cv.width = imgW; cv.height = imgH; renderW = imgW; renderH = imgH; cv.style.width = cv.style.height = "";
+    gl.viewport(0, 0, imgW, imgH);
+  }
+  const ihdr = new Uint8Array(13); ihdr.set(be32(W), 0); ihdr.set(be32(H), 4); ihdr[8] = 8; ihdr[9] = 2;
+  const idat = new Uint8Array(packed); let p = 0; for (const c of parts) { idat.set(c, p); p += c.length; }
+  return new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), ...pngChunk("IHDR", ihdr), ...pngChunk("IDAT", idat), ...pngChunk("IEND", new Uint8Array(0))], { type: "image/png" });
+}
+// Alternativa si el navegador no trae CompressionStream: un solo lienzo, reduciendo el tamaño hasta que el equipo lo acepte
+async function exportCanvas(W, H) {
+  const rect = cv.getBoundingClientRect();
+  cv.style.width = rect.width + "px"; cv.style.height = rect.height + "px";
+  let k = 1;
+  try {
+    for (;;) {
+      const w = Math.round(W * k), h = Math.round(H * k);
+      cv.width = w; cv.height = h; renderW = w; renderH = h;
+      if (gl.drawingBufferWidth === w && gl.drawingBufferHeight === h) { cancelAnimationFrame(raf); drawNow(); break; }
+      k *= .85; if (w < imgW) throw new Error("este equipo no permite dibujar a más resolución");
+    }
+    return { blob: await new Promise(res => cv.toBlob(res, "image/png")), W: cv.width, H: cv.height };
+  } finally {
+    cv.width = imgW; cv.height = imgH; renderW = imgW; renderH = imgH; cv.style.width = cv.style.height = ""; gl.viewport(0, 0, imgW, imgH);
+  }
+}
 $("dl").addEventListener("click", async () => {
   errEl.textContent = "";
   if (gl.isContextLost()) { errEl.textContent = "La GPU se reinició. Recarga la página y vuelve a cargar la imagen."; return; }
-  const { f, W, H } = exportSize(), big = W > imgW;
+  let { f, W, H } = exportSize(); const big = W > imgW, want = +$("dlScale").value;
   const btn = $("dl"), label = btn.textContent;
   btn.disabled = true;
   let blob = null;
@@ -1444,29 +1517,18 @@ $("dl").addEventListener("click", async () => {
     if (big) {
       btn.textContent = "Generando " + W + " × " + H + "…";
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));       // deja pintar el aviso
-      const rect = cv.getBoundingClientRect();
-      cv.style.width = rect.width + "px"; cv.style.height = rect.height + "px";      // la vista no cambia de tamaño
-      cv.width = W; cv.height = H; renderW = W; renderH = H;
-      if (gl.drawingBufferWidth !== W || gl.drawingBufferHeight !== H) throw new Error("este equipo no permite dibujar a " + W + " × " + H);
-      cancelAnimationFrame(raf); drawNow();
-    }
-    blob = await new Promise(res => cv.toBlob(res, "image/png"));
-    if (!blob) throw new Error("no se pudo generar el PNG (imagen demasiado grande para este navegador). Prueba con una resolución menor");
-  } catch (e) { errEl.textContent = "No se pudo descargar: " + e.message; }
-  finally {
-    if (big) {                                                                         // vuelve a la vista normal
-      cv.width = imgW; cv.height = imgH; renderW = imgW; renderH = imgH;
-      cv.style.width = cv.style.height = "";
-      gl.viewport(0, 0, imgW, imgH); render();
-    }
-    btn.textContent = label; btn.disabled = false;
-  }
+      if (typeof CompressionStream !== "undefined") blob = await exportBands(W, H, p => { btn.textContent = "Generando " + W + " × " + H + "… " + p + " %"; });
+      else { const r = await exportCanvas(W, H); blob = r.blob; W = r.W; H = r.H; f = W / imgW; }
+    } else blob = await new Promise(res => cv.toBlob(res, "image/png"));
+    if (!blob) throw new Error("no se pudo generar el PNG. Prueba con una resolución menor");
+  } catch (e) { errEl.textContent = "No se pudo descargar: " + e.message; blob = null; }
+  finally { render(); btn.textContent = label; btn.disabled = false; }
   if (!blob) return;
   const url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url; a.download = dlName() + (big ? "-" + W + "x" + H : "") + ".png";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 15000);
-  $("info").textContent = "Descargado: " + W + " × " + H + " px" + (f < +$("dlScale").value - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
+  $("info").textContent = "Descargado: " + W + " × " + H + " px" + (f < want - 1e-6 ? " (el equipo limita la ampliación a " + f.toFixed(1) + "×)" : "") + ".";
 });
 
 const fileIn = $("file");
