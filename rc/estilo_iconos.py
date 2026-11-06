@@ -27,12 +27,14 @@ ESTILO_ICONO = (
 )
 
 ESTILO_FOTO = (
-    "Candid documentary photograph, Colombia. {escena}. Real everyday people, "
-    "not models: natural skin texture with pores, fine lines and small "
-    "imperfections, no makeup look. Natural, soft, uneven available light. "
-    "Anatomically correct hands with five fingers each, relaxed natural poses. "
-    "Shot on 35mm, eye level, slightly imperfect framing, mild grain, "
-    "unretouched, no text overlays, no logos."
+    "Candid documentary photograph, Colombia. {escena}. Middle-class Latin "
+    "American people, well-groomed and neatly dressed in clean, contemporary "
+    "smart-casual clothes, tidy hair, light natural everyday makeup where it "
+    "applies. Real people, not fashion models: natural skin texture with visible "
+    "pores and subtle fine lines, unretouched. Clean, modern settings. Natural, "
+    "soft available light. Anatomically correct hands with five fingers each, "
+    "relaxed natural poses. Shot on 35mm, eye level, slightly imperfect framing, "
+    "mild grain, no text overlays, no logos."
 )
 
 
