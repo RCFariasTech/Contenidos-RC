@@ -325,7 +325,7 @@ def _variante(pieza: dict) -> tuple[str, int]:
 
 
 def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[str, bytes]:
-    """PDF para diseño: las 5 tarjetas 3:4 de un carrusel o el guion visual 9:16 de un reel."""
+    """PDF para diseño: las 5 tarjetas 4:5 de un carrusel o el guion visual 9:16 de un reel."""
     from rc import reels, tarjetas  # import diferido: reportlab/svglib solo se cargan al generar
     pieza = _pieza(pieza_id)
     if not pieza.get("contenido"):
@@ -346,7 +346,7 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     pieza = _pieza(pieza_id)
     _nombre, pdf = tarjetas_pdf(pieza_id, semilla, guias=True)
     imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf, max(200, min(int(ancho), 900)))]
-    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 3 / 4}
+    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5}
 
 
 # ---------- ilustraciones 3D (Krea) ----------
@@ -361,27 +361,24 @@ def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
 
 
 def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None) -> dict:
-    """Pide a Krea varias variantes de la ilustración de la tarjeta 1 o 2 (LoRA «3d characters Flux»).
+    """Pide a Krea (Nano Banana Pro) varias variantes de la imagen de la tarjeta 1 (ícono isométrico en el estilo de
+    la guía, con los íconos de la guía como referencia) o de la tarjeta 2 (foto realista).
 
-    La escena sale, en este orden, de: la descripción que escribió el usuario, el `prompt_krea` de esa tarjeta o,
-    si no hay, una descripción que Claude escribe a partir del texto de ESA tarjeta (para que cada ilustración
-    corresponda a su tarjeta). Devuelve {"items": [...], "descripcion": str}.
+    El tema sale, en este orden, de: la descripción que escribió el usuario, el `prompt_krea` de esa tarjeta o, si no
+    hay, una descripción que Claude escribe a partir del texto de ESA tarjeta. Devuelve {"items": [...], "descripcion": str}.
     """
-    from rc import tarjetas
+    from rc import estilo_iconos, tarjetas
     pieza = _pieza(int(pieza_id))
     tarjeta = int(tarjeta)
     if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
-        raise ErrorNegocio("Las ilustraciones son para tarjetas de carruseles con contenido.")
-    if tarjeta not in (1, 2):
-        raise ErrorNegocio("Solo las tarjetas 1 y 2 llevan ilustración.")
+        raise ErrorNegocio("Las imágenes son para tarjetas de carruseles con contenido.")
+    if tarjeta not in tarjetas.TIPO_IMAGEN:
+        raise ErrorNegocio("Solo la tarjeta 1 (ícono) y la 2 (foto) llevan imagen.")
     if not krea.configurado():
-        raise ErrorNegocio("Las ilustraciones no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
-    _mes, variante = _variante(pieza)
-    semilla = max(0, int(semilla))
-    estilo = tarjetas.estilo_de_tarjeta(tarjeta, variante, semilla)
-    clave, hex_fondo = tarjetas.fondo_de_tarjeta(tarjeta, variante, semilla)
+        raise ErrorNegocio("Las imágenes no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
+    tipo = tarjetas.TIPO_IMAGEN[tarjeta]
     k = ajustes()["krea"]
-    ancho, alto = tarjetas.tamano_ilustracion(estilo, k["lado_largo"])
+    ancho, alto = (1024, 1024) if tipo == "icono" else (1376, 768)
     contenido = pieza["contenido"]
     descripcion = " ".join((descripcion or "").split())[:500]
     if not descripcion:
@@ -391,20 +388,22 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
         t = _texto_tarjeta(contenido, tarjeta)
         try:
             descripcion = generador.describir_ilustracion(contenido.get("tema_especifico", ""), t["titular"],
-                                                          t["texto"], t.get("nota", ""))
+                                                          t["texto"], t.get("nota", ""), tipo=tipo)
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
-    prompt = krea.construir_prompt(descripcion, clave, hex_fondo)
+    prompt = krea.construir_prompt(descripcion, tipo)
+    referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""))
+                   if tipo == "icono" else [])
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
         try:
-            job_id = krea.crear_trabajo(prompt, ancho, alto)
+            job_id = krea.crear_trabajo(prompt, tarjetas.PROPORCION_KREA[tarjeta], referencias)
         except ErrorNegocio as e:
             fallo = e
             break
         filas.append(db.insertar("ilustraciones", {
             "pieza_id": pieza["id"], "tarjeta": tarjeta, "job_id": job_id, "prompt": prompt,
-            "descripcion": descripcion, "fondo": hex_fondo, "ancho": ancho, "alto": alto})[0])
+            "descripcion": descripcion, "fondo": "#12244A" if tipo == "icono" else "", "ancho": ancho, "alto": alto})[0])
     if fallo and not filas:
         raise fallo
     return {"items": filas, "descripcion": descripcion}

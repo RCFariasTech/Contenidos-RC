@@ -179,36 +179,37 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     }
 
 
-SISTEMA_ILUSTRACION = (
-    "You write prompts for a text-to-image model trained on RC Farias' 3D characters. Given the text of ONE Instagram "
-    "carousel card (in Spanish), write ONE short English prompt (8 to 25 words) that illustrates exactly that card's idea.\n"
-    "Format: start with \"3d of\" or \"3d character of\" / \"3d characters of\", then the subject and what it is doing, "
-    "with one or two concrete objects. You may describe clothes in red, white or blue. Keep it simple and literal: one "
-    "clear scene, no metaphors, no text, letters, numbers, logos or brand names, no art-style words, and do NOT mention "
-    "the background (it is added later).\n"
-    "Examples of the expected style:\n"
-    "- 3d character of a person inside a giant backpack, the backpack has different pockets\n"
-    "- 3d characters of scientists standing in a laboratory\n"
-    "- 3d of a robot waving his hand on top of a red modern platform\n"
-    "- 3d of a character consulting a laptop\n"
-    "- 3d of a kid looking at a cellphone wearing a white shirt, red shorts, white boots and a blue backpack, with dark brown hair\n"
-    "Answer with the prompt only."
+SISTEMA_ICONO = (
+    "You describe the subject of ONE isometric 3D brand icon for an Instagram carousel card about BTL / experiential "
+    "marketing (RC Farias, Colombia). Given the card text (in Spanish), answer with ONE short English description "
+    "(10 to 30 words) of a small cluster of 2 to 4 concrete objects that represent exactly that card's idea (e.g. a "
+    "store shelf with a digital screen and a rising bar chart; a brand booth with a QR totem and a floating dashboard). "
+    "Objects only: no style words, no colors, no background, no text, letters, numbers, logos or brand names. "
+    "Answer with the description only."
+)
+
+SISTEMA_FOTO = (
+    "You describe ONE realistic documentary photo for an Instagram carousel card about BTL / experiential marketing in "
+    "Colombia. Given the card text (in Spanish), answer with ONE English scene description (15 to 40 words): who "
+    "(ordinary middle-class Latin American people, age and gender), where (a concrete, clean, modern place such as a "
+    "supermarket aisle, a mall activation, an event, an office) and what they are doing, with one or two concrete "
+    "objects. No style or camera words, no text, signs, logos or brand names. Answer with the description only."
 )
 
 
-def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "") -> str:
-    """Escena en inglés para Krea, a partir del texto de la tarjeta (sin búsqueda web; respuesta corta)."""
+def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", tipo: str = "icono") -> str:
+    """Tema en inglés para Krea (ícono isométrico o escena de foto), a partir del texto de la tarjeta."""
     usuario = (f"Carousel topic: {tema}\nCard headline: {titular}\nCard text: {texto}\n"
                + (f"Designer note (Spanish): {nota}\n" if nota else ""))
     try:
         respuesta = _cliente().messages.create(
-            model=ajustes()["modelo"], max_tokens=600, system=SISTEMA_ILUSTRACION,
+            model=ajustes()["modelo"], max_tokens=600, system=SISTEMA_ICONO if tipo == "icono" else SISTEMA_FOTO,
             messages=[{"role": "user", "content": usuario}], output_config={"effort": "low"})
     except anthropic.APIError as e:
-        raise ErrorGeneracion(f"No se pudo describir la ilustración: {e}") from e
+        raise ErrorGeneracion(f"No se pudo describir la imagen: {e}") from e
     descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
     if not descripcion:
-        raise ErrorGeneracion("El modelo no devolvió la descripción de la ilustración.")
+        raise ErrorGeneracion("El modelo no devolvió la descripción de la imagen.")
     return " ".join(descripcion.split()).strip('"').strip()[:500]
 
 

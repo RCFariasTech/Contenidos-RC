@@ -40,8 +40,9 @@ DISENO = {
             "texto": {"type": "string"},
             "ilustracion": {"type": "string"},
             "prompt_krea": {"type": "string"},
+            "icono": {"type": "string"},
         },
-        "required": ["titular", "texto", "ilustracion", "prompt_krea"],
+        "required": ["titular", "texto", "ilustracion", "prompt_krea", "icono"],
         "additionalProperties": False,
     },
 }

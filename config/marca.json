@@ -8,13 +8,31 @@
     "blanco": "#FFFFFF"
   },
   "gradientes_verticales": {
-    "cielo": ["#FFFFFF", "#A9DAF1"],
-    "azul": ["#A9DAF1", "#0069D1"],
-    "noche": ["#0069D1", "#1F3864"],
-    "coral": ["#F65155", "#E88080"],
-    "niebla": ["#D8D6D2", "#FFFFFF"]
+    "cielo": [
+      "#FFFFFF",
+      "#A9DAF1"
+    ],
+    "azul": [
+      "#A9DAF1",
+      "#0069D1"
+    ],
+    "noche": [
+      "#0069D1",
+      "#1F3864"
+    ],
+    "coral": [
+      "#F65155",
+      "#E88080"
+    ],
+    "niebla": [
+      "#D8D6D2",
+      "#FFFFFF"
+    ]
   },
-  "colores_logo_solo_referencia": {"rojo_logo": "#FE171F", "azul_logo": "#010E30"},
+  "colores_logo_solo_referencia": {
+    "rojo_logo": "#FE171F",
+    "azul_logo": "#010E30"
+  },
   "tipografias": {
     "titulos": "Arial Black",
     "subtitulos": "Arial Bold",
@@ -28,5 +46,19 @@
     "fondo_oscuro": "plantilla/logo_rc_blanco.png",
     "constellation_negro": "plantilla/logo_constellation_negro.svg",
     "constellation_blanco": "plantilla/logo_constellation_blanco.svg"
+  },
+  "paleta_2026": {
+    "marino": "#12244A",
+    "rojo": "#FF0006",
+    "rojo2": "#FF1F35",
+    "azul": "#005EFF",
+    "gris": "#C9CACB",
+    "gris_claro": "#E8E8E8",
+    "blanco": "#FFFFFF",
+    "negro": "#171719"
+  },
+  "fuentes_2026": {
+    "titulos": "Space Grotesk",
+    "parrafos": "Sora"
   }
 }

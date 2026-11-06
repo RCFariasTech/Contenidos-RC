@@ -38,12 +38,18 @@ FORMATO CARRUSEL:
 - slide_5_cierre: máximo 30 palabras. Debe mencionar "RC Farías" y "Constellation".
 - "diseno": lista de EXACTAMENTE 5 elementos (uno por tarjeta, en orden) que parte el texto de cada tarjeta para diseñarla.
   Por tarjeta: "titular" (la idea o dato central, máximo 8 palabras, va en negrita grande), "texto" (el resto) y
-  "ilustracion" (solo las tarjetas 1 y 2 llevan ilustración 3D: una frase con personaje, objeto y escena concretos; en las tarjetas 3, 4 y 5 déjala VACÍA).
-  "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás): prompt EN INGLÉS para el generador de ilustraciones 3D de RC,
-  corto (8 a 25 palabras) y literal, con este formato: «3d of …» o «3d character(s) of …» + el sujeto, qué hace y uno o dos
-  objetos concretos; puede describir ropa en rojo, blanco o azul. Sin texto, logos, metáforas ni palabras de estilo, y sin
-  mencionar el fondo (lo agrega el sistema). Ej.: "3d of a kid looking at a cellphone wearing a white shirt, red shorts and
-  a blue backpack", "3d characters of scientists standing in a laboratory".
+  "ilustracion" (nota breve en español para el diseñador; solo tarjetas 1 y 2: en la 1 qué representa el ícono, en la 2 qué muestra la foto; vacía en las demás),
+  "icono" (solo tarjeta 3, y la 4 si no tiene cifra; vacío en las demás): el ícono de línea que mejor representa la idea, EXACTAMENTE una de estas claves:
+  ${iconos_linea}.
+  "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás), EN INGLÉS:
+  · Tarjeta 1 = ícono isométrico 3D de marca: describe 2 a 4 objetos concretos que representen la idea del post (10 a 30 palabras),
+    sin estilo, colores, fondo, texto ni logos (el estilo lo agrega el sistema). Ej.: "a supermarket shelf with a small digital screen
+    showing a rising bar chart, a shopping cart and a price tag".
+  · Tarjeta 2 = foto documental realista: quién (personas latinas comunes de clase media, edad y género), dónde (lugar concreto,
+    limpio y moderno) y qué hacen, con uno o dos objetos (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto ni logos.
+    Ej.: "a woman in her 40s in a supermarket aisle looking at a small digital screen on the shelf while holding a basket".
+  Diseño fijo de las tarjetas: 1 gancho con ícono, 2 texto con foto, 3 texto con ícono de línea, 4 dato (la primera cifra del texto
+  se muestra gigante: si es posible, que la tarjeta 4 gire en torno a una cifra verificable), 5 cierre.
   titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).
   Tarjeta 1: titular = todo slide_1_gancho y texto vacío. Tarjeta 5: titular vacío y texto = todo slide_5_cierre.
   Si una tarjeta gira en torno a una cifra, ponla en el titular.

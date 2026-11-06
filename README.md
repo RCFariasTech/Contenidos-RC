@@ -12,7 +12,7 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | 4. Interfaz | ✅ Propuestas (comentarios, ajustes, aprobación, fechas) y Repositorio |
 | 5. PowerPoint y cron | ✅ Exportación con marca; cron diario desde el día 15 |
 | 6. Migración del historial | ✅ 7 temas previos cargados como histórico |
-| 7. Tarjetas de carrusel | ✅ PDF 3:4 (1080 × 1440) por carrusel para diseño: texto editable, 7 estilos de la guía, espacios para ilustraciones 3D (`rc/tarjetas.py`) |
+| 7. Tarjetas de carrusel | ✅ PDF 4:5 (1080 × 1350) por carrusel con el sistema gráfico 2026: texto editable, 5 plantillas fijas, ícono isométrico y foto de Krea (`rc/tarjetas.py`) |
 
 ## Infraestructura
 
@@ -62,9 +62,14 @@ El mensaje es una Adaptive Card dentro de `{"type": "message", "attachments": [.
 
 ### Ilustraciones 3D con Krea (opcional)
 
-En las tarjetas 1 y 2 de cada carrusel, el botón **Ilustración de la tarjeta N** genera 3 variantes con el modelo (LoRA) «3d characters Flux» de la cuenta de Krea (`config/ajustes.json` → `krea`: modelo Flux.1 Dev, `style_id`, tamaño y variantes por clic). La escena (en inglés, editable en la ventana) sale de lo que escriba el usuario, del campo `prompt_krea` de esa tarjeta o, si no hay, de una descripción que Claude escribe a partir del texto de esa misma tarjeta; el prompt pide un fondo del color de la tarjeta , sin línea de piso ni sombras largas (solo sombra de contacto); la imagen se genera con la proporción del espacio de ilustración de esa tarjeta. Con **Usar en la tarjeta** la variante elegida (una por tarjeta) se monta en el espacio de ilustración de la tarjeta (se genera con esa misma proporción) y la tarjeta se pinta con el color real del fondo de la imagen, para que no se note el recuadro. Se ve en la vista previa, las miniaturas y el PDF. Las imágenes **quedan en Krea**: la app guarda el enlace, la escena, el prompt, el estado y cuál está elegida (tabla `ilustraciones`, migraciones 005 y 006) y descarga la elegida al armar el PDF. Cada clic consume **saldo de API** de Krea: es un saldo en dólares del workspace (Krea → API → «Workspace API balance»), distinto de los créditos mensuales de la aplicación; con saldo $0 la API responde error de pago.
+Sistema gráfico 2026 (guía visual de noviembre de 2026): paleta `paleta_2026` de `config/marca.json`, títulos en Space Grotesk y párrafos en Sora (`plantilla/fuentes/`), logo RC / FARÍAS blanco (`plantilla/logo_rc_blanco_2026.png`) e íconos de línea de la guía como vectores (`plantilla/iconos_linea/`, uno por concepto). Ya no se usan personajes ilustrados.
 
-Opcionalmente, cada generación puede enviar como referencia de estilo las imágenes de `krea.referencias_estilo` (fuerza `fuerza_referencias`); hoy va vacía porque el LoRA entrenado sobre Flux da mejor resultado solo. Krea 1, el modelo de las sesiones del equipo, no está disponible por API y el LoRA solo es compatible con Flux.1 Dev.
+En las tarjetas 1 y 2 de cada carrusel, los botones **Ícono de la tarjeta 1** y **Foto de la tarjeta 2** generan 3 variantes con **Nano Banana Pro** en Krea (`config/ajustes.json` → `krea`). Los prompts de estilo están en `rc/estilo_iconos.py`:
+- **Ícono (tarjeta 1):** ícono isométrico con el estilo de la guía, sobre azul marino; se envían como referencia los íconos isométricos de la guía publicados en `public/marca/iso/` (por eso `krea.url_publica` o `APP_URL` debe apuntar a la URL pública de la app).
+- **Foto (tarjeta 2):** foto documental realista de personas latinas comunes de clase media, bien presentadas, con piel real y luz natural; se monta con velo azul.
+
+El tema sale de lo que escriba el usuario, del campo `prompt_krea` de esa tarjeta o, si no hay, de una descripción que Claude escribe a partir del texto de esa tarjeta. Con **Usar en la tarjeta** la variante elegida se monta en la vista previa, las miniaturas y el PDF. Las imágenes **quedan en Krea** (tabla `ilustraciones`). Cada clic consume **saldo de API** de Krea (Krea → API → «Workspace API balance»), distinto de los créditos de la aplicación.
+
 
 Para activarlo agrega en Vercel `KREA_API_TOKEN` (tipo **Sensitive**) con una clave de API de Krea de tipo **personal**, creada por el usuario dueño del modelo (las claves de servicio no ven los modelos entrenados de un usuario y Krea responde «Invalid ids detected or no access»). Luego vuelve a desplegar.
 
@@ -72,13 +77,13 @@ Después de agregar o cambiar variables hay que **volver a desplegar** (Deployme
 
 ## Tarjetas de carrusel
 
-Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo carrusel (flechas, teclado o deslizar) con opción de descargar el PDF: 5 páginas 3:4 con Montserrat, colores de `config/marca.json` y los logos de `plantilla/`. Solo las tarjetas 1 y 2 llevan ilustración 3D; las tarjetas 3 y 4 son solo texto y la 5 es el cierre. Los estilos rotan (distinto en cada carrusel). Las ilustraciones 3D (Krea) quedan como espacios con la nota de qué ilustrar. La generación ahora devuelve también `diseno` (titular + texto + nota por tarjeta); los carruseles generados antes no lo tienen y usan una división automática del texto hasta que se ajusten. Fuentes en `plantilla/fuentes/`.
+Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo carrusel con opción de descargar el PDF: 5 páginas 4:5 en orden fijo — 1 gancho (azul marino, titular gigante en bold + ícono isométrico), 2 foto (azul, texto + foto con velo azul), 3 ícono de línea (gris), 4 dato (rojo, la primera cifra del texto gigante en bold; si no hay cifra, otra tarjeta de ícono) y 5 cierre (azul marino, comillas rojas y logos RC Farías + Constellation). La generación devuelve `diseno` con titular, texto, nota, `prompt_krea` (tarjetas 1 y 2) e `icono` (clave del ícono de línea para la tarjeta 3). Los reels usan la misma paleta y tipografías.
 
 ## Guion visual de los reels
 
 Cada reel tiene el botón **Ver guion visual**: vista previa y descarga de un PDF 9:16 (1080 × 1920) con una página por escena (etiqueta con rol y tiempo, espacio **IMAGEN O VIDEO** y el texto en pantalla editable, dentro de la zona segura de Instagram). El diseñador lo abre en Adobe Express con «Empezar con tu contenido», inserta los medios y anima. Código en `rc/reels.py`.
 
-Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). La vista previa (tarjetas y guion visual) tiene el botón **Rehacer**, que muestra otra propuesta de colores y estilos sin cambiar el texto; el PDF que se descarga coincide con lo que se ve. Los recuadros de ilustración con su nota y la etiqueta de cada escena solo aparecen en la vista previa, no en el PDF descargado.
+Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). La vista previa (tarjetas y guion visual) tiene el botón **Rehacer**, que cambia el ícono de línea (si la tarjeta no pidió uno) o los colores de las escenas del reel sin cambiar el texto; el PDF que se descarga coincide con lo que se ve. Los recuadros de ilustración con su nota y la etiqueta de cada escena solo aparecen en la vista previa, no en el PDF descargado.
 
 ## Protección de despliegues
 

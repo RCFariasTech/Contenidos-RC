@@ -178,7 +178,7 @@ class TestFlujo(unittest.TestCase):
             nombre, pdf = servicio.tarjetas_pdf(c["id"])
             self.assertTrue(nombre.startswith("tarjetas-2026-11-") and pdf.startswith(b"%PDF"))
             vista = servicio.vista_tarjetas(c["id"])
-            self.assertEqual((len(vista["imagenes"]), vista["relacion"]), (5, 0.75))
+            self.assertEqual((len(vista["imagenes"]), vista["relacion"]), (5, 0.8))
             self.assertTrue(all(i.startswith("data:image/png;base64,") for i in vista["imagenes"]))
         reel = next(p for p in estado["piezas"] if p["formato"] == "Reel")
         nombre, pdf = servicio.tarjetas_pdf(reel["id"])
@@ -358,8 +358,8 @@ class TestFlujo(unittest.TestCase):
         trabajos = iter(f"job-{i}" for i in range(1, 20))
         enviados, guias = [], []
 
-        def crear(prompt, ancho, alto):
-            enviados.append((prompt, ancho, alto))
+        def crear(prompt, proporcion, referencias):
+            enviados.append((prompt, proporcion, referencias))
             return next(trabajos)
 
         with mock.patch.object(krea, "configurado", return_value=True), \
@@ -368,12 +368,15 @@ class TestFlujo(unittest.TestCase):
             self.assertEqual(len(filas), 3)
             self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2", "job-3"})
             self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
-            prompt, ancho, alto = enviados[0]
-            self.assertIn("3d of a 3D character pushing a shopping cart", prompt)  # el prompt_krea de la tarjeta
-            self.assertRegex(prompt, r", isolated in a flat solid [a-z ]+ background, ")       # fondo de la tarjeta, al estilo RC
-            self.assertEqual((ancho, alto), (1216, 848))                        # espacio de ilustración de la portada
-            self.assertEqual(filas[0]["fondo"][0], "#")
+            prompt, proporcion, referencias = enviados[0]
+            self.assertIn("A 3D character pushing a shopping cart", prompt)      # el prompt_krea de la tarjeta
+            self.assertIn("isometric", prompt)                                  # tarjeta 1: ícono isométrico
+            self.assertEqual(proporcion, "1:1")
+            self.assertTrue(referencias and all(r.endswith(".png") for r in referencias))
             self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
+            prompt, proporcion, referencias = enviados[-1]
+            self.assertIn("documentary photograph", prompt)                    # tarjeta 2: foto
+            self.assertEqual((proporcion, referencias), ("16:9", []))
             for caso in ((carrusel["id"], 3), (reel["id"], 1)):
                 with self.assertRaises(servicio.ErrorNegocio):
                     servicio.generar_ilustraciones(*caso)
@@ -390,12 +393,12 @@ class TestFlujo(unittest.TestCase):
         self.bd.tablas["piezas"][[p["id"] for p in self.bd.tablas["piezas"]].index(carrusel["id"])]["contenido"] = pieza["contenido"]
         pedidas, enviados = [], []
 
-        def describir(tema, titular, texto, nota=""):
+        def describir(tema, titular, texto, nota="", tipo="icono"):
             pedidas.append((titular, texto))
             return f"3d of a scene for {titular}"
 
         with mock.patch.object(krea, "configurado", return_value=True), \
-                mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, h: enviados.append(p) or f"j{len(enviados)}"), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=lambda p, a, r: enviados.append(p) or f"j{len(enviados)}"), \
                 mock.patch.object(servicio.generador, "describir_ilustracion", side_effect=describir):
             r2 = servicio.generar_ilustraciones(carrusel["id"], 2)
             r_user = servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="Two 3D robots shaking hands")
@@ -433,7 +436,7 @@ class TestFlujo(unittest.TestCase):
             _, pdf = servicio.tarjetas_pdf(carrusel["id"])
         doc = pymupdf.open(stream=pdf, filetype="pdf")
         self.assertTrue(doc[0].get_images())                      # tarjeta 1 con la ilustración montada
-        self.assertNotIn("ILUSTRACIÓN 3D", doc[0].get_text())
+        self.assertNotIn("ÍCONO ISOMÉTRICO", doc[0].get_text())
         servicio.elegir_ilustracion(filas[1]["id"], False)        # quitarla
         self.assertFalse(any(f["elegida"] for f in self.bd.tablas["ilustraciones"]))
 

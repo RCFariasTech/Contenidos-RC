@@ -1,48 +1,30 @@
-"""Cliente mínimo de la API pública de Krea (solo librería estándar) para generar ilustraciones 3D con el LoRA
-«3d characters Flux». Las imágenes viven en Krea: aquí solo se envían trabajos y se consulta su estado.
+"""Cliente mínimo de la API pública de Krea (solo librería estándar): íconos isométricos y fotos con Nano Banana Pro.
+Las imágenes viven en Krea: aquí solo se envían trabajos y se consulta su estado.
 """
 
 import json
 import logging
-import random
 import urllib.error
 import urllib.request
 
 from rc.config import ajustes, env
+from rc import estilo_iconos
 from rc.errores import ErrorNegocio
 
 log = logging.getLogger(__name__)
 
 URL_BASE = "https://api.krea.ai"
 TIMEOUT_S = 25
-# Nombres simples de fondo, como en los prompts que mejor le funcionan al equipo en Krea
-# («isolated in a red background», «isolated in a light gray background»).
-NOMBRES_COLOR = {
-    "coral": "red", "celeste": "light blue", "azul_medio": "blue",
-    "gris_claro": "light gray", "azul_marino": "dark navy blue", "blanco": "white",
-}
 
 
 def configurado() -> bool:
     return bool(env("KREA_API_TOKEN", False))
 
 
-def construir_prompt(descripcion: str, color: str, hex_fondo: str = "", composicion: str = "") -> str:
-    """Prompt corto al estilo de las sesiones de RC en Krea: «3d of <escena>, isolated in a <color> background».
-
-    Sin adornos de estilo ni códigos de color: el LoRA aporta el estilo y los prompts largos lo diluyen. El difuminado
-    de bordes lo hace la app al montar la imagen en la tarjeta.
-    """
-    escena = " ".join(descripcion.split()).rstrip(" .")
-    if not escena.lower().startswith("3d"):
-        escena = f"3d of {escena[0].lower() + escena[1:]}" if escena else "3d character"
-    escena = escena.split(", isolated in")[0]  # si ya traía fondo, se reemplaza por el de la tarjeta
-    partes = [escena, composicion] if composicion else [escena]
-    partes.append(f"isolated in a flat solid {NOMBRES_COLOR.get(color, color)} background")
-    partes.append("seamless backdrop with no floor line, no horizon and no vignette, even flat lighting on the background, "
-                  "only a minimal soft contact shadow right under the subject so it does not float, no long or cast "
-                  "shadows and no light spots away from the subject")
-    return ", ".join(partes)[:1800]
+def construir_prompt(descripcion: str, tipo: str) -> str:
+    """Prompt completo para Krea: tipo «icono» (isométrico, tarjeta 1) o «foto» (tarjeta 2 y reels)."""
+    escena = " ".join((descripcion or "").split()).strip(" .\"")
+    return (estilo_iconos.prompt_icono(escena) if tipo == "icono" else estilo_iconos.prompt_foto(escena))[:3000]
 
 
 def _motivo(cuerpo: str) -> str:
@@ -80,42 +62,25 @@ def _peticion(metodo: str, ruta: str, cuerpo: dict | None = None):
         if e.code == 429:
             raise ErrorNegocio("Krea tiene demasiados trabajos en curso; intenta de nuevo en un momento.") from e
         motivo = _motivo(detalle)
-        if e.code == 400 and ("no access" in motivo.lower() or "invalid ids" in motivo.lower()):
-            raise ErrorNegocio("La clave de API de Krea no tiene acceso al modelo «3d characters Flux». "
-                               "Crea una clave de tipo PERSONAL (no de servicio) con el usuario dueño del modelo y "
-                               "reemplaza KREA_API_TOKEN en Vercel.") from e
         raise ErrorNegocio(f"Krea rechazó la solicitud ({e.code})" + (f": {motivo}" if motivo else ".")) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise ErrorNegocio("No se pudo conectar con Krea.") from e
 
 
-PROPORCIONES_KREA2 = {"1:1": 1, "4:3": 4 / 3, "3:2": 3 / 2, "16:9": 16 / 9, "4:5": 4 / 5, "3:4": 3 / 4, "2:3": 2 / 3, "9:16": 9 / 16}
-
-
-def proporcion_cercana(ancho: int, alto: int) -> str:
-    """La proporción admitida por Krea 2 más parecida a ancho/alto."""
-    r = ancho / alto
-    return min(PROPORCIONES_KREA2, key=lambda k: abs(PROPORCIONES_KREA2[k] - r))
-
-
-def cuerpo_generacion(prompt: str, ancho: int, alto: int) -> dict:
-    """Parámetros según el modelo configurado: Flux (ancho/alto en px) o Krea 2 (proporción y resolución)."""
+def cuerpo_generacion(prompt: str, proporcion: str, referencias: list[str] | None = None) -> dict:
+    """Parámetros de Nano Banana Pro: proporción, resolución y (íconos) imágenes de referencia de estilo."""
     k = ajustes()["krea"]
-    base = {"prompt": prompt, "seed": random.randint(1, 2**31 - 1),
-            "styles": [{"id": k["style_id"], "strength": k["style_strength"]}]}
-    # Imágenes buenas del equipo (sesión «Character Choosing») como referencia de estilo, además del LoRA.
-    referencias = [u for u in k.get("referencias_estilo", []) if str(u).startswith("https://")][:10]
-    if referencias:
-        base["image_style_references"] = [{"url": u, "strength": k.get("fuerza_referencias", 0.6)} for u in referencias]
-    if k["modelo"].startswith("krea/krea-2"):
-        return {**base, "aspect_ratio": proporcion_cercana(ancho, alto), "resolution": "1K",
-                "creativity": k.get("creatividad", "raw")}
-    return {**base, "width": ancho, "height": alto, "steps": k["pasos"]}
+    cuerpo = {"prompt": prompt, "aspect_ratio": proporcion, "resolution": k.get("resolucion", "1K")}
+    urls = [u for u in (referencias or []) if str(u).startswith("https://")][:6]
+    if urls:
+        cuerpo["image_urls"] = urls
+    return cuerpo
 
 
-def crear_trabajo(prompt: str, ancho: int, alto: int) -> str:
-    """Envía una generación con el LoRA y devuelve el id del trabajo."""
-    resp = _peticion("POST", f"/generate/image/{ajustes()['krea']['modelo']}", cuerpo_generacion(prompt, ancho, alto))
+def crear_trabajo(prompt: str, proporcion: str, referencias: list[str] | None = None) -> str:
+    """Envía una generación y devuelve el id del trabajo."""
+    resp = _peticion("POST", f"/generate/image/{ajustes()['krea']['modelo']}",
+                     cuerpo_generacion(prompt, proporcion, referencias))
     job_id = resp.get("job_id")
     if not job_id:
         raise ErrorNegocio("Krea no devolvió el id del trabajo.")

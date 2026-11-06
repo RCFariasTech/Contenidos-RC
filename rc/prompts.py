@@ -28,7 +28,8 @@ def sistema() -> str:
     a = ajustes()
     temas = "\n".join(f'- "{t}"' for t in pilares()["temas_ya_usados"])
     return _plantilla("sistema").substitute(
-        cta=a["cta"], temas_ya_usados=temas, max_palabras_caption=a["max_palabras_caption"])
+        cta=a["cta"], temas_ya_usados=temas, max_palabras_caption=a["max_palabras_caption"],
+        iconos_linea=", ".join(sorted(p.stem for p in (RAIZ / "plantilla" / "iconos_linea").glob("*.svg"))))
 
 
 def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> str:

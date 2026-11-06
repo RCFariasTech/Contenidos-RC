@@ -1,9 +1,9 @@
 {
   "verificado": "2026-09-25",
   "Carrusel": {
-    "tamano_px": "1080 × 1440",
-    "relacion": "3:4",
-    "notas": "Formato de los carruseles publicados de RC Farías. Todas las tarjetas con la misma relación de aspecto."
+    "tamano_px": "1080 × 1350",
+    "relacion": "4:5",
+    "notas": "Formato elegido por RC Farías con el sistema gráfico 2026 (noviembre de 2026). Todas las tarjetas con la misma relación de aspecto."
   },
   "Reel": {
     "tamano_px": "1080 × 1920",

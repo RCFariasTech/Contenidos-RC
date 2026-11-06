@@ -205,7 +205,7 @@ function miniatura(pieza, i) {
   const reel = pieza.formato === "Reel";
   const caja = el("button", {
     clase: "miniatura", type: "button", "data-pieza": pieza.id, "data-indice": i,
-    style: `aspect-ratio: ${reel ? "9 / 16" : "3 / 4"}; width: ${reel ? 84 : 112}px`,
+    style: `aspect-ratio: ${reel ? "9 / 16" : "4 / 5"}; width: ${reel ? 84 : 112}px`,
     title: "Ver en grande",
     "aria-label": `Ver la propuesta gráfica de la ${reel ? "escena" : "tarjeta"} ${i + 1} en grande`,
     onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget, i),
@@ -228,9 +228,9 @@ function renderTextos(pieza, conMiniaturas = true) {
         el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
         pieza.formato === "Carrusel" && i < 2 && conMiniaturas ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
-          title: "Genera variantes de la ilustración 3D en Krea con el modelo «3d characters in red and blue»",
+          title: i === 0 ? "Genera en Krea variantes del ícono isométrico de la portada, con el estilo de la guía visual" : "Genera en Krea variantes de la foto realista de la tarjeta 2",
           onclick: () => abrirIlustraciones(pieza, i + 1, c[campo] || ""),
-        }, `Ilustración de la tarjeta ${i + 1}`) : null),
+        }, i === 0 ? "Ícono de la tarjeta 1" : "Foto de la tarjeta 2") : null),
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
       conMiniaturas ? miniatura(pieza, i) : null);
   });
@@ -571,7 +571,7 @@ async function cargarVistaTarjetas(piezaId, indice = 0) {
   $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
   $("tarjetas-ayuda").textContent = relacion < 0.7
     ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable. Ábrelo en Adobe Express con «Empezar con tu contenido». La etiqueta de cada escena solo se ve aquí, no en el PDF."
-    : "3:4 · 1080 × 1440. Los recuadros con la nota de ilustración (Krea) solo se ven aquí: el PDF descargado deja ese espacio libre. «Rehacer» muestra otra propuesta de colores y estilos.";
+    : "4:5 · 1080 × 1350. Los recuadros del ícono (tarjeta 1) y la foto (tarjeta 2) solo se ven aquí: el PDF descargado deja ese espacio libre. «Rehacer» cambia el ícono de línea cuando la tarjeta no pidió uno.";
   $("tarjetas-titulo").textContent = relacion < 0.7 ? "Vista previa del guion visual" : "Vista previa del carrusel";
   $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` })));
   if (!$("dialogo-tarjetas").open) $("dialogo-tarjetas").showModal();
@@ -637,7 +637,7 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 
 $("btn-pptx").addEventListener("click", () => descargarPptx());
 
-// ---------- ilustraciones 3D (Krea) ----------
+// ---------- imágenes de Krea: ícono isométrico (tarjeta 1) y foto (tarjeta 2) ----------
 
 const ilus = { pieza: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "" };
 
@@ -653,25 +653,25 @@ async function elegirIlustracion(it, elegida) {
     await api("ilustracion-elegir", { metodo: "POST", cuerpo: { id: it.id, elegida } });
     refrescarMiniaturasDe(ilus.pieza);
   } catch (e) {
-    ilus.mensaje = `No se pudo ${elegida ? "usar" : "quitar"} la ilustración: ${e.message}`;
+    ilus.mensaje = `No se pudo ${elegida ? "usar" : "quitar"} la imagen: ${e.message}`;
   }
   await cargarIlustraciones();
 }
 
 function renderIlustraciones() {
   const hayEnCola = ilus.items.some((it) => it.estado === "en_cola");
-  const mensaje = ilus.mensaje || (ilus.configurado ? "" : "Las ilustraciones aún no están activadas: falta configurar KREA_API_TOKEN en Vercel (ver README).");
+  const mensaje = ilus.mensaje || (ilus.configurado ? "" : "Las imágenes aún no están activadas: falta configurar KREA_API_TOKEN en Vercel (ver README).");
   $("ilus-aviso").hidden = !mensaje;
   $("ilus-aviso").textContent = mensaje;
   $("ilus-generar").disabled = ilus.enviando || !ilus.configurado;
-  $("ilus-generar").textContent = ilus.enviando ? "Preparando la escena y enviando a Krea…" : (ilus.items.length ? "Generar más" : "Generar ilustraciones");
+  $("ilus-generar").textContent = ilus.enviando ? "Preparando la descripción y enviando a Krea…" : (ilus.items.length ? "Generar más" : (ilus.tarjeta === 1 ? "Generar íconos" : "Generar fotos"));
   $("ilus-galeria").replaceChildren(...(ilus.items.length ? ilus.items.map((it) => {
     const lista = it.estado === "lista" && it.url?.startsWith("https://");
     const marco = el("div", {
       clase: `galeria__marco${it.estado === "en_cola" ? " galeria__marco--cargando" : ""}${it.estado === "fallida" ? " galeria__marco--fallida" : ""}`,
       style: `background-color: ${/^#[0-9A-Fa-f]{6}$/.test(it.fondo) ? it.fondo : "#D8D6D2"}; aspect-ratio: ${it.ancho || 4} / ${it.alto || 3}`,
     });
-    if (lista) marco.append(el("img", { src: it.url, alt: "Ilustración generada en Krea", loading: "lazy" }));
+    if (lista) marco.append(el("img", { src: it.url, alt: ilus.tarjeta === 1 ? "Ícono generado en Krea" : "Foto generada en Krea", loading: "lazy" }));
     else if (it.estado === "en_cola") marco.append("Generando en Krea…");
     else marco.append(it.error || "No se pudo generar");
     return el("figure", { clase: `galeria__item${it.elegida ? " galeria__item--elegida" : ""}` }, marco,
@@ -681,7 +681,7 @@ function renderIlustraciones() {
           it.elegida ? el("span", {}, el("strong", {}, "✓ En la tarjeta")) : null,
           it.elegida ? el("button", { clase: "btn btn--texto", type: "button", onclick: () => elegirIlustracion(it, false) }, "Quitar") : null),
         lista ? el("a", { href: it.url, target: "_blank", rel: "noopener noreferrer" }, "Abrir en Krea") : el("span", {}, `${it.ancho}×${it.alto}`)));
-  }) : [el("p", { clase: "ayuda" }, "Aún no hay ilustraciones para esta tarjeta. Revisa la escena y pulsa «Generar ilustraciones».")]));
+  }) : [el("p", { clase: "ayuda" }, "Aún no hay imágenes para esta tarjeta. Revisa la descripción y pulsa «Generar».")]));
   clearTimeout(ilus.timer);
   if (hayEnCola && $("dialogo-ilustraciones").open) ilus.timer = setTimeout(cargarIlustraciones, 4000);
 }
@@ -695,14 +695,14 @@ async function cargarIlustraciones() {
       $("ilus-descripcion").value = ilus.items.find((it) => it.descripcion)?.descripcion || "";
     }
   } catch (e) {
-    ilus.mensaje = `No se pudieron cargar las ilustraciones: ${e.message}`;
+    ilus.mensaje = `No se pudieron cargar las imágenes: ${e.message}`;
   }
   renderIlustraciones();
 }
 
 async function abrirIlustraciones(pieza, tarjeta, texto) {
   Object.assign(ilus, { pieza, tarjeta, items: [], enviando: false, mensaje: "" });
-  $("titulo-ilustraciones").textContent = `Ilustración · Tarjeta ${tarjeta}`;
+  $("titulo-ilustraciones").textContent = tarjeta === 1 ? "Ícono isométrico · Tarjeta 1" : "Foto · Tarjeta 2";
   $("ilus-texto").textContent = texto || "—";
   const diseno = pieza.contenido?.diseno?.[tarjeta - 1];
   $("ilus-descripcion").value = diseno?.prompt_krea || "";
@@ -722,7 +722,7 @@ $("ilus-generar").addEventListener("click", async () => {
     } });
     if (r.descripcion) $("ilus-descripcion").value = r.descripcion;
   } catch (e) {
-    ilus.mensaje = `No se pudieron generar las ilustraciones: ${e.message}`;
+    ilus.mensaje = `No se pudieron generar las imágenes: ${e.message}`;
   }
   ilus.enviando = false;
   await cargarIlustraciones();
@@ -956,7 +956,7 @@ $("btn-verificar").addEventListener("click", async (ev) => {
   $("lista-conexiones").replaceChildren(el("li", { clase: "ayuda" }, "Verificando…"));
   try {
     const d = await api("verificar-conexiones");
-    const nombres = { anthropic: "Anthropic (generación de contenido)", krea: "Krea (ilustraciones)", correo: "Correo (envío del PowerPoint)", teams: "Microsoft Teams (aviso del día 15)" };
+    const nombres = { anthropic: "Anthropic (generación de contenido)", krea: "Krea (íconos y fotos)", correo: "Correo (envío del PowerPoint)", teams: "Microsoft Teams (aviso del día 15)" };
     $("lista-conexiones").replaceChildren(...Object.entries(nombres).map(([clave, nombre]) => el("li", { clase: `conexion conexion--${d[clave]?.ok ? "ok" : "falla"}` },
       el("span", { "aria-hidden": "true" }, d[clave]?.ok ? "✓" : "✕"),
       el("strong", {}, nombre), " — ", d[clave]?.detalle || "Sin datos")));

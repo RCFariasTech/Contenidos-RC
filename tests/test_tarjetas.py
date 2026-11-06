@@ -1,4 +1,4 @@
-"""Tarjetas de carrusel en PDF 3:4 (sin red)."""
+"""Tarjetas de carrusel en PDF 4:5 · sistema gráfico 2026 (sin red)."""
 
 import json
 import unittest
@@ -13,11 +13,13 @@ FIXTURE = Path(__file__).parent / "fixtures" / "mes_noviembre.json"
 
 
 class TestTarjetas(unittest.TestCase):
-    def test_pdf_de_cinco_paginas_3_4_con_texto_vivo(self):
+    def test_pdf_de_cinco_paginas_4_5_con_texto_vivo(self):
         pieza = carrusel()
         doc = pymupdf.open(stream=tarjetas.generar_pdf(pieza), filetype="pdf")
         self.assertEqual(len(doc), 5)
-        self.assertEqual((doc[0].rect.width, doc[0].rect.height), (1080, 1440))
+        self.assertEqual((doc[0].rect.width, doc[0].rect.height), (1080, 1350))
+        fuentes = {f[3] for f in doc[0].get_fonts()}
+        self.assertTrue(any("SpaceGrotesk-Bold" in f for f in fuentes), fuentes)   # titular gancho en bold
         self.assertIn("Tu góndola ya es un medio", " ".join(doc[0].get_text().split()))
         self.assertIn("Constellation", doc[4].get_text())
 
@@ -30,47 +32,37 @@ class TestTarjetas(unittest.TestCase):
         self.assertEqual(tarjs[0]["titular"], pieza["slide_1_gancho"])
         self.assertEqual(len(pymupdf.open(stream=tarjetas.generar_pdf(pieza), filetype="pdf")), 5)
 
-    def test_estilos_varian_entre_carruseles(self):
-        a, b = tarjetas.estilos_sugeridos(0), tarjetas.estilos_sugeridos(1)
-        self.assertEqual((a[0], a[-1], b[0], b[-1]), (1, 7, 1, 7))
-        self.assertNotEqual(a[1:4], b[1:4])
+    def test_orden_fijo_y_dato_o_icono_en_la_tarjeta_4(self):
+        base = {"slide_1_gancho": "a", "slide_2": "b", "slide_3": "c", "slide_5_cierre": "e"}
+        self.assertEqual(tarjetas.plantillas_de({**base, "slide_4": "Las ventas suben 18% con pantallas."}), [1, 2, 3, 4, 5])
+        self.assertEqual(tarjetas.plantillas_de({**base, "slide_4": "Sin cifras aquí."}), [1, 2, 3, 3, 5])
 
-    def test_solo_las_tarjetas_1_y_2_llevan_ilustracion(self):
-        for v in range(12):
-            est = tarjetas.estilos_sugeridos(v)
-            self.assertIn(est[1], tarjetas.ESTILOS_CON_ILUSTRACION)
-            self.assertTrue(all(e not in tarjetas.ESTILOS_CON_ILUSTRACION for e in est[2:]), est)
-        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=3, guias=True), filetype="pdf")
-        con = [i + 1 for i, p in enumerate(doc) if "ILUSTRACIÓN 3D" in p.get_text()]
-        self.assertEqual(con, [1, 2])
+    def test_la_cifra_va_gigante_y_en_bold(self):
+        pieza = {"slide_1_gancho": "a", "slide_2": "b", "slide_3": "c", "slide_5_cierre": "e",
+                 "slide_4": "La comunicación en punto de venta sube en promedio 18% las ventas anunciadas."}
+        self.assertEqual(tarjetas.separar_cifra(pieza["slide_4"])[1], "18%")
+        pagina = pymupdf.open(stream=tarjetas.generar_pdf(pieza), filetype="pdf")[3]
+        tramos = [s for b in pagina.get_text("dict")["blocks"] if b["type"] == 0 for ln in b["lines"] for s in ln["spans"]]
+        cifra = next(s for s in tramos if s["text"].strip() == "18%")
+        self.assertGreater(cifra["size"], 150)
+        self.assertIn("SpaceGrotesk-Bold", cifra["font"])
 
-    def test_la_descarga_no_trae_recuadros_de_ilustracion_solo_la_vista_previa(self):
+    def test_icono_de_linea_elegido_o_alternativo(self):
+        claves = tarjetas.iconos_linea()
+        self.assertGreaterEqual(len(claves), 10)
+        self.assertEqual(tarjetas._icono_de({"icono": "crecimiento"}, 0), "crecimiento")
+        self.assertIn(tarjetas._icono_de({"icono": "inexistente"}, 3), claves)
+
+    def test_la_descarga_no_trae_recuadros_de_imagen_solo_la_vista_previa(self):
         previa = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True), filetype="pdf")
-        descarga = pymupdf.open(stream=tarjetas.generar_pdf(carrusel()), filetype="pdf")
-        self.assertTrue(any("ILUSTRACIÓN 3D" in p.get_text() for p in previa))
-        self.assertFalse(any("ILUSTRACIÓN 3D" in p.get_text() or "Krea" in p.get_text() for p in descarga))
-        self.assertIn("Tu góndola", " ".join(descarga[0].get_text().split()))  # el texto sigue ahí
-
-    def test_rehacer_cambia_la_propuesta(self):
-        propuestas = {tuple(tarjetas.estilos_sugeridos(2, s)) for s in range(6)}
-        self.assertGreaterEqual(len(propuestas), 4)
-        for s in range(8):
-            est = tarjetas.estilos_sugeridos(2, s)
-            self.assertIn(est[1], tarjetas.ESTILOS_CON_ILUSTRACION)
-            self.assertTrue(all(e not in tarjetas.ESTILOS_CON_ILUSTRACION for e in est[2:4]))
-        self.assertEqual(tarjetas.estilos_sugeridos(2, 0), tarjetas.estilos_sugeridos(2))
-        pdf0 = tarjetas.generar_pdf(carrusel(), variante=2, semilla=0)
-        pdf1 = tarjetas.generar_pdf(carrusel(), variante=2, semilla=1)
-        self.assertNotEqual(pdf0, pdf1)
-
-    def test_portadas_rotan_de_color(self):
-        fondos = [tarjetas.PORTADAS[v % len(tarjetas.PORTADAS)][0] for v in range(5)]
-        self.assertEqual(len(set(fondos)), 5)
-        # carruseles consecutivos (mismo mes o mes siguiente) nunca repiten fondo
-        self.assertTrue(all(fondos[i] != fondos[(i + 1) % 5] for i in range(5)))
+        descarga = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=False), filetype="pdf")
+        self.assertIn("ÍCONO ISOMÉTRICO", previa[0].get_text())
+        self.assertIn("FOTO", previa[1].get_text())
+        self.assertNotIn("ÍCONO ISOMÉTRICO", descarga[0].get_text())
+        self.assertNotIn("FOTO", descarga[1].get_text())
 
     def test_todo_el_texto_cabe_dentro_de_la_tarjeta_sin_solaparse(self):
-        """Textos extremos en los 7 estilos: nada se sale de la página ni se pisa con otro texto."""
+        """Textos extremos en las 5 plantillas: nada se sale de la página ni se pisa con otro texto."""
         import random
         rnd = random.Random(7)
         lex = ("activación retail media experiencia consumidor marca estrategia incremental conversión "
@@ -81,8 +73,8 @@ class TestTarjetas(unittest.TestCase):
 
         for _ in range(12):
             tarjs = [{"titular": frase(rnd.randint(1, 14)), "texto": frase(rnd.randint(0, 55)),
-                      "nota": frase(rnd.randint(3, 40)), "variante": rnd.randint(0, 9)} for _ in range(9)]
-            for estilo, fn in tarjetas.ESTILOS.items():
+                      "nota": frase(rnd.randint(3, 40)), "alternativa": rnd.randint(0, 9)} for _ in range(9)]
+            for estilo, fn in tarjetas.PLANTILLAS.items():
                 import io
                 from reportlab.pdfgen import canvas
                 tarjetas._registrar_fuentes()
@@ -93,7 +85,8 @@ class TestTarjetas(unittest.TestCase):
                 c.save()
                 pagina = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0]
                 lineas = [pymupdf.Rect(ln["bbox"]) for b in pagina.get_text("dict")["blocks"] if b["type"] == 0
-                          for ln in b["lines"]]
+                          for ln in b["lines"]
+                          if "".join(s["text"] for s in ln["spans"]).strip() != "\u201d"]  # comillas decorativas
                 for r in lineas:
                     self.assertTrue(pymupdf.Rect(20, 20, tarjetas.W - 20, tarjetas.H - 20).contains(r),
                                     f"estilo {estilo}: texto fuera de la tarjeta {r}")
@@ -102,26 +95,6 @@ class TestTarjetas(unittest.TestCase):
                         inter = a & b
                         self.assertFalse(inter.width > 3 and inter.height > 0.4 * min(a.height, b.height),
                                          f"estilo {estilo}: textos superpuestos {a} / {b}")
-
-    def test_orden_de_lectura_titular_antes_que_texto(self):
-        """En cada estilo con titular y texto, el titular queda arriba del texto (se lee primero)."""
-        import io
-        from reportlab.pdfgen import canvas
-        tarjetas._registrar_fuentes()
-        d = {"titular": "ALFATITULAR completo aquí.", "texto": "OMEGATEXTO sigue después.", "nota": "x", "variante": 0}
-        for estilo, fn in tarjetas.ESTILOS.items():
-            if estilo == 7:
-                continue
-            buf = io.BytesIO()
-            c = canvas.Canvas(buf, pagesize=(tarjetas.W, tarjetas.H))
-            fn(tarjetas.Lienzo(c, tarjetas._colores()), d)
-            c.showPage()
-            c.save()
-            pagina = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0]
-            y = {}
-            for clave in ("ALFATITULAR", "OMEGATEXTO"):
-                y[clave] = pagina.search_for(clave)[0].y0
-            self.assertLess(y["ALFATITULAR"], y["OMEGATEXTO"], f"estilo {estilo}: el texto aparece antes que el titular")
 
     def test_contenido_viejo_usa_la_primera_oracion_como_titular(self):
         tit, texto = tarjetas._separar("El 78% admite que al menos el 10% de su presupuesto se desperdicia por medición débil. "
@@ -142,31 +115,31 @@ class TestTarjetas(unittest.TestCase):
         img.save(buf, "PNG")
         return buf.getvalue()
 
-    def test_la_tarjeta_toma_el_color_real_del_fondo_de_la_imagen(self):
-        foto = self._foto((0.3, 0.3, 0.7, 0.7), fondo=(240, 85, 90))   # Krea no clava el coral exacto
-        self.assertEqual(tarjetas.color_fondo_imagen(foto), "#F0555A")
-        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), variante=0, imagenes={1: foto}), filetype="pdf")
+    def test_el_icono_se_funde_con_el_fondo_marino(self):
+        foto = self._foto((0.3, 0.3, 0.7, 0.7), fondo=(20, 38, 76))   # Krea no clava el marino exacto
+        self.assertEqual(tarjetas.color_fondo_imagen(foto), "#14264C")
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), imagenes={1: foto}), filetype="pdf")
         pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2))
-        self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), (240, 85, 90))))     # fondo = fondo de la imagen
-        self.assertTrue(all(abs(a - b) <= 4 for a, b in zip(pix.pixel(17, 80), (240, 85, 90))))   # borde izquierdo del recuadro: sin parche
+        self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), (20, 38, 76))))
+        rojo = self._foto((0.3, 0.3, 0.7, 0.7), fondo=(240, 85, 90))   # fondo muy distinto: se mantiene el marino
+        pix = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), imagenes={1: rojo}), filetype="pdf")[0] \
+            .get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2))
+        self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), (0x12, 0x24, 0x4A))))
 
-    def test_ilustracion_se_recorta_al_espacio_de_la_tarjeta(self):
+    def test_imagen_se_recorta_al_espacio_de_la_tarjeta(self):
         import io
         from PIL import Image
-        img = Image.open(io.BytesIO(tarjetas.ilustracion_en_recuadro(self._foto((0.2, 0.2, 0.8, 0.8)), 410, 880, escala=1)))
-        self.assertEqual(img.size, (410, 880))
-        self.assertEqual(img.mode, "RGBA")
+        img = Image.open(io.BytesIO(tarjetas.recortar(self._foto((0.2, 0.2, 0.8, 0.8)), 1080, 620, escala=1)))
+        self.assertEqual(img.size, (1080, 620))
 
-    def test_tarjeta_con_ilustracion_no_dibuja_recuadro(self):
-        import io
-        from PIL import Image
-        buf = io.BytesIO()
-        Image.new("RGB", (912, 1216), (240, 240, 240)).save(buf, "PNG")
-        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True, imagenes={1: buf.getvalue()}), filetype="pdf")
-        self.assertTrue(doc[0].get_images())
-        self.assertNotIn("ILUSTRACIÓN 3D", doc[0].get_text())
-        self.assertIn("ILUSTRACIÓN 3D", doc[1].get_text())           # la tarjeta 2 sin imagen conserva su guía
-        self.assertIn("Tu góndola", " ".join(doc[0].get_text().split()))
+    def test_la_foto_lleva_velo_azul_y_no_dibuja_recuadro(self):
+        foto = self._foto((0, 0, 1, 1), fondo=(255, 255, 255))
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True, imagenes={2: foto}), filetype="pdf")
+        self.assertTrue(doc[1].get_images())
+        self.assertNotIn("FOTO · Krea", doc[1].get_text())
+        self.assertIn("ÍCONO ISOMÉTRICO", doc[0].get_text())      # la tarjeta 1 sin imagen conserva su guía
+        r, g, b = doc[1].get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2)).pixel(100, 250)[:3]
+        self.assertTrue(b > 200 and r < 180, (r, g, b))             # blanco bajo el velo azul → azulado
 
     def test_nombre_de_archivo(self):
         self.assertEqual(tarjetas.nombre_archivo({"tema_especifico": "Retail media: ¿ya?"}, "2026-11-01"),

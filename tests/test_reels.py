@@ -23,7 +23,7 @@ class TestReels(unittest.TestCase):
         for pagina, campo in zip(doc, reels.CAMPOS):
             texto = " ".join(pagina.get_text().split())
             self.assertIn(REEL[campo], texto)
-            self.assertIn("IMAGEN O VIDEO", texto)
+            self.assertIn("FOTO O VIDEO", texto)
         self.assertIn("ESCENA 1 · GANCHO · 0–5 s", " ".join(doc[0].get_text().split()))
 
     def test_solo_el_cierre_lleva_logos_y_se_adaptan_al_fondo(self):
@@ -74,7 +74,7 @@ class TestReels(unittest.TestCase):
     def test_cada_escena_tiene_un_fondo_distinto(self):
         doc = pymupdf.open(stream=reels.generar_pdf(REEL, variante=2), filetype="pdf")
         fondos = [tuple(p.get_pixmap(matrix=pymupdf.Matrix(.1, .1)).pixel(2, 2)) for p in doc]
-        self.assertEqual(len(set(fondos)), 5, fondos)
+        self.assertEqual(len(set(fondos[:4])), 4, fondos)  # el cierre siempre es azul marino
         otra = pymupdf.open(stream=reels.generar_pdf(REEL, variante=2, semilla=1), filetype="pdf")
         self.assertNotEqual(fondos[0], tuple(otra[0].get_pixmap(matrix=pymupdf.Matrix(.1, .1)).pixel(2, 2)))
 

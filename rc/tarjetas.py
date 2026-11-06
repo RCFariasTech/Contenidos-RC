@@ -1,7 +1,14 @@
-"""Tarjetas de carrusel 3:4 (1080 x 1440) en PDF vectorial para el equipo de diseño.
+"""Tarjetas de carrusel 4:5 (1080 x 1350) en PDF vectorial · sistema gráfico RC Farías 2026.
 
-Texto vivo y formas vectoriales (editable en Illustrator). Las ilustraciones 3D se hacen en Krea:
-aquí solo se reserva el espacio con la nota de qué ilustrar. Colores desde config/marca.json.
+Orden fijo de 5 plantillas (guía visual 2026):
+  1. Gancho  · azul marino, titular gigante en Space Grotesk Bold gris + ícono isométrico (Krea).
+  2. Foto    · azul, texto arriba y foto real (Krea, Nano Banana Pro) con velo azul abajo.
+  3. Ícono   · gris, ícono de línea de la guía (marino + rojo) y texto marino.
+  4. Dato    · rojo, cifra gigante en Space Grotesk Bold entre dos líneas de texto. Si la tarjeta no
+               tiene cifra, se usa otra vez la plantilla de ícono.
+  5. Cierre  · azul marino, comillas rojas, texto blanco y logos RC Farías + Constellation.
+
+Texto vivo y formas vectoriales (editable en Illustrator). Colores desde config/marca.json («paleta_2026»).
 """
 
 import io
@@ -11,6 +18,7 @@ from pathlib import Path
 
 from reportlab.graphics import renderPDF
 from reportlab.lib.colors import HexColor
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
@@ -18,25 +26,38 @@ from reportlab.pdfgen import canvas
 
 from rc.config import RAIZ, marca
 
-W, H, M = 1080, 1440, 84
-NEGRITA, MUY_NEGRITA, NORMAL = "Mont-Bold", "Mont-Black", "Mont-Regular"
+W, H, M = 1080, 1350, 96
+TITULO, TITULO_MEDIO, TEXTO, TEXTO_SEMI = "SpaceGrotesk-Bold", "SpaceGrotesk-Medium", "Sora-Regular", "Sora-SemiBold"
+PLANTILLA = RAIZ / "plantilla"
+DIR_ICONOS = PLANTILLA / "iconos_linea"
 
-# Solo las tarjetas 1 y 2 llevan ilustración 3D. Portada (1) y cierre (7) son fijos; la tarjeta 2 rota entre los
-# estilos con ilustración y las tarjetas 3 y 4 entre los estilos solo de texto.
-ESTILOS_TARJETA_2 = (2, 3, 4)
-ESTILOS_SOLO_TEXTO = (5, 6, 8, 9)
-ESTILOS_CON_ILUSTRACION = frozenset({1, 2, 3, 4})
+NOMBRES = {1: "Gancho", 2: "Foto", 3: "Ícono", 4: "Dato", 5: "Cierre"}
+# Tarjetas que llevan imagen de Krea, qué tipo y su caja (ancho, alto) en px.
+TIPO_IMAGEN = {1: "icono", 2: "foto"}
+AREA_IMAGEN = {1: (500, 500), 2: (W, 620)}
+PROPORCION_KREA = {1: "1:1", 2: "16:9"}
+
+PALETA_2026 = {"marino": "#12244A", "rojo": "#FF0006", "rojo2": "#FF1F35", "azul": "#005EFF",
+               "gris": "#C9CACB", "gris_claro": "#E8E8E8", "blanco": "#FFFFFF", "negro": "#171719"}
+
+RE_CIFRA = re.compile(r"[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?")
 
 
 @lru_cache(maxsize=1)
 def _registrar_fuentes() -> None:
-    for nombre in ("Black", "Bold", "Regular"):
-        pdfmetrics.registerFont(TTFont(f"Mont-{nombre}", str(RAIZ / "plantilla" / "fuentes" / f"Montserrat-{nombre}.ttf")))
+    for nombre in (TITULO, TITULO_MEDIO, TEXTO, TEXTO_SEMI):
+        pdfmetrics.registerFont(TTFont(nombre, str(PLANTILLA / "fuentes" / f"{nombre}.ttf")))
 
 
 def _colores() -> dict:
-    p = marca()["paleta"]
-    return {k: HexColor(p[k]) for k in ("coral", "celeste", "azul_medio", "gris_claro", "azul_marino", "blanco")}
+    p = {**PALETA_2026, **(marca().get("paleta_2026") or {})}
+    return {k: HexColor(v) for k, v in p.items()}
+
+
+@lru_cache(maxsize=1)
+def iconos_linea() -> tuple[str, ...]:
+    """Claves de los íconos de línea disponibles (nombre del archivo sin .svg)."""
+    return tuple(sorted(p.stem for p in DIR_ICONOS.glob("*.svg")))
 
 
 # ---------- texto ----------
@@ -58,125 +79,30 @@ def envolver(texto, fuente, tam, ancho):
 TAM_MINIMO = 16  # suelo absoluto: el texto siempre debe caber completo, aunque la letra quede pequeña
 
 
-def ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter):
-    """Mayor tamaño de letra con el que el texto cabe entero (en alto y en ancho) en la caja dada.
-
-    tam_min es el tamaño mínimo *deseado*; si aun así no cabe, se sigue achicando hasta TAM_MINIMO.
-    """
+def ajustar(texto, fuente, ancho, alto, tam_max, inter):
+    """Mayor tamaño de letra con el que el texto cabe entero (en alto y en ancho) en la caja dada."""
     tam = tam_max
     while tam > TAM_MINIMO:
         lineas = envolver(texto, fuente, tam, ancho)
-        cabe_alto = len(lineas) * tam * inter <= alto
-        cabe_ancho = all(stringWidth(ln, fuente, tam) <= ancho for ln in lineas)
-        if cabe_alto and cabe_ancho:
+        if len(lineas) * tam * inter <= alto and all(stringWidth(ln, fuente, tam) <= ancho for ln in lineas):
             return tam, lineas
         tam -= 2
     return TAM_MINIMO, envolver(texto, fuente, TAM_MINIMO, ancho)
 
 
-class Lienzo:
-    def __init__(self, c, col, alto=H, ancho=W, guias=True, imagenes=None):
-        # guias=False (PDF que se descarga): se omiten los recuadros y notas que solo sirven en la vista previa.
-        # imagenes: {tarjeta: bytes} con la ilustración elegida, que ocupa el lugar del recuadro en esa tarjeta.
-        self.c, self.col, self.alto, self.ancho, self.guias = c, col, alto, ancho, guias
-        self.imagenes, self.tarjeta, self.estilo = imagenes or {}, 0, 0
+# ---------- imágenes ----------
 
-    def bloque(self, texto, fuente, color, x, y_sup, ancho, alto, tam_max, alinear="izq", inter=1.2, tam_min=34):
-        """Texto con el borde superior en y_sup (medido desde arriba). Devuelve el alto usado."""
-        if not (texto or "").strip():
-            return 0
-        c = self.c
-        tam, lineas = ajustar(texto, fuente, ancho, alto, tam_max, tam_min, inter)
-        c.setFillColor(self.col[color])
-        c.setFont(fuente, tam)
-        y = self.alto - y_sup - tam * 0.95
-        for ln in lineas:
-            w = stringWidth(ln, fuente, tam)
-            px = x if alinear == "izq" else (x + ancho - w if alinear == "der" else x + (ancho - w) / 2)
-            c.drawString(px, y, ln)
-            y -= tam * inter
-        return len(lineas) * tam * inter
-
-    def fondo(self, color):
-        """Color de la tarjeta; si la tarjeta tiene ilustración elegida, se usa el color real del fondo de la imagen."""
-        datos = self.imagenes.get(self.tarjeta)
-        if datos:
-            try:
-                self.c.setFillColor(HexColor(color_fondo_imagen(datos)))
-                self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
-                return
-            except Exception:  # imagen dañada: color de la paleta
-                pass
-        self.c.setFillColor(self.col[color])
-        self.c.rect(0, 0, self.ancho, self.alto, stroke=0, fill=1)
-
-    def marcador(self, x, y_sup, ancho, alto, nota, claro=True):
-        """Espacio de la ilustración: la imagen elegida o, en la vista previa, el recuadro con la nota de qué ilustrar."""
-        datos = self.imagenes.get(self.tarjeta)
-        if datos:
-            try:
-                from reportlab.lib.utils import ImageReader
-                self.c.drawImage(ImageReader(io.BytesIO(ilustracion_en_recuadro(datos, ancho, alto))), x,
-                                 self.alto - y_sup - alto, width=ancho, height=alto, mask="auto")
-                return
-            except Exception:
-                pass
-        if not self.guias:
-            return
-        c = self.c
-        y = H - y_sup - alto
-        tinta = self.col["blanco"] if claro else self.col["azul_marino"]
-        c.saveState()
-        c.setFillColor(tinta)
-        c.setFillAlpha(0.14 if claro else 0.10)
-        c.setStrokeColor(tinta)
-        c.setStrokeAlpha(0.75)
-        c.setLineWidth(3)
-        c.setDash(14, 10)
-        c.roundRect(x, y, ancho, alto, 36, stroke=1, fill=1)
-        c.restoreState()
-        c.setFillColor(tinta)
-        c.setFont(NEGRITA, 28)
-        c.drawCentredString(x + ancho / 2, y + alto / 2 + 30, "ILUSTRACIÓN 3D · Krea")
-        tam, lineas = ajustar(nota or "", NORMAL, ancho - 120, alto / 2 - 50, 22, 14, 1.35)
-        c.setFont(NORMAL, tam)
-        for i, ln in enumerate(lineas):
-            c.drawCentredString(x + ancho / 2, y + alto / 2 - 14 - i * tam * 1.35, ln)
-
-    def flecha(self, x, y_sup, escala=1.0):
-        """Punto + flecha coral de las tarjetas publicadas."""
-        c = self.c
-        y = H - y_sup
-        c.setFillColor(self.col["coral"])
-        c.circle(x + 14 * escala, y, 14 * escala, stroke=0, fill=1)
-        c.setStrokeColor(self.col["coral"])
-        c.setLineWidth(22 * escala)
-        c.setLineCap(1)
-        c.setLineJoin(1)
-        c.line(x + 62 * escala, y, x + 150 * escala, y)
-        p = c.beginPath()
-        p.moveTo(x + 118 * escala, y + 44 * escala)
-        p.lineTo(x + 160 * escala, y)
-        p.lineTo(x + 118 * escala, y - 44 * escala)
-        c.drawPath(p, stroke=1, fill=0)
-
-    def logo_svg(self, ruta, cx, cy, ancho):
-        """SVG como vector, centrado en (cx, cy) (cy medido desde abajo)."""
-        from svglib.svglib import svg2rlg  # import diferido: solo al generar tarjetas
-        dib = svg2rlg(str(ruta))
-        k = ancho / dib.width
-        dib.scale(k, k)
-        renderPDF.draw(dib, self.c, cx - ancho / 2, cy - dib.height * k / 2)
-
-
-def _abrir(datos: bytes):
+def _abrir(datos: bytes, alfa: bool = False):
     from PIL import Image
-    return Image.open(io.BytesIO(datos)).convert("RGB")
+    img = Image.open(io.BytesIO(datos))
+    if alfa and (img.mode in ("RGBA", "LA") or "transparency" in img.info):
+        return img.convert("RGBA")
+    return img.convert("RGB")
 
 
 def color_fondo_imagen(datos: bytes) -> str:
-    """Hex del fondo real de la ilustración (mediana de su borde). La tarjeta se pinta con este color para que la
-    imagen y el fondo sean el mismo tono y no se note el recuadro (Krea nunca clava exactamente el color pedido)."""
+    """Hex del fondo real de la imagen (mediana de su borde). La tarjeta 1 se pinta con este color para que el ícono
+    y el fondo sean el mismo tono (Krea nunca clava exactamente el color pedido)."""
     img = _abrir(datos)
     img.thumbnail((200, 200))
     w, h = img.size
@@ -185,148 +111,194 @@ def color_fondo_imagen(datos: bytes) -> str:
     return "#" + "".join(f"{sorted(c[i] for c in borde)[len(borde) // 2]:02X}" for i in range(3))
 
 
-def ilustracion_en_recuadro(datos: bytes, ancho: float, alto: float, escala: float = 1.5) -> bytes:
-    """PNG con alfa: la ilustración recortada a la proporción del recuadro con un borde apenas difuminado (3 %), que se
-    funde con el fondo de la tarjeta porque éste se pinta con el mismo color de fondo de la imagen."""
+def _parecido(hex_a: str, hex_b: str, tolerancia: int = 40) -> bool:
+    a = [int(hex_a[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(hex_b[i:i + 2], 16) for i in (1, 3, 5)]
+    return sum(abs(x - y) for x, y in zip(a, b)) <= tolerancia * 3
+
+
+def recortar(datos: bytes, ancho: float, alto: float, escala: float = 1.5, borde_suave: bool = False) -> bytes:
+    """La imagen recortada (tipo «cover») a la proporción de la caja. borde_suave difumina apenas el contorno."""
     from PIL import Image, ImageDraw, ImageFilter
-    img = _abrir(datos)
+    img = _abrir(datos, alfa=True)
     w, h = max(1, round(ancho * escala)), max(1, round(alto * escala))
+    if img.mode == "RGBA":  # PNG con transparencia: se encaja entero, sin recortar ni difuminar
+        img.thumbnail((w, h), Image.LANCZOS)
+        salida = io.BytesIO()
+        img.save(salida, "PNG", optimize=True)
+        return salida.getvalue()
     k = max(w / img.width, h / img.height)
     img = img.resize((max(w, round(img.width * k)), max(h, round(img.height * k))), Image.LANCZOS)
     izq, arr = (img.width - w) // 2, (img.height - h) // 2
     img = img.crop((izq, arr, izq + w, arr + h))
-    borde = max(2, round(min(w, h) * 0.03))
-    mascara = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(mascara).rectangle((borde, borde, w - borde - 1, h - borde - 1), fill=255)
-    img.putalpha(mascara.filter(ImageFilter.GaussianBlur(borde / 2)))
+    if borde_suave:
+        borde = max(2, round(min(w, h) * 0.04))
+        mascara = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mascara).rectangle((borde, borde, w - borde - 1, h - borde - 1), fill=255)
+        img.putalpha(mascara.filter(ImageFilter.GaussianBlur(borde / 2)))
     salida = io.BytesIO()
-    img.save(salida, "PNG", optimize=True)
+    img.save(salida, "PNG" if borde_suave else "JPEG", **({"optimize": True} if borde_suave else {"quality": 90}))
     return salida.getvalue()
 
 
-@lru_cache(maxsize=None)
-def proporcion_svg(ruta: str) -> float:
-    """Alto / ancho de un SVG."""
-    from svglib.svglib import svg2rlg
-    dib = svg2rlg(ruta)
-    return dib.height / dib.width
+# ---------- lienzo ----------
+
+class Lienzo:
+    def __init__(self, c, col, guias=True, imagenes=None):
+        # guias=False (PDF que se descarga): se omiten los recuadros y notas que solo sirven en la vista previa.
+        # imagenes: {tarjeta: bytes} con la imagen elegida en Krea (1: ícono isométrico, 2: foto).
+        self.c, self.col, self.guias, self.imagenes, self.tarjeta = c, col, guias, imagenes or {}, 0
+
+    def fondo(self, color):
+        self.c.setFillColor(self.col[color] if color in self.col else HexColor(color))
+        self.c.rect(0, 0, W, H, stroke=0, fill=1)
+
+    def bloque(self, texto, fuente, color, x, y_sup, ancho, alto, tam_max, inter=1.25):
+        """Texto con el borde superior en y_sup (desde arriba). Devuelve el alto usado."""
+        if not (texto or "").strip():
+            return 0
+        tam, lineas = ajustar(texto, fuente, ancho, alto, tam_max, inter)
+        self.c.setFillColor(self.col[color])
+        self.c.setFont(fuente, tam)
+        y = H - y_sup - tam * 0.9
+        for ln in lineas:
+            self.c.drawString(x, y, ln)
+            y -= tam * inter
+        return len(lineas) * tam * inter
+
+    def svg(self, ruta, x, y_sup, ancho):
+        from svglib.svglib import svg2rlg  # import diferido: solo al generar tarjetas
+        dib = svg2rlg(str(ruta))
+        k = ancho / dib.width
+        dib.scale(k, k)
+        renderPDF.draw(dib, self.c, x, H - y_sup - dib.height * k)
+        return dib.height * k
+
+    def png(self, ruta_o_bytes, x, y_sup, ancho, alto):
+        fuente = io.BytesIO(ruta_o_bytes) if isinstance(ruta_o_bytes, bytes) else str(ruta_o_bytes)
+        self.c.drawImage(ImageReader(fuente), x, H - y_sup - alto, ancho, alto, mask="auto",
+                         preserveAspectRatio=True, anchor="sw")
+
+    def recuadro_guia(self, x, y_sup, ancho, alto, rotulo, nota, tinta="blanco"):
+        """En la vista previa: recuadro punteado con qué imagen va y la nota de qué mostrar."""
+        if not self.guias:
+            return
+        c, y = self.c, H - y_sup - alto
+        c.saveState()
+        c.setFillColor(self.col[tinta])
+        c.setFillAlpha(0.12)
+        c.setStrokeColor(self.col[tinta])
+        c.setStrokeAlpha(0.7)
+        c.setLineWidth(3)
+        c.setDash(14, 10)
+        c.roundRect(x, y, ancho, alto, 28, stroke=1, fill=1)
+        c.restoreState()
+        c.setFillColor(self.col[tinta])
+        c.setFont(TEXTO_SEMI, 26)
+        c.drawCentredString(x + ancho / 2, y + alto / 2 + 24, rotulo)
+        tam, lineas = ajustar(nota or "", TEXTO, ancho - 100, alto / 2 - 40, 20, 1.35)
+        c.setFont(TEXTO, tam)
+        for i, ln in enumerate(lineas):
+            c.drawCentredString(x + ancho / 2, y + alto / 2 - 16 - i * tam * 1.35, ln)
 
 
-# ---------- los 7 estilos (todos reciben titular, texto y nota de ilustración) ----------
+# ---------- las 5 plantillas ----------
 
-# Portadas: el color de fondo rota para que el feed se vea variado (fondo, titular, texto, ilustración sobre fondo oscuro)
-PORTADAS = (
-    ("coral", "blanco", "blanco", True),
-    ("celeste", "azul_marino", "azul_marino", False),
-    ("azul_medio", "blanco", "celeste", True),
-    ("gris_claro", "azul_marino", "coral", False),
-    ("azul_marino", "blanco", "celeste", True),
-)
-
-
-def estilo1_portada(L, d):
-    """Fondo que rota (coral, celeste, azul, gris, marino) · ilustración arriba · titular grande abajo."""
-    fondo, c_titular, c_texto, oscuro = PORTADAS[d.get("variante", 0) % len(PORTADAS)]
-    L.fondo(fondo)
-    L.marcador(M, 84, W - 2 * M, 640, d["nota"], claro=oscuro)
-    usado = L.bloque(d["titular"], MUY_NEGRITA, c_titular, M, 780, W - 2 * M, 380, 124, tam_min=64, inter=1.08)
-    y = 780 + usado + 24
-    L.bloque(d["texto"], NORMAL, c_texto, M, y, W - 2 * M, H - 70 - y, 52)
-
-
-def estilo2_navy_centro(L, d):
-    """Azul marino · flecha · ilustración al centro · titular y remate abajo."""
-    L.fondo("azul_marino")
-    L.flecha(W / 2 - 80, 190, 1.0)
-    L.marcador(M + 100, 330, W - 2 * M - 200, 560, d["nota"])
-    L.c.setFillColor(L.col["coral"])
-    L.c.rect(M + 130, H - 920, W - 2 * M - 260, 8, stroke=0, fill=1)
-    u = L.bloque(d["titular"], NEGRITA, "blanco", M, 980, W - 2 * M, 190, 66, alinear="centro", tam_min=40)
-    L.bloque(d["texto"], NORMAL, "celeste", M, 980 + u + 16, W - 2 * M, 1360 - (980 + u + 16), 50, alinear="centro", tam_min=32)
+def t1_gancho(L, d):
+    datos = L.imagenes.get(1)
+    fondo = L.col["marino"]
+    if datos:
+        try:
+            real = color_fondo_imagen(datos) if _abrir(datos, alfa=True).mode == "RGB" else PALETA_2026["marino"]
+            if _parecido(real, PALETA_2026["marino"]):
+                fondo = HexColor(real)
+        except Exception:
+            datos = None
+    L.c.setFillColor(fondo)
+    L.c.rect(0, 0, W, H, stroke=0, fill=1)
+    usado = L.bloque(d["titular"], TITULO, "gris", M, 120, W - 2 * M, 600, 150, inter=1.0)
+    if d.get("texto"):
+        L.bloque(d["texto"], TEXTO, "blanco", M, 150 + usado, 620, 200, 40)
+    ancho, alto = AREA_IMAGEN[1]
+    x, y_sup = W - M - ancho + 40, H - alto - 80
+    if datos:
+        try:
+            L.png(recortar(datos, ancho, alto, borde_suave=True), x, y_sup, ancho, alto)
+            return
+        except Exception:
+            pass
+    L.recuadro_guia(x, y_sup, ancho, alto, "ÍCONO ISOMÉTRICO · Krea", d.get("nota", ""))
 
 
-def estilo3_coral_partido(L, d):
-    """Coral · titular enorme arriba · ilustración a la izquierda · texto a la derecha."""
-    L.fondo("coral")
-    L.bloque(d["titular"], MUY_NEGRITA, "blanco", M, 90, W - 2 * M, 470, 104, tam_min=60, inter=1.1)
-    L.marcador(M, 620, 420, 620, d["nota"])
-    L.bloque(d["texto"], NORMAL, "blanco", 540, 620, W - 540 - M, 620, 54, alinear="der", tam_min=32)
+def t2_foto(L, d):
+    L.fondo("azul")
+    texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
+    ancho, alto = AREA_IMAGEN[2]
+    L.bloque(texto, TEXTO, "blanco", M, 110, W - 2 * M - 40, H - alto - 180, 50, inter=1.3)
+    datos = L.imagenes.get(2)
+    if datos:
+        try:
+            L.png(recortar(datos, ancho, alto), 0, H - alto, ancho, alto)
+            L.c.saveState()
+            L.c.setFillColor(L.col["azul"])
+            L.c.setFillAlpha(0.45)
+            L.c.rect(0, 0, ancho, alto, stroke=0, fill=1)
+            L.c.restoreState()
+            return
+        except Exception:
+            pass
+    L.recuadro_guia(M, H - alto + 20, W - 2 * M, alto - 100, "FOTO · Krea (con velo azul)", d.get("nota", ""))
 
 
-def estilo4_blanco_lateral(L, d):
-    """Blanco · ilustración a la izquierda · texto coral alineado a la derecha."""
-    L.fondo("blanco")
-    L.marcador(M, 190, 410, 880, d["nota"], claro=False)
-    u = L.bloque(d["titular"], NEGRITA, "coral", 520, 190, W - 520 - M, 420, 80, alinear="der", tam_min=44, inter=1.15)
-    L.bloque(d["texto"], NORMAL, "coral", 520, 190 + u + 60, W - 520 - M, 880 - u - 60, 50, alinear="der", tam_min=32)
+def _icono_de(d: dict, alternativa: int) -> str:
+    claves = iconos_linea()
+    pedido = (d.get("icono") or "").strip().lower()
+    return pedido if pedido in claves else claves[alternativa % len(claves)]
 
 
-def estilo5_gris_pildora(L, d):
-    """Gris · titular en negrita arriba · '+' coral y texto azul marino debajo (sin píldora)."""
-    c = L.c
-    L.fondo("gris_claro")
-    u = L.bloque(d["titular"], NEGRITA, "azul_marino", M, 150, W - 2 * M, 520, 84, inter=1.15)
-    y_texto = 150 + u + 90
-    cx, cy = M + 115, H - y_texto - 70  # centro del "+"
-    c.setFillColor(L.col["coral"])
-    c.rect(cx - 95, cy - 17, 190, 34, stroke=0, fill=1)
-    c.rect(cx - 17, cy - 95, 34, 190, stroke=0, fill=1)
-    L.bloque(d["texto"], NORMAL, "azul_marino", 330, y_texto, W - 330 - M, H - 90 - y_texto, 60)
+def t3_icono(L, d):
+    L.fondo("gris")
+    L.svg(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg", M, 150, 180)
+    texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
+    L.bloque(texto, TEXTO, "marino", M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
 
 
-def estilo6_celeste(L, d):
-    """Celeste · flecha + titular · texto de apoyo."""
-    L.fondo("celeste")
-    L.flecha(M, 250, 0.9)
-    u = L.bloque(d["titular"], MUY_NEGRITA, "azul_marino", M + 190, 190, W - M - (M + 190), 330, 80, tam_min=48, inter=1.1)
-    y = 190 + max(u, 100) + 70
-    L.bloque(d["texto"], NORMAL, "azul_marino", M, y, W - 2 * M, 1340 - y, 58, tam_min=34, inter=1.25)
+def separar_cifra(texto: str) -> tuple[str, str, str]:
+    """(antes, cifra, después) con la primera cifra del texto; cifra vacía si no hay."""
+    m = RE_CIFRA.search(texto or "")
+    if not m or not re.search(r"\d", m.group(0)):
+        return texto, "", ""
+    return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
 
 
-def estilo8_marino_texto(L, d):
-    """Azul marino · flecha coral · titular blanco en negrita · texto celeste (sin ilustración)."""
-    L.fondo("azul_marino")
-    L.flecha(M, 230, 0.9)
-    u = L.bloque(d["titular"], MUY_NEGRITA, "blanco", M, 300, W - 2 * M, 520, 88, tam_min=44, inter=1.12)
-    L.c.setFillColor(L.col["coral"])
-    L.c.rect(M, H - (300 + u + 50) - 8, 220, 8, stroke=0, fill=1)
-    y = 300 + u + 90
-    L.bloque(d["texto"], NORMAL, "celeste", M, y, W - 2 * M, H - 90 - y, 58, inter=1.25)
+def t4_dato(L, d):
+    todo = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
+    antes, cifra, despues = separar_cifra(todo)
+    L.fondo("rojo2")
+    usado = L.bloque(antes, TEXTO, "blanco", M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
+    y = 120 + usado + 30
+    tam = 300
+    while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
+        tam -= 10
+    L.c.setFillColor(L.col["gris"])
+    L.c.setFont(TITULO, tam)
+    L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
+    y += tam * 0.86 + 60
+    L.bloque(despues, TEXTO, "blanco", M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
 
 
-def estilo9_blanco_texto(L, d):
-    """Blanco · titular coral en negrita · texto azul marino · barra celeste (sin ilustración)."""
-    L.fondo("blanco")
-    L.c.setFillColor(L.col["celeste"])
-    L.c.rect(0, H - 40, W, 40, stroke=0, fill=1)
-    u = L.bloque(d["titular"], MUY_NEGRITA, "coral", M, 200, W - 2 * M, 560, 92, tam_min=44, inter=1.12)
-    y = 200 + u + 70
-    L.bloque(d["texto"], NORMAL, "azul_marino", M, y, W - 2 * M, H - 90 - y, 58, inter=1.25)
+def t5_cierre(L, d):
+    L.fondo("marino")
+    L.c.setFillColor(L.col["rojo"])
+    L.c.setFont(TITULO, 520)
+    L.c.drawString(W - M - 300, H - 520, "”")
+    texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
+    L.bloque(texto, TEXTO, "blanco", M, 330, 680, 640, 50, inter=1.3)
+    L.png(PLANTILLA / "logo_rc_blanco_2026.png", M, H - 175, 300, 80)
+    L.svg(PLANTILLA / "logo_constellation_blanco.svg", W - M - 330, H - 160, 330)
 
 
-def estilo7_cierre(L, d):
-    """Blanco · marco con Constellation arriba · cita centrada · logo RC / FARÍAS abajo."""
-    c = L.c
-    L.fondo("blanco")
-    c.setStrokeColor(L.col["azul_marino"])
-    c.setLineWidth(3)
-    x0, y0, x1, y1 = 56, H - 1190, W - 56, H - 214
-    c.roundRect(x0, y0, x1 - x0, y1 - y0, 40, stroke=1, fill=0)
-    c.setFillColor(L.col["blanco"])
-    c.rect(x0 + 110, y1 - 8, x1 - x0 - 220, 18, stroke=0, fill=1)
-    c.rect(x0 + 160, y0 - 6, x1 - x0 - 320, 14, stroke=0, fill=1)
-    L.logo_svg(RAIZ / marca()["logos"]["constellation_negro"], W / 2, y1 - 2, 600)
-    texto = " ".join(p for p in (d["titular"], d["texto"]) if p).strip()
-    L.bloque(f"“{texto}”", NORMAL, "azul_marino", 130, 400, W - 260, 560, 58, alinear="centro", tam_min=36, inter=1.28)
-    c.drawImage(str(RAIZ / marca()["logos"]["fondo_claro_sobrio"]), W / 2 - 215, y0 - 52,
-                width=430, height=125, mask="auto", preserveAspectRatio=True)
-
-
-ESTILOS = {1: estilo1_portada, 2: estilo2_navy_centro, 3: estilo3_coral_partido, 4: estilo4_blanco_lateral,
-           5: estilo5_gris_pildora, 6: estilo6_celeste, 7: estilo7_cierre,
-           8: estilo8_marino_texto, 9: estilo9_blanco_texto}
-NOMBRES = {1: "Portada", 2: "Azul marino", 3: "Coral partido", 4: "Blanco lateral",
-           5: "Gris con titular", 6: "Celeste", 7: "Cierre", 8: "Azul marino texto", 9: "Blanco texto"}
+PLANTILLAS = {1: t1_gancho, 2: t2_foto, 3: t3_icono, 4: t4_dato, 5: t5_cierre}
 
 
 # ---------- datos de cada tarjeta ----------
@@ -335,11 +307,7 @@ CAMPOS_SLIDE = ("slide_1_gancho", "slide_2", "slide_3", "slide_4", "slide_5_cier
 
 
 def _separar(texto: str) -> tuple[str, str]:
-    """Titular + resto para contenidos viejos sin `diseno`: la primera oración (o hasta los dos puntos).
-
-    Solo corta en un límite natural; si el texto es una sola oración, todo va como titular, porque
-    partir una frase a la mitad deja un titular sin sentido.
-    """
+    """Titular + resto para contenidos viejos sin `diseno`: la primera oración (o hasta los dos puntos)."""
     texto = (texto or "").strip()
     partes = re.split(r"(?<=[:.?!])\s+", texto, maxsplit=1)
     if len(partes) == 2 and 0 < len(partes[0].split()) <= 30:
@@ -348,7 +316,7 @@ def _separar(texto: str) -> tuple[str, str]:
 
 
 def datos_tarjetas(contenido: dict) -> list[dict]:
-    """Las 5 tarjetas con titular, texto y nota de ilustración (usa `diseno` si existe)."""
+    """Las 5 tarjetas con titular, texto, nota de imagen y (tarjeta 3) clave del ícono de línea."""
     diseno = contenido.get("diseno") or []
     tarjetas = []
     for i, campo in enumerate(CAMPOS_SLIDE):
@@ -356,66 +324,41 @@ def datos_tarjetas(contenido: dict) -> list[dict]:
         if i < len(diseno):
             d = diseno[i]
             tarjetas.append({"titular": d.get("titular", ""), "texto": d.get("texto", ""),
-                             "nota": d.get("ilustracion", "")})
+                             "nota": d.get("ilustracion", ""), "icono": d.get("icono", "")})
         elif i == 0:
-            tarjetas.append({"titular": texto, "texto": "", "nota": ""})
+            tarjetas.append({"titular": texto, "texto": "", "nota": "", "icono": ""})
         elif i == len(CAMPOS_SLIDE) - 1:
-            tarjetas.append({"titular": "", "texto": texto, "nota": ""})
+            tarjetas.append({"titular": "", "texto": texto, "nota": "", "icono": ""})
         else:
             titular, resto = _separar(texto)
-            tarjetas.append({"titular": titular, "texto": resto, "nota": ""})
+            tarjetas.append({"titular": titular, "texto": resto, "nota": "", "icono": ""})
+    for t, campo in zip(tarjetas, CAMPOS_SLIDE):
+        t["completo"] = " ".join((contenido.get(campo) or "").split()) or " ".join(p for p in (t["titular"], t["texto"]) if p)
     return tarjetas
 
 
-def estilos_sugeridos(variante: int = 0, semilla: int = 0) -> list[int]:
-    """Portada · tarjeta 2 con ilustración · tarjetas 3 y 4 solo texto · cierre.
-
-    Rotan según la variante (mes y carrusel); la semilla (botón «Rehacer») produce otra propuesta.
-    """
-    n = len(ESTILOS_SOLO_TEXTO)
-    i = (variante * 2 + semilla * 3) % n
-    return [1, ESTILOS_TARJETA_2[(variante + semilla) % len(ESTILOS_TARJETA_2)],
-            ESTILOS_SOLO_TEXTO[i], ESTILOS_SOLO_TEXTO[(i + 1) % n], 7]
-
-
-# Fondo de cada estilo con ilustración y tamaño (px) de su recuadro, para pedirle a Krea una imagen del color y la
-# proporción correctos.
-FONDO_ESTILO = {2: "azul_marino", 3: "coral", 4: "blanco"}
-AREA_ILUSTRACION = {1: (W - 2 * M, 640), 2: (W - 2 * M - 200, 560), 3: (420, 620), 4: (410, 880)}
-
-
-def estilo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> int:
-    """Estilo (1-9) que lleva la tarjeta `indice` (1-5) en la propuesta actual."""
-    return estilos_sugeridos(variante, semilla)[indice - 1]
-
-
-def fondo_de_tarjeta(indice: int, variante: int = 0, semilla: int = 0) -> tuple[str, str]:
-    """(clave de color, hex) del fondo de una tarjeta con ilustración."""
-    estilo = estilo_de_tarjeta(indice, variante, semilla)
-    clave = PORTADAS[(variante + semilla) % len(PORTADAS)][0] if estilo == 1 else FONDO_ESTILO[estilo]
-    return clave, marca()["paleta"][clave]
-
-
-def tamano_ilustracion(estilo: int, lado_largo: int = 1216) -> tuple[int, int]:
-    """(ancho, alto) para generar la imagen: la proporción del espacio de ilustración de ese estilo, múltiplos de 16."""
-    ancho, alto = AREA_ILUSTRACION[estilo]
-    k = lado_largo / max(ancho, alto)
-    return max(512, round(ancho * k / 16) * 16), max(512, round(alto * k / 16) * 16)
+def plantillas_de(contenido: dict) -> list[int]:
+    """Plantilla de cada tarjeta: orden fijo; la 4 pasa a «ícono» si no tiene cifra."""
+    t4 = datos_tarjetas(contenido)[3]
+    tiene_cifra = bool(separar_cifra(t4["completo"])[1])
+    return [1, 2, 3, 4 if tiene_cifra else 3, 5]
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
                 guias: bool = False, imagenes: dict[int, bytes] | None = None) -> bytes:
-    """guias=True dibuja los recuadros de ilustración con su nota (vista previa); False los omite (descarga)."""
+    """guias=True dibuja los recuadros de imagen con su nota (vista previa); False los omite (descarga).
+
+    variante + semilla solo cambian el ícono de línea cuando la tarjeta no pidió uno («Rehacer tarjetas»).
+    """
     _registrar_fuentes()
-    col = _colores()
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(W, H))
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
-    L = Lienzo(c, col, guias=guias, imagenes=imagenes)
-    for numero, (estilo, datos) in enumerate(zip(estilos_sugeridos(variante, semilla), datos_tarjetas(contenido)), 1):
-        L.tarjeta, L.estilo = numero, estilo
-        ESTILOS[estilo](L, {**datos, "variante": variante + semilla})
+    L = Lienzo(c, _colores(), guias=guias, imagenes=imagenes)
+    for numero, (plantilla, datos) in enumerate(zip(plantillas_de(contenido), datos_tarjetas(contenido)), 1):
+        L.tarjeta = numero
+        PLANTILLAS[plantilla](L, {**datos, "alternativa": variante + semilla * 3 + numero * 5})
         c.showPage()
     c.save()
     return buffer.getvalue()
