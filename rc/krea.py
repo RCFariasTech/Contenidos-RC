@@ -22,9 +22,10 @@ def configurado() -> bool:
 
 
 def construir_prompt(descripcion: str, tipo: str) -> str:
-    """Prompt completo para Krea: tipo «icono» (isométrico, tarjeta 1) o «foto» (tarjeta 2 y reels)."""
+    """Prompt completo para Krea: «icono» (isométrico, tarjeta 1), «foto» (tarjeta 2) o «linea» (tarjeta 3)."""
     escena = " ".join((descripcion or "").split()).strip(" .\"")
-    return (estilo_iconos.prompt_icono(escena) if tipo == "icono" else estilo_iconos.prompt_foto(escena))[:3000]
+    fn = {"icono": estilo_iconos.prompt_icono, "linea": estilo_iconos.prompt_linea}.get(tipo, estilo_iconos.prompt_foto)
+    return fn(escena)[:3000]
 
 
 def _motivo(cuerpo: str) -> str:

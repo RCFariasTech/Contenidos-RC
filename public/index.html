@@ -166,11 +166,12 @@
     <dialog id="dialogo-ilustraciones" class="dialogo dialogo--ilus" aria-labelledby="titulo-ilustraciones">
       <h2 id="titulo-ilustraciones">Imágenes</h2>
       <p class="ilus-tarjeta"><span class="ilus-tarjeta__rotulo">Texto de esta tarjeta:</span> <span id="ilus-texto"></span></p>
-      <label for="ilus-descripcion" class="ilus-etiqueta">Qué mostrar <span class="ayuda">(en inglés, para Krea; puedes editarlo antes de generar)</span></label>
+      <label for="ilus-descripcion" class="ilus-etiqueta">Qué mostrar <span class="ayuda">(sugerencia a partir del texto de la tarjeta; puedes editarla antes de generar)</span></label>
       <textarea id="ilus-descripcion" rows="3" maxlength="500" placeholder="Vacío: se escribe automáticamente a partir del texto de esta tarjeta."></textarea>
+      <div class="ilus-sugerir"><button type="button" id="ilus-sugerir" class="btn btn--secundario btn--chico" title="Pide a Claude otra idea distinta de las anteriores">Sugerir otra descripción</button></div>
       <p id="ilus-aviso" class="alerta alerta--aviso" hidden></p>
       <div id="ilus-galeria" class="galeria"></div>
-      <p class="ayuda">Nano Banana Pro en Krea. Tarjeta 1: ícono isométrico con el estilo de la guía visual (usa los íconos de la guía como referencia), sobre azul marino. Tarjeta 2: foto realista de personas comunes de clase media, que se monta con velo azul. «Usar en la tarjeta» la coloca en la vista previa y en el PDF; las imágenes siguen viviendo en Krea.</p>
+      <p class="ayuda">Nano Banana Pro en Krea. Tarjeta 1: ícono isométrico sobre azul marino. Tarjeta 2: foto realista de personas comunes de clase media, que se monta con velo azul. Tarjeta 3: ícono de línea (marino con un acento rojo) sobre gris. Los íconos usan los de la guía visual como referencia de estilo. «Usar en la tarjeta» la coloca en la vista previa y en el PDF; las imágenes siguen viviendo en Krea.</p>
       <div class="dialogo__acciones">
         <button type="button" id="ilus-cerrar" class="btn btn--secundario">Cerrar</button>
         <button type="button" id="ilus-generar" class="btn btn--primario">Generar</button>

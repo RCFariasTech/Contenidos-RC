@@ -226,11 +226,11 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
         el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
-        pieza.formato === "Carrusel" && i < 2 && conMiniaturas ? el("button", {
+        pieza.formato === "Carrusel" && i < 3 && conMiniaturas ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
-          title: i === 0 ? "Genera en Krea variantes del ícono isométrico de la portada, con el estilo de la guía visual" : "Genera en Krea variantes de la foto realista de la tarjeta 2",
+          title: IMAGEN_TARJETA[i + 1].ayuda,
           onclick: () => abrirIlustraciones(pieza, i + 1, c[campo] || ""),
-        }, i === 0 ? "Ícono de la tarjeta 1" : "Foto de la tarjeta 2") : null),
+        }, IMAGEN_TARJETA[i + 1].boton) : null),
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
       conMiniaturas ? miniatura(pieza, i) : null);
   });
@@ -637,9 +637,19 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 
 $("btn-pptx").addEventListener("click", () => descargarPptx());
 
-// ---------- imágenes de Krea: ícono isométrico (tarjeta 1) y foto (tarjeta 2) ----------
+// ---------- imágenes de Krea: ícono isométrico (1), foto (2) e ícono de línea (3) ----------
 
-const ilus = { pieza: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "" };
+const IMAGEN_TARJETA = {
+  1: { boton: "Ícono de la tarjeta 1", titulo: "Ícono isométrico · Tarjeta 1", generar: "Generar íconos", alt: "Ícono generado en Krea",
+       ayuda: "Genera en Krea variantes del ícono isométrico de la portada, con el estilo de la guía visual" },
+  2: { boton: "Foto de la tarjeta 2", titulo: "Foto · Tarjeta 2", generar: "Generar fotos", alt: "Foto generada en Krea",
+       ayuda: "Genera en Krea variantes de la foto realista de la tarjeta 2" },
+  3: { boton: "Ícono de la tarjeta 3", titulo: "Ícono de línea · Tarjeta 3", generar: "Generar íconos", alt: "Ícono de línea generado en Krea",
+       ayuda: "Genera en Krea variantes del ícono de línea de la tarjeta 3, con el estilo de los íconos de la guía visual" },
+};
+
+const ilus = { pieza: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "",
+  sugiriendo: false, previas: [] };
 
 function refrescarMiniaturasDe(pieza) {
   miniaturas.rev.set(pieza.id, (miniaturas.rev.get(pieza.id) || 0) + 1);
@@ -663,15 +673,17 @@ function renderIlustraciones() {
   const mensaje = ilus.mensaje || (ilus.configurado ? "" : "Las imágenes aún no están activadas: falta configurar KREA_API_TOKEN en Vercel (ver README).");
   $("ilus-aviso").hidden = !mensaje;
   $("ilus-aviso").textContent = mensaje;
-  $("ilus-generar").disabled = ilus.enviando || !ilus.configurado;
-  $("ilus-generar").textContent = ilus.enviando ? "Preparando la descripción y enviando a Krea…" : (ilus.items.length ? "Generar más" : (ilus.tarjeta === 1 ? "Generar íconos" : "Generar fotos"));
+  $("ilus-generar").disabled = ilus.enviando || ilus.sugiriendo || !ilus.configurado;
+  $("ilus-generar").textContent = ilus.enviando ? "Enviando a Krea…" : (ilus.items.length ? "Generar más" : IMAGEN_TARJETA[ilus.tarjeta].generar);
+  $("ilus-sugerir").disabled = ilus.enviando || ilus.sugiriendo;
+  $("ilus-sugerir").textContent = ilus.sugiriendo ? "Pensando otra opción…" : "Sugerir otra descripción";
   $("ilus-galeria").replaceChildren(...(ilus.items.length ? ilus.items.map((it) => {
     const lista = it.estado === "lista" && it.url?.startsWith("https://");
     const marco = el("div", {
       clase: `galeria__marco${it.estado === "en_cola" ? " galeria__marco--cargando" : ""}${it.estado === "fallida" ? " galeria__marco--fallida" : ""}`,
       style: `background-color: ${/^#[0-9A-Fa-f]{6}$/.test(it.fondo) ? it.fondo : "#D8D6D2"}; aspect-ratio: ${it.ancho || 4} / ${it.alto || 3}`,
     });
-    if (lista) marco.append(el("img", { src: it.url, alt: ilus.tarjeta === 1 ? "Ícono generado en Krea" : "Foto generada en Krea", loading: "lazy" }));
+    if (lista) marco.append(el("img", { src: it.url, alt: IMAGEN_TARJETA[ilus.tarjeta].alt, loading: "lazy" }));
     else if (it.estado === "en_cola") marco.append("Generando en Krea…");
     else marco.append(it.error || "No se pudo generar");
     return el("figure", { clase: `galeria__item${it.elegida ? " galeria__item--elegida" : ""}` }, marco,
@@ -691,9 +703,6 @@ async function cargarIlustraciones() {
     const d = await api(`ilustraciones?pieza=${ilus.pieza.id}`);
     ilus.configurado = d.configurado;
     ilus.items = d.items.filter((it) => it.tarjeta === ilus.tarjeta);
-    if (!$("ilus-descripcion").value.trim()) {
-      $("ilus-descripcion").value = ilus.items.find((it) => it.descripcion)?.descripcion || "";
-    }
   } catch (e) {
     ilus.mensaje = `No se pudieron cargar las imágenes: ${e.message}`;
   }
@@ -701,15 +710,42 @@ async function cargarIlustraciones() {
 }
 
 async function abrirIlustraciones(pieza, tarjeta, texto) {
-  Object.assign(ilus, { pieza, tarjeta, items: [], enviando: false, mensaje: "" });
-  $("titulo-ilustraciones").textContent = tarjeta === 1 ? "Ícono isométrico · Tarjeta 1" : "Foto · Tarjeta 2";
+  Object.assign(ilus, { pieza, tarjeta, items: [], enviando: false, mensaje: "", sugiriendo: false, previas: [] });
+  $("titulo-ilustraciones").textContent = IMAGEN_TARJETA[tarjeta].titulo;
   $("ilus-texto").textContent = texto || "—";
-  const diseno = pieza.contenido?.diseno?.[tarjeta - 1];
-  $("ilus-descripcion").value = diseno?.prompt_krea || "";
+  $("ilus-descripcion").value = "";
   renderIlustraciones();
   $("dialogo-ilustraciones").showModal();
   await cargarIlustraciones();
+  // Si ya se generaron imágenes, se retoma la última descripción usada; si no, Claude sugiere una en español.
+  const usada = ilus.items.find((it) => it.descripcion)?.descripcion;
+  if (usada) {
+    $("ilus-descripcion").value = usada;
+    ilus.previas.push(usada);
+  } else {
+    await sugerirDescripcion();
+  }
 }
+
+async function sugerirDescripcion() {
+  const actual = $("ilus-descripcion").value.trim();
+  if (actual && !ilus.previas.includes(actual)) ilus.previas.push(actual);
+  ilus.sugiriendo = true;
+  ilus.mensaje = "";
+  renderIlustraciones();
+  try {
+    const r = await api("ilustracion-sugerir", { metodo: "POST", cuerpo: {
+      pieza_id: ilus.pieza.id, tarjeta: ilus.tarjeta, previas: ilus.previas.slice(-6) } });
+    $("ilus-descripcion").value = r.descripcion;
+    ilus.previas.push(r.descripcion);
+  } catch (e) {
+    ilus.mensaje = `No se pudo sugerir una descripción: ${e.message}`;
+  }
+  ilus.sugiriendo = false;
+  renderIlustraciones();
+}
+
+$("ilus-sugerir").addEventListener("click", sugerirDescripcion);
 
 $("ilus-generar").addEventListener("click", async () => {
   ilus.enviando = true;

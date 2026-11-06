@@ -85,9 +85,18 @@ class TestKrea(unittest.TestCase):
 
     def test_prompt_de_icono_con_el_estilo_de_la_guia(self):
         p = krea.construir_prompt("a shelf with a screen and a cart.", "icono")
-        self.assertIn("Subject: a shelf with a screen and a cart.", p)
+        self.assertIn("a shelf with a screen and a cart.", p)
         for rasgo in ("isometric", "#005EFF", "#FF0006", "flat solid navy #12244A", "No text"):
             self.assertIn(rasgo, p)
+
+    def test_prompt_de_icono_de_linea(self):
+        p = krea.construir_prompt("una lupa sobre un gráfico", "linea")
+        for rasgo in ("minimalist line icon", "una lupa sobre un gráfico", "#12244A", "#FF0006", "#C9CACB", "No text"):
+            self.assertIn(rasgo, p)
+        from rc import estilo_iconos
+        from rc.config import RAIZ
+        for r in estilo_iconos.referencias_icono("https://x.app", "linea"):
+            self.assertTrue((RAIZ / "public" / r.replace("https://x.app/", "")).exists(), r)
 
     def test_prompt_de_foto_realista_de_clase_media(self):
         p = krea.construir_prompt("a woman in a supermarket aisle", "foto")

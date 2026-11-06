@@ -373,12 +373,12 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
     if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
         raise ErrorNegocio("Las imágenes son para tarjetas de carruseles con contenido.")
     if tarjeta not in tarjetas.TIPO_IMAGEN:
-        raise ErrorNegocio("Solo la tarjeta 1 (ícono) y la 2 (foto) llevan imagen.")
+        raise ErrorNegocio("Solo las tarjetas 1 (ícono), 2 (foto) y 3 (ícono de línea) llevan imagen.")
     if not krea.configurado():
         raise ErrorNegocio("Las imágenes no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
     tipo = tarjetas.TIPO_IMAGEN[tarjeta]
     k = ajustes()["krea"]
-    ancho, alto = (1024, 1024) if tipo == "icono" else (1376, 768)
+    ancho, alto = (1376, 768) if tipo == "foto" else (1024, 1024)
     contenido = pieza["contenido"]
     descripcion = " ".join((descripcion or "").split())[:500]
     if not descripcion:
@@ -392,8 +392,8 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
     prompt = krea.construir_prompt(descripcion, tipo)
-    referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""))
-                   if tipo == "icono" else [])
+    referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""), tipo)
+                   if tipo in ("icono", "linea") else [])
     filas, fallo = [], None
     for _ in range(k["variantes_por_clic"]):
         try:
@@ -403,10 +403,31 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
             break
         filas.append(db.insertar("ilustraciones", {
             "pieza_id": pieza["id"], "tarjeta": tarjeta, "job_id": job_id, "prompt": prompt,
-            "descripcion": descripcion, "fondo": "#12244A" if tipo == "icono" else "", "ancho": ancho, "alto": alto})[0])
+            "descripcion": descripcion, "fondo": {"icono": "#12244A", "linea": "#C9CACB"}.get(tipo, ""),
+            "ancho": ancho, "alto": alto})[0])
     if fallo and not filas:
         raise fallo
     return {"items": filas, "descripcion": descripcion}
+
+
+def sugerir_descripcion(pieza_id: int, tarjeta: int, previas: list[str] | None = None) -> dict:
+    """Descripción sugerida en español de qué mostrar en la imagen de la tarjeta; con `previas`, una opción distinta."""
+    from rc import tarjetas
+    pieza = _pieza(int(pieza_id))
+    tarjeta = int(tarjeta)
+    if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
+        raise ErrorNegocio("Las imágenes son para tarjetas de carruseles con contenido.")
+    if tarjeta not in tarjetas.TIPO_IMAGEN:
+        raise ErrorNegocio("Solo las tarjetas 1, 2 y 3 llevan imagen.")
+    contenido = pieza["contenido"]
+    t = _texto_tarjeta(contenido, tarjeta)
+    try:
+        descripcion = generador.describir_ilustracion(
+            contenido.get("tema_especifico", ""), t["titular"], t["texto"], t.get("nota", ""),
+            tipo=tarjetas.TIPO_IMAGEN[tarjeta], evitar=[str(p)[:500] for p in (previas or [])][:10])
+    except generador.ErrorGeneracion as e:
+        raise ErrorNegocio(str(e)) from e
+    return {"descripcion": descripcion}
 
 
 def elegir_ilustracion(ilustracion_id: int, elegida: bool = True) -> dict:

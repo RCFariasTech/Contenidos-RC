@@ -377,7 +377,12 @@ class TestFlujo(unittest.TestCase):
             prompt, proporcion, referencias = enviados[-1]
             self.assertIn("documentary photograph", prompt)                    # tarjeta 2: foto
             self.assertEqual((proporcion, referencias), ("16:9", []))
-            for caso in ((carrusel["id"], 3), (reel["id"], 1)):
+            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 3, descripcion="una lupa")["items"]), 3)
+            prompt, proporcion, referencias = enviados[-1]
+            self.assertIn("minimalist line icon", prompt)                      # tarjeta 3: ícono de línea
+            self.assertIn("una lupa", prompt)
+            self.assertTrue(referencias and all("/marca/linea/" in r for r in referencias))
+            for caso in ((carrusel["id"], 4), (reel["id"], 1)):
                 with self.assertRaises(servicio.ErrorNegocio):
                     servicio.generar_ilustraciones(*caso)
         with mock.patch.object(krea, "configurado", return_value=False):
@@ -408,6 +413,21 @@ class TestFlujo(unittest.TestCase):
         self.assertIn(f"3d of a scene for {t2['titular']}", enviados[0])
         self.assertEqual(r_user["descripcion"], "Two 3D robots shaking hands")  # la del usuario manda y no llama a Claude
         self.assertTrue(all(f["descripcion"] == "Two 3D robots shaking hands" for f in r_user["items"]))
+
+    def test_sugerir_descripcion_en_espanol_y_otra_distinta(self):
+        carrusel, _ = self._mes_generado()
+        llamadas = []
+
+        def describir(tema, titular, texto, nota="", tipo="icono", evitar=None):
+            llamadas.append((tipo, list(evitar or [])))
+            return f"opción {len(llamadas)}"
+
+        with mock.patch.object(servicio.generador, "describir_ilustracion", side_effect=describir):
+            self.assertEqual(servicio.sugerir_descripcion(carrusel["id"], 3), {"descripcion": "opción 1"})
+            self.assertEqual(servicio.sugerir_descripcion(carrusel["id"], 2, ["opción 1"])["descripcion"], "opción 2")
+            with self.assertRaises(servicio.ErrorNegocio):
+                servicio.sugerir_descripcion(carrusel["id"], 5)
+        self.assertEqual(llamadas, [("linea", []), ("foto", ["opción 1"])])
 
     def test_elegir_una_ilustracion_por_tarjeta_y_montarla_en_el_pdf(self):
         import pymupdf

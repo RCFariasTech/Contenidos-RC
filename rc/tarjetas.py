@@ -33,9 +33,9 @@ DIR_ICONOS = PLANTILLA / "iconos_linea"
 
 NOMBRES = {1: "Gancho", 2: "Foto", 3: "Ícono", 4: "Dato", 5: "Cierre"}
 # Tarjetas que llevan imagen de Krea, qué tipo y su caja (ancho, alto) en px.
-TIPO_IMAGEN = {1: "icono", 2: "foto"}
-AREA_IMAGEN = {1: (500, 500), 2: (W, 620)}
-PROPORCION_KREA = {1: "1:1", 2: "16:9"}
+TIPO_IMAGEN = {1: "icono", 2: "foto", 3: "linea"}
+AREA_IMAGEN = {1: (500, 500), 2: (W, 620), 3: (260, 260)}
+PROPORCION_KREA = {1: "1:1", 2: "16:9", 3: "1:1"}
 
 PALETA_2026 = {"marino": "#12244A", "rojo": "#FF0006", "rojo2": "#FF1F35", "azul": "#005EFF",
                "gris": "#C9CACB", "gris_claro": "#E8E8E8", "blanco": "#FFFFFF", "negro": "#171719"}
@@ -257,8 +257,28 @@ def _icono_de(d: dict, alternativa: int) -> str:
 
 
 def t3_icono(L, d):
-    L.fondo("gris")
-    L.svg(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg", M, 150, 180)
+    # La imagen de Krea (ícono de línea generado) solo aplica a la tarjeta 3; la 4 sin cifra usa el ícono de la guía.
+    datos = L.imagenes.get(3) if L.tarjeta == 3 else None
+    fondo = L.col["gris"]
+    if datos:
+        try:
+            real = color_fondo_imagen(datos)
+            if _parecido(real, PALETA_2026["gris"]):
+                fondo = HexColor(real)
+        except Exception:
+            datos = None
+    L.c.setFillColor(fondo)
+    L.c.rect(0, 0, W, H, stroke=0, fill=1)
+    ancho, alto = AREA_IMAGEN[3]
+    puesto = False
+    if datos:
+        try:
+            L.png(recortar(datos, ancho, alto, borde_suave=True), M - 40, 110, ancho, alto)
+            puesto = True
+        except Exception:
+            pass
+    if not puesto:
+        L.svg(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg", M, 150, 180)
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     L.bloque(texto, TEXTO, "marino", M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
 

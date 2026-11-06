@@ -179,37 +179,51 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     }
 
 
-SISTEMA_ICONO = (
-    "You describe the subject of ONE isometric 3D brand icon for an Instagram carousel card about BTL / experiential "
-    "marketing (RC Farias, Colombia). Given the card text (in Spanish), answer with ONE short English description "
-    "(10 to 30 words) of a small cluster of 2 to 4 concrete objects that represent exactly that card's idea (e.g. a "
-    "store shelf with a digital screen and a rising bar chart; a brand booth with a QR totem and a floating dashboard). "
-    "Objects only: no style words, no colors, no background, no text, letters, numbers, logos or brand names. "
-    "Answer with the description only."
-)
+SISTEMAS_IMAGEN = {
+    "icono": (
+        "Describes el tema de UN ícono isométrico 3D de marca para una tarjeta de carrusel de Instagram sobre marketing "
+        "BTL y experiencial (RC Farías, Colombia). A partir del texto de la tarjeta, responde con UNA descripción breve "
+        "EN ESPAÑOL (10 a 30 palabras) de un grupo de 2 a 4 objetos concretos que representen exactamente la idea de esa "
+        "tarjeta (ej.: una góndola con una pantalla digital, una gráfica de barras que sube y un carrito de compras). "
+        "Solo objetos: sin palabras de estilo, colores, fondo, textos, letras, números, logos ni marcas."
+    ),
+    "linea": (
+        "Describes el tema de UN ícono de línea minimalista (pictograma simple) para una tarjeta de carrusel de "
+        "Instagram sobre marketing BTL y experiencial. A partir del texto de la tarjeta, responde con UNA descripción "
+        "breve EN ESPAÑOL (5 a 15 palabras) de un solo símbolo o un par de elementos simples que representen la idea "
+        "(ej.: una lupa sobre un gráfico de barras; un carrito de compras con una flecha hacia arriba). Sin estilo, "
+        "colores, fondo, textos, letras, números ni logos."
+    ),
+    "foto": (
+        "Describes UNA foto documental realista para una tarjeta de carrusel de Instagram sobre marketing BTL y "
+        "experiencial en Colombia. A partir del texto de la tarjeta, responde con UNA descripción de la escena EN "
+        "ESPAÑOL (15 a 40 palabras): quién (personas latinas comunes de clase media, edad y género), dónde (un lugar "
+        "concreto, limpio y moderno: pasillo de supermercado, activación en centro comercial, evento, oficina) y qué "
+        "hacen, con uno o dos objetos concretos. Sin palabras de estilo ni de cámara, sin textos, letreros, logos ni marcas."
+    ),
+}
 
-SISTEMA_FOTO = (
-    "You describe ONE realistic documentary photo for an Instagram carousel card about BTL / experiential marketing in "
-    "Colombia. Given the card text (in Spanish), answer with ONE English scene description (15 to 40 words): who "
-    "(ordinary middle-class Latin American people, age and gender), where (a concrete, clean, modern place such as a "
-    "supermarket aisle, a mall activation, an event, an office) and what they are doing, with one or two concrete "
-    "objects. No style or camera words, no text, signs, logos or brand names. Answer with the description only."
-)
 
-
-def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", tipo: str = "icono") -> str:
-    """Tema en inglés para Krea (ícono isométrico o escena de foto), a partir del texto de la tarjeta."""
-    usuario = (f"Carousel topic: {tema}\nCard headline: {titular}\nCard text: {texto}\n"
-               + (f"Designer note (Spanish): {nota}\n" if nota else ""))
+def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", tipo: str = "icono",
+                          evitar: list[str] | None = None) -> str:
+    """Descripción EN ESPAÑOL de qué mostrar (ícono isométrico, ícono de línea o foto), a partir del texto de la
+    tarjeta. `evitar`: sugerencias anteriores, para proponer una opción distinta."""
+    usuario = (f"Tema del carrusel: {tema}\nTitular de la tarjeta: {titular}\nTexto de la tarjeta: {texto}\n"
+               + (f"Nota del diseñador: {nota}\n" if nota else ""))
+    previas = [" ".join(p.split()) for p in (evitar or []) if p and p.strip()][-6:]
+    if previas:
+        usuario += ("Ya se propusieron estas opciones; propone una idea claramente DISTINTA (otros objetos u otra "
+                    "situación):\n" + "\n".join(f"- {p}" for p in previas) + "\n")
+    sistema = SISTEMAS_IMAGEN.get(tipo, SISTEMAS_IMAGEN["foto"]) + " Responde solo con la descripción."
     try:
         respuesta = _cliente().messages.create(
-            model=ajustes()["modelo"], max_tokens=600, system=SISTEMA_ICONO if tipo == "icono" else SISTEMA_FOTO,
+            model=ajustes()["modelo"], max_tokens=600, system=sistema,
             messages=[{"role": "user", "content": usuario}], output_config={"effort": "low"})
     except anthropic.APIError as e:
-        raise ErrorGeneracion(f"No se pudo describir la imagen: {e}") from e
+        raise ErrorGeneracion(f"No se pudo sugerir la descripción: {e}") from e
     descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
     if not descripcion:
-        raise ErrorGeneracion("El modelo no devolvió la descripción de la imagen.")
+        raise ErrorGeneracion("El modelo no devolvió la descripción.")
     return " ".join(descripcion.split()).strip('"').strip()[:500]
 
 

@@ -258,6 +258,16 @@ def ruta_ilustraciones_generar(req):
                                                   str(cuerpo.get("descripcion") or "")[:500])
 
 
+def ruta_ilustracion_sugerir(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    previas = cuerpo.get("previas") or []
+    if not isinstance(previas, list):
+        raise ErrorCliente(400, "previas debe ser una lista.")
+    return 200, _servicio().sugerir_descripcion(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"),
+                                                [str(p) for p in previas])
+
+
 def ruta_ilustracion_elegir(req):
     _dueno(req)
     cuerpo = req["cuerpo"]
@@ -345,6 +355,7 @@ RUTAS = {
     ("GET", "ilustraciones"): ruta_ilustraciones_listar,
     ("POST", "ilustraciones"): ruta_ilustraciones_generar,
     ("POST", "ilustracion-elegir"): ruta_ilustracion_elegir,
+    ("POST", "ilustracion-sugerir"): ruta_ilustracion_sugerir,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,

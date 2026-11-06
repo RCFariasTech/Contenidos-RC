@@ -126,6 +126,13 @@ class TestTarjetas(unittest.TestCase):
             .get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2))
         self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), (0x12, 0x24, 0x4A))))
 
+    def test_icono_de_linea_generado_en_la_tarjeta_3(self):
+        icono = self._foto((0.3, 0.3, 0.7, 0.7), fondo=(0xC8, 0xC9, 0xCA))
+        pieza = {"slide_1_gancho": "a", "slide_2": "b", "slide_3": "c", "slide_4": "Sin cifras.", "slide_5_cierre": "e"}
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(pieza, imagenes={3: icono}), filetype="pdf")
+        self.assertTrue(doc[2].get_images())          # tarjeta 3: el ícono generado
+        self.assertFalse(doc[3].get_images())         # tarjeta 4 (sin cifra): ícono vectorial de la guía
+
     def test_imagen_se_recorta_al_espacio_de_la_tarjeta(self):
         import io
         from PIL import Image
