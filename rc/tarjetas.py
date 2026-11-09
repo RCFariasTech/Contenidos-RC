@@ -34,7 +34,7 @@ DIR_ICONOS = PLANTILLA / "iconos_linea"
 NOMBRES = {1: "Gancho", 2: "Foto", 3: "Ícono", 4: "Dato", 5: "Cierre"}
 # Tarjetas que llevan imagen de Krea, qué tipo y su caja (ancho, alto) en px.
 TIPO_IMAGEN = {1: "icono", 2: "foto", 3: "linea"}
-AREA_IMAGEN = {1: (820, 820), 2: (W, 620), 3: (260, 260)}
+AREA_IMAGEN = {1: (660, 660), 2: (W, 620), 3: (260, 260)}
 PROPORCION_KREA = {1: "1:1", 2: "16:9", 3: "1:1"}
 
 PALETA_2026 = {"marino": "#12244A", "rojo": "#FF0006", "rojo2": "#FF1F35", "azul": "#005EFF",
@@ -274,7 +274,7 @@ def t1_gancho(L, d):
     tema = TEMAS[L.fondo_clave]
     datos = _fondo_con_imagen(L, L.imagenes.get(1))
     ancho, alto = AREA_IMAGEN[1]
-    x, y_sup = W - ancho - 30, H - alto - 30
+    x, y_sup = W - ancho - 50, H - alto - 50
     usado = L.bloque(d["titular"], TITULO, tema["titulo"], M, 110, W - 2 * M, 430, 150, inter=1.0)
     if d.get("texto"):
         L.bloque(d["texto"], TEXTO, tema["texto"], M, 160 + usado, 520, 160, 38)
