@@ -46,9 +46,10 @@ FORMATO CARRUSEL:
     el texto): UN objeto, o dos que interactúan, máximo 15 palabras, sin objetos extra «junto a», sin estilo, colores, fondo,
     texto ni logos. Ej.: "an hourglass whose sand falls into a piggy bank", "a balance scale with a clock on one side and
     stacked coins on the other".
-  · Tarjeta 2 = foto documental realista: quién (personas latinas comunes de clase media, edad y género), dónde (lugar concreto,
-    limpio y moderno) y qué hacen, con uno o dos objetos (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto ni logos.
-    Ej.: "a woman in her 40s in a supermarket aisle looking at a small digital screen on the shelf while holding a basket".
+  · Tarjeta 2 = foto documental realista de un evento o activación de marca CON TECNOLOGÍA (pantallas LED grandes, gafas VR,
+    simuladores, hologramas, pantallas táctiles, juegos multimedia, activaciones phygital): quién (personas latinas comunes de
+    clase media, edad y género), dónde y qué tecnología usan (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto
+    ni logos. Ej.: "a woman in her 30s trying VR goggles at a brand activation in a shopping mall while a staff member assists her".
   Diseño fijo de las tarjetas: 1 gancho con ícono, 2 texto con foto, 3 texto con ícono de línea, 4 dato (la primera cifra del texto
   se muestra gigante: si es posible, que la tarjeta 4 gire en torno a una cifra verificable), 5 cierre.
   titular + texto deben contener EXACTAMENTE las mismas palabras, en el mismo orden, que el campo slide_N correspondiente (no reescribas ni agregues).

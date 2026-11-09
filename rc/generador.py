@@ -203,10 +203,12 @@ SISTEMAS_IMAGEN = {
     ),
     "foto": (
         "Describes UNA foto documental realista para una tarjeta de carrusel de Instagram sobre marketing BTL y "
-        "experiencial en Colombia. A partir del texto de la tarjeta, responde con UNA descripción de la escena EN "
-        "ESPAÑOL (15 a 40 palabras): quién (personas latinas comunes de clase media, edad y género), dónde (un lugar "
-        "concreto, limpio y moderno: pasillo de supermercado, activación en centro comercial, evento, oficina) y qué "
-        "hacen, con uno o dos objetos concretos. Sin palabras de estilo ni de cámara, sin textos, letreros, logos ni marcas."
+        "experiencial en Colombia. La foto SIEMPRE muestra un evento o activación de marca con tecnología: pantallas "
+        "LED grandes, gafas de realidad virtual, simuladores, hologramas, pantallas táctiles, juegos multimedia o "
+        "activaciones phygital. A partir del texto de la tarjeta, responde con UNA descripción de la escena EN "
+        "ESPAÑOL (15 a 40 palabras): quién (personas latinas comunes de clase media, edad y género), dónde (evento, "
+        "centro comercial, punto de venta, feria) y qué tecnología usan. Sin palabras de estilo ni de cámara, sin "
+        "textos, letreros, logos ni marcas."
     ),
 }
 
@@ -224,8 +226,9 @@ def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", t
     sistema = SISTEMAS_IMAGEN.get(tipo, SISTEMAS_IMAGEN["foto"]) + " Responde solo con la descripción."
     try:
         respuesta = _cliente().messages.create(
-            model=ajustes()["modelo"], max_tokens=600, system=sistema,
-            messages=[{"role": "user", "content": usuario}], output_config={"effort": "low"})
+            # Modelo rápido: es una descripción corta y el usuario espera con el panel abierto.
+            model=ajustes().get("modelo_sugerencias") or ajustes()["modelo"], max_tokens=400, system=sistema,
+            messages=[{"role": "user", "content": usuario}])
     except anthropic.APIError as e:
         raise ErrorGeneracion(f"No se pudo sugerir la descripción: {e}") from e
     descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()

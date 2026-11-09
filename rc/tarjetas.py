@@ -34,7 +34,7 @@ DIR_ICONOS = PLANTILLA / "iconos_linea"
 NOMBRES = {1: "Gancho", 2: "Foto", 3: "Ícono", 4: "Dato", 5: "Cierre"}
 # Tarjetas que llevan imagen de Krea, qué tipo y su caja (ancho, alto) en px.
 TIPO_IMAGEN = {1: "icono", 2: "foto", 3: "linea"}
-AREA_IMAGEN = {1: (500, 500), 2: (W, 620), 3: (260, 260)}
+AREA_IMAGEN = {1: (820, 820), 2: (W, 620), 3: (260, 260)}
 PROPORCION_KREA = {1: "1:1", 2: "16:9", 3: "1:1"}
 
 PALETA_2026 = {"marino": "#12244A", "rojo": "#FF0006", "rojo2": "#FF1F35", "azul": "#005EFF",
@@ -148,6 +148,7 @@ class Lienzo:
         # guias=False (PDF que se descarga): se omiten los recuadros y notas que solo sirven en la vista previa.
         # imagenes: {tarjeta: bytes} con la imagen elegida en Krea (1: ícono isométrico, 2: foto).
         self.c, self.col, self.guias, self.imagenes, self.tarjeta = c, col, guias, imagenes or {}, 0
+        self.fondo_clave = "marino"
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color] if color in self.col else HexColor(color))
@@ -202,52 +203,111 @@ class Lienzo:
             c.drawCentredString(x + ancho / 2, y + alto / 2 - 16 - i * tam * 1.35, ln)
 
 
-# ---------- las 5 plantillas ----------
+# ---------- rotación de colores ----------
 
-def t1_gancho(L, d):
-    datos = L.imagenes.get(1)
-    fondo = L.col["marino"]
+# Cada pieza empieza con el color de su semana (1: azul marino, 2: azul, 3: gris, 4: rojo) y las tarjetas siguientes
+# avanzan en ese mismo orden. El mes siguiente vuelve a empezar en azul marino.
+ROTACION = ("marino", "azul", "gris", "rojo2")
+# Por fondo: color del titular, del texto, de la cifra, de los trazos del ícono de línea y de su acento, de las comillas
+# y versión de los logos.
+TEMAS = {
+    "marino": {"titulo": "gris", "texto": "blanco", "cifra": "gris", "linea": "blanco", "acento": "rojo", "logos": "blanco"},
+    "azul": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "linea": "blanco", "acento": "marino", "logos": "blanco"},
+    "gris": {"titulo": "marino", "texto": "marino", "cifra": "rojo", "linea": "marino", "acento": "rojo", "logos": "marino"},
+    "rojo2": {"titulo": "blanco", "texto": "blanco", "cifra": "gris", "linea": "blanco", "acento": "marino", "logos": "blanco"},
+}
+
+
+def inicio_de_semana(semana: int) -> int:
+    return (max(1, int(semana or 1)) - 1) % len(ROTACION)
+
+
+def color_de_tarjeta(numero: int, inicio: int = 0) -> str:
+    """Clave del color de fondo de la tarjeta `numero` (1-5) en una pieza que empieza en `inicio`."""
+    return ROTACION[(inicio + numero - 1) % len(ROTACION)]
+
+
+def hex_de_tarjeta(numero: int, inicio: int = 0) -> str:
+    return PALETA_2026[color_de_tarjeta(numero, inicio)]
+
+
+def _fondo_con_imagen(L, datos):
+    """Pinta el fondo de la tarjeta; si la imagen de Krea trae un fondo casi igual, usa ese tono exacto para que no se
+    note el recuadro. Devuelve los bytes de la imagen o None si está dañada."""
+    fondo = L.col[L.fondo_clave]
     if datos:
         try:
-            real = color_fondo_imagen(datos) if _abrir(datos, alfa=True).mode == "RGB" else PALETA_2026["marino"]
-            if _parecido(real, PALETA_2026["marino"]):
-                fondo = HexColor(real)
+            if _abrir(datos, alfa=True).mode == "RGB":
+                real = color_fondo_imagen(datos)
+                if _parecido(real, PALETA_2026[L.fondo_clave]):
+                    fondo = HexColor(real)
         except Exception:
             datos = None
     L.c.setFillColor(fondo)
     L.c.rect(0, 0, W, H, stroke=0, fill=1)
-    usado = L.bloque(d["titular"], TITULO, "gris", M, 120, W - 2 * M, 600, 150, inter=1.0)
-    if d.get("texto"):
-        L.bloque(d["texto"], TEXTO, "blanco", M, 150 + usado, 620, 200, 40)
+    return datos
+
+
+def _svg_recoloreado(ruta, trazo, acento):
+    """Ícono de línea de la guía (marino + rojo) con los colores que contrastan con el fondo de la tarjeta."""
+    from reportlab.graphics.shapes import Group
+    from svglib.svglib import svg2rlg
+    dib = svg2rlg(str(ruta))
+
+    def pintar(nodo):
+        for hijo in getattr(nodo, "contents", []):
+            pintar(hijo)
+        for attr in ("strokeColor", "fillColor"):
+            color = getattr(nodo, attr, None)
+            if color is not None and hasattr(color, "red"):
+                if color.red > 0.8 and color.green < 0.3 and color.blue < 0.3:  # el rojo del acento (cualquier tono)
+                    setattr(nodo, attr, acento)
+                elif color.red < 0.3 and color.blue < 0.5:                     # el azul marino de los trazos
+                    setattr(nodo, attr, trazo)
+    pintar(dib)
+    return dib
+
+
+# ---------- las 5 plantillas ----------
+
+def t1_gancho(L, d):
+    tema = TEMAS[L.fondo_clave]
+    datos = _fondo_con_imagen(L, L.imagenes.get(1))
     ancho, alto = AREA_IMAGEN[1]
-    x, y_sup = W - M - ancho + 40, H - alto - 80
+    x, y_sup = W - ancho - 30, H - alto - 30
+    usado = L.bloque(d["titular"], TITULO, tema["titulo"], M, 110, W - 2 * M, 430, 150, inter=1.0)
+    if d.get("texto"):
+        L.bloque(d["texto"], TEXTO, tema["texto"], M, 160 + usado, 520, 160, 38)
     if datos:
         try:
             L.png(recortar(datos, ancho, alto, borde_suave=True), x, y_sup, ancho, alto)
             return
         except Exception:
             pass
-    L.recuadro_guia(x, y_sup, ancho, alto, "ÍCONO ISOMÉTRICO · Krea", d.get("nota", ""))
+    L.recuadro_guia(x + 60, y_sup + 60, ancho - 120, alto - 120, "ÍCONO ISOMÉTRICO · Krea", d.get("nota", ""),
+                    tinta=tema["texto"])
 
 
 def t2_foto(L, d):
-    L.fondo("azul")
+    tema = TEMAS[L.fondo_clave]
+    L.fondo(L.fondo_clave)
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     ancho, alto = AREA_IMAGEN[2]
-    L.bloque(texto, TEXTO, "blanco", M, 110, W - 2 * M - 40, H - alto - 180, 50, inter=1.3)
+    L.bloque(texto, TEXTO, tema["texto"], M, 110, W - 2 * M - 40, H - alto - 180, 50, inter=1.3)
     datos = L.imagenes.get(2)
     if datos:
         try:
             L.png(recortar(datos, ancho, alto), 0, H - alto, ancho, alto)
             L.c.saveState()
-            L.c.setFillColor(L.col["azul"])
+            L.c.setFillColor(L.col[L.fondo_clave])  # velo del color de la tarjeta
             L.c.setFillAlpha(0.45)
             L.c.rect(0, 0, ancho, alto, stroke=0, fill=1)
             L.c.restoreState()
             return
         except Exception:
             pass
-    L.recuadro_guia(M, H - alto + 20, W - 2 * M, alto - 100, "FOTO · Krea (con velo azul)", d.get("nota", ""))
+    L.recuadro_guia(M, H - alto + 20, W - 2 * M, alto - 100, "FOTO · Krea (con velo del color de la tarjeta)",
+                    d.get("nota", ""), tinta=tema["texto"])
 
 
 def _icono_de(d: dict, alternativa: int) -> str:
@@ -257,18 +317,9 @@ def _icono_de(d: dict, alternativa: int) -> str:
 
 
 def t3_icono(L, d):
+    tema = TEMAS[L.fondo_clave]
     # La imagen de Krea (ícono de línea generado) solo aplica a la tarjeta 3; la 4 sin cifra usa el ícono de la guía.
-    datos = L.imagenes.get(3) if L.tarjeta == 3 else None
-    fondo = L.col["gris"]
-    if datos:
-        try:
-            real = color_fondo_imagen(datos)
-            if _parecido(real, PALETA_2026["gris"]):
-                fondo = HexColor(real)
-        except Exception:
-            datos = None
-    L.c.setFillColor(fondo)
-    L.c.rect(0, 0, W, H, stroke=0, fill=1)
+    datos = _fondo_con_imagen(L, L.imagenes.get(3) if L.tarjeta == 3 else None)
     ancho, alto = AREA_IMAGEN[3]
     puesto = False
     if datos:
@@ -278,9 +329,13 @@ def t3_icono(L, d):
         except Exception:
             pass
     if not puesto:
-        L.svg(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg", M, 150, 180)
+        dib = _svg_recoloreado(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg",
+                               L.col[tema["linea"]], L.col[tema["acento"]])
+        k = 180 / dib.width
+        dib.scale(k, k)
+        renderPDF.draw(dib, L.c, M, H - 150 - dib.height * k)
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
-    L.bloque(texto, TEXTO, "marino", M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
+    L.bloque(texto, TEXTO, tema["texto"], M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
 
 
 def separar_cifra(texto: str) -> tuple[str, str, str]:
@@ -292,30 +347,34 @@ def separar_cifra(texto: str) -> tuple[str, str, str]:
 
 
 def t4_dato(L, d):
+    tema = TEMAS[L.fondo_clave]
     todo = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     antes, cifra, despues = separar_cifra(todo)
-    L.fondo("rojo2")
-    usado = L.bloque(antes, TEXTO, "blanco", M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
+    L.fondo(L.fondo_clave)
+    usado = L.bloque(antes, TEXTO, tema["texto"], M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
     y = 120 + usado + 30
     tam = 300
     while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
         tam -= 10
-    L.c.setFillColor(L.col["gris"])
+    L.c.setFillColor(L.col[tema["cifra"]])
     L.c.setFont(TITULO, tam)
     L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
     y += tam * 0.86 + 60
-    L.bloque(despues, TEXTO, "blanco", M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
+    L.bloque(despues, TEXTO, tema["texto"], M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
 
 
 def t5_cierre(L, d):
-    L.fondo("marino")
-    L.c.setFillColor(L.col["rojo"])
+    tema = TEMAS[L.fondo_clave]
+    L.fondo(L.fondo_clave)
+    L.c.setFillColor(L.col["marino" if L.fondo_clave == "rojo2" else "rojo"])
     L.c.setFont(TITULO, 520)
-    L.c.drawString(W - M - 300, H - 520, "”")
+    L.c.drawString(W - M - 300, H - 520, "\u201d")
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
-    L.bloque(texto, TEXTO, "blanco", M, 330, 680, 640, 50, inter=1.3)
-    L.png(PLANTILLA / "logo_rc_blanco_2026.png", M, H - 175, 300, 80)
-    L.svg(PLANTILLA / "logo_constellation_blanco.svg", W - M - 330, H - 160, 330)
+    L.bloque(texto, TEXTO, tema["texto"], M, 330, 680, 640, 50, inter=1.3)
+    oscuro = tema["logos"] == "marino"
+    L.png(PLANTILLA / ("logo_rc_marino_2026.png" if oscuro else "logo_rc_blanco_2026.png"), M, H - 175, 300, 80)
+    L.svg(PLANTILLA / ("logo_constellation_negro.svg" if oscuro else "logo_constellation_blanco.svg"),
+          W - M - 330, H - 160, 330)
 
 
 PLANTILLAS = {1: t1_gancho, 2: t2_foto, 3: t3_icono, 4: t4_dato, 5: t5_cierre}
@@ -365,9 +424,10 @@ def plantillas_de(contenido: dict) -> list[int]:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
-                guias: bool = False, imagenes: dict[int, bytes] | None = None) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None, inicio: int = 0) -> bytes:
     """guias=True dibuja los recuadros de imagen con su nota (vista previa); False los omite (descarga).
 
+    inicio: color con que empieza la pieza (según su semana, ver ROTACION).
     variante + semilla solo cambian el ícono de línea cuando la tarjeta no pidió uno («Rehacer tarjetas»).
     """
     _registrar_fuentes()
@@ -377,7 +437,7 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     c.setAuthor("RC Farías")
     L = Lienzo(c, _colores(), guias=guias, imagenes=imagenes)
     for numero, (plantilla, datos) in enumerate(zip(plantillas_de(contenido), datos_tarjetas(contenido)), 1):
-        L.tarjeta = numero
+        L.tarjeta, L.fondo_clave = numero, color_de_tarjeta(numero, inicio)
         PLANTILLAS[plantilla](L, {**datos, "alternativa": variante + semilla * 3 + numero * 5})
         c.showPage()
     c.save()

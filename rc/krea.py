@@ -21,11 +21,18 @@ def configurado() -> bool:
     return bool(env("KREA_API_TOKEN", False))
 
 
-def construir_prompt(descripcion: str, tipo: str) -> str:
-    """Prompt completo para Krea: «icono» (isométrico, tarjeta 1), «foto» (tarjeta 2) o «linea» (tarjeta 3)."""
+def construir_prompt(descripcion: str, tipo: str, fondo: str = "") -> str:
+    """Prompt completo para Krea: «icono» (isométrico), «foto» o «linea» (ícono de línea). `fondo`: clave del color de
+    la tarjeta (paleta 2026); los íconos se generan sobre ese color y con trazos que contrastan."""
+    from rc.tarjetas import TEMAS  # colores de cada fondo
     escena = " ".join((descripcion or "").split()).strip(" .\"")
-    fn = {"icono": estilo_iconos.prompt_icono, "linea": estilo_iconos.prompt_linea}.get(tipo, estilo_iconos.prompt_foto)
-    return fn(escena)[:3000]
+    if tipo == "icono":
+        return estilo_iconos.prompt_icono(escena, fondo or "marino")[:3000]
+    if tipo == "linea":
+        fondo = fondo or "gris"
+        tema = TEMAS.get(fondo, TEMAS["gris"])
+        return estilo_iconos.prompt_linea(escena, fondo, tema["linea"], tema["acento"])[:3000]
+    return estilo_iconos.prompt_foto(escena)[:3000]
 
 
 def _motivo(cuerpo: str) -> str:

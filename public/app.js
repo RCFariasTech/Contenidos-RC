@@ -197,7 +197,11 @@ function pedirMiniaturas(pieza) {
   if (miniaturas.cache.has(clave) || miniaturas.pendientes.has(clave)) return;
   miniaturas.pendientes.add(clave);
   api(`tarjetas-vista?pieza=${pieza.id}&semilla=${semillaDe(pieza.id)}&ancho=360`)
-    .then((datos) => miniaturas.cache.set(clave, datos))
+    .then((datos) => {
+      miniaturas.cache.set(clave, datos);
+      // Imágenes automáticas de Krea aún en camino: se vuelve a pedir la vista en unos segundos.
+      if (datos.imagenes_en_cola > 0) setTimeout(() => refrescarMiniaturasDe(pieza), 15000);
+    })
     .catch(() => miniaturas.cache.set(clave, { error: true }))
     .finally(() => { miniaturas.pendientes.delete(clave); repintarMiniaturas(pieza.id); });
 }
@@ -690,6 +694,7 @@ async function elegirIlustracion(it, elegida) {
   try {
     await api("ilustracion-elegir", { metodo: "POST", cuerpo: { id: it.id, elegida } });
     refrescarMiniaturasDe(ilus.pieza);
+    if (elegida) { $("dialogo-ilustraciones").close(); return; } // elegida: se cierra y se ve en la miniatura
   } catch (e) {
     ilus.mensaje = `No se pudo ${elegida ? "usar" : "quitar"} la imagen: ${e.message}`;
   }

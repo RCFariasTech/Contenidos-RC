@@ -205,6 +205,7 @@ def generar_pieza(pieza_id: int) -> dict:
         contenido, informe, uso = _validar_y_reparar(pieza, resultado, urls, historial, hermanas)
         fila = _guardar_version(pieza, contenido, informe, urls, uso, "generacion")
         _actualizar_estado_mes(pieza["mes_id"])
+        imagenes_automaticas(pieza["id"])
         return fila
     except Detenida:
         raise
@@ -231,6 +232,9 @@ def rehacer_pieza(pieza_id: int) -> dict:
         urls = resultado["urls"]
         contenido, informe, uso = _validar_y_reparar(pieza, resultado, urls, historial, hermanas + descartados)
         fila = _guardar_version(pieza, contenido, informe, urls, uso, "rehacer")
+        # Tema nuevo: las imágenes del tema anterior ya no aplican; se piden otras.
+        db.actualizar("ilustraciones", {"elegida": False}, pieza_id=f"eq.{pieza_id}", elegida="is.true")
+        imagenes_automaticas(pieza_id)
         return fila
     except Detenida:
         raise
@@ -368,10 +372,15 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
         raise ErrorNegocio("Esta pieza aún no tiene contenido.")
     mes, variante = _variante(pieza)
     contenido = pieza["contenido"]
-    modulo, rotulo = (reels, "Reel") if pieza["formato"] == "Reel" else (tarjetas, "Carrusel")
-    extra = {"imagenes": _imagenes_elegidas(pieza["id"])} if modulo is tarjetas else {}
-    pdf = modulo.generar_pdf(contenido, f"{rotulo} · {contenido.get('tema_especifico', '')}", variante,
-                             semilla=max(0, int(semilla)), guias=guias, **extra)
+    inicio = tarjetas.inicio_de_semana(pieza.get("semana"))  # color con que empieza la pieza: rota por semana
+    titulo = f"{'Reel' if pieza['formato'] == 'Reel' else 'Carrusel'} · {contenido.get('tema_especifico', '')}"
+    if pieza["formato"] == "Reel":
+        modulo = reels
+        pdf = reels.generar_pdf(contenido, titulo, inicio, semilla=max(0, int(semilla)), guias=guias)
+    else:
+        modulo = tarjetas
+        pdf = tarjetas.generar_pdf(contenido, titulo, variante, semilla=max(0, int(semilla)), guias=guias,
+                                   imagenes=_imagenes_elegidas(pieza["id"]), inicio=inicio)
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
@@ -382,7 +391,10 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     pieza = _pieza(pieza_id)
     _nombre, pdf = tarjetas_pdf(pieza_id, semilla, guias=True)
     imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf, max(200, min(int(ancho), 900)))]
-    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5}
+    # Imágenes automáticas que Krea aún no termina: la pantalla vuelve a pedir la vista en unos segundos.
+    en_cola = len(db.seleccionar("ilustraciones", select="id", pieza_id=f"eq.{int(pieza_id)}", automatica="is.true",
+                                 estado="eq.en_cola")) if pieza["formato"] == "Carrusel" else 0
+    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5, "imagenes_en_cola": en_cola}
 
 
 # ---------- ilustraciones 3D (Krea) ----------
@@ -396,7 +408,8 @@ def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
     return tarjetas.datos_tarjetas(contenido)[tarjeta - 1]
 
 
-def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None) -> dict:
+def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None,
+                          cantidad: int | None = None, automatica: bool = False) -> dict:
     """Pide a Krea (Nano Banana Pro) varias variantes de la imagen de la tarjeta 1 (ícono isométrico en el estilo de
     la guía, con los íconos de la guía como referencia) o de la tarjeta 2 (foto realista).
 
@@ -427,11 +440,12 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
                                                           t["texto"], t.get("nota", ""), tipo=tipo)
         except generador.ErrorGeneracion as e:
             raise ErrorNegocio(str(e)) from e
-    prompt = krea.construir_prompt(descripcion, tipo)
+    fondo = tarjetas.color_de_tarjeta(tarjeta, tarjetas.inicio_de_semana(pieza.get("semana")))
+    prompt = krea.construir_prompt(descripcion, tipo, fondo)
     referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""), tipo)
                    if tipo in ("icono", "linea") else [])
     filas, fallo = [], None
-    for _ in range(k["variantes_por_clic"]):
+    for _ in range(cantidad or k["variantes_por_clic"]):
         try:
             job_id = krea.crear_trabajo(prompt, tarjetas.PROPORCION_KREA[tarjeta], referencias)
         except ErrorNegocio as e:
@@ -439,8 +453,8 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
             break
         filas.append(db.insertar("ilustraciones", {
             "pieza_id": pieza["id"], "tarjeta": tarjeta, "job_id": job_id, "prompt": prompt,
-            "descripcion": descripcion, "fondo": {"icono": "#12244A", "linea": "#C9CACB"}.get(tipo, ""),
-            "ancho": ancho, "alto": alto})[0])
+            "descripcion": descripcion, "fondo": tarjetas.PALETA_2026[fondo],
+            "ancho": ancho, "alto": alto, "automatica": automatica})[0])
     if fallo and not filas:
         raise fallo
     return {"items": filas, "descripcion": descripcion}
@@ -464,6 +478,26 @@ def sugerir_descripcion(pieza_id: int, tarjeta: int, previas: list[str] | None =
     except generador.ErrorGeneracion as e:
         raise ErrorNegocio(str(e)) from e
     return {"descripcion": descripcion}
+
+
+def imagenes_automaticas(pieza_id: int) -> int:
+    """Al terminar los textos de un carrusel, pide a Krea una imagen por tarjeta (1 ícono isométrico, 2 foto, 3 ícono
+    de línea); la primera que queda lista se usa en su tarjeta (ver `ilustraciones`). Nunca hace fallar la generación
+    de textos: si Krea no está configurado o falla, el carrusel queda con los espacios para generar a mano."""
+    from rc import tarjetas
+    pieza = _pieza(int(pieza_id))
+    if pieza["formato"] != "Carrusel" or not pieza.get("contenido") or not krea.configurado():
+        return 0
+    if not ajustes()["krea"].get("automaticas", True):
+        return 0
+    pedidas = 0
+    for tarjeta in tarjetas.TIPO_IMAGEN:
+        try:
+            pedidas += len(generar_ilustraciones(pieza["id"], tarjeta, cantidad=1, automatica=True)["items"])
+        except Exception:  # noqa: BLE001 (las imágenes son un extra: no deben romper la entrega de textos)
+            log.warning("No se pudo pedir la imagen automática de la tarjeta %s de la pieza %s", tarjeta, pieza["id"],
+                        exc_info=True)
+    return pedidas
 
 
 def detener_ilustraciones(pieza_id: int, tarjeta: int) -> dict:
@@ -501,6 +535,8 @@ MAX_BYTES_ILUSTRACION = 15 * 1024 * 1024
 def _imagenes_elegidas(pieza_id: int) -> dict[int, bytes]:
     """{tarjeta: bytes} de las ilustraciones elegidas, descargadas de Krea. Si una falla, esa tarjeta queda sin imagen."""
     import urllib.request
+    if krea.configurado():
+        ilustraciones(pieza_id)  # actualiza las que siguen en cola (y elige las automáticas que ya están listas)
     imagenes = {}
     for f in db.seleccionar("ilustraciones", select="tarjeta,url", pieza_id=f"eq.{int(pieza_id)}", elegida="is.true"):
         url = str(f.get("url") or "")
@@ -532,6 +568,11 @@ def ilustraciones(pieza_id: int) -> dict:
         if nuevo["estado"] != "en_cola":
             db.actualizar("ilustraciones", nuevo, id=f"eq.{f['id']}", estado="eq.en_cola")
             f.update(nuevo)
+            # Imagen automática lista y la tarjeta aún sin imagen elegida: se usa directamente.
+            if f.get("automatica") and nuevo["estado"] == "lista" and not any(
+                    o.get("elegida") and o["tarjeta"] == f["tarjeta"] for o in filas):
+                db.actualizar("ilustraciones", {"elegida": True}, id=f"eq.{f['id']}")
+                f["elegida"] = True
     return {"configurado": krea.configurado(), "items": filas}
 
 

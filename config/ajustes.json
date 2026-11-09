@@ -1,5 +1,6 @@
 {
   "modelo": "claude-opus-5",
+  "modelo_sugerencias": "claude-sonnet-5-5",
   "effort": "medium",
   "max_tokens": 16000,
   "web_search_max_uses_generar": 3,

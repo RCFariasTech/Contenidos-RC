@@ -77,6 +77,10 @@ Después de agregar o cambiar variables hay que **volver a desplegar** (Deployme
 
 ## Tarjetas de carrusel
 
+**Rotación de colores.** Cada pieza empieza con el color de su semana (semana 1 azul marino, 2 azul, 3 gris, 4 rojo) y sus tarjetas o escenas siguen ese mismo orden; el mes siguiente vuelve a empezar en azul marino. Textos, cifras, íconos de línea y logos cambian de color para contrastar con cada fondo, y las imágenes de Krea se piden sobre el color de su tarjeta.
+
+**Imágenes automáticas.** Al terminar los textos de un carrusel (o al rehacerlo), la app pide a Krea una imagen por tarjeta (ícono isométrico, foto e ícono de línea) y la primera que queda lista se usa en su tarjeta; las miniaturas se refrescan solas. Para cambiarlas, se entra al panel de cada tarjeta. Se desactiva con `krea.automaticas: false`. Las sugerencias de descripción usan `modelo_sugerencias` (Sonnet), más rápido. Las fotos muestran siempre eventos con tecnología (pantallas LED, gafas VR, simuladores, hologramas, pantallas táctiles, juegos multimedia, activaciones phygital).
+
 Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo carrusel con opción de descargar el PDF: 5 páginas 4:5 en orden fijo — 1 gancho (azul marino, titular gigante en bold + ícono isométrico), 2 foto (azul, texto + foto con velo azul), 3 ícono de línea (gris), 4 dato (rojo, la primera cifra del texto gigante en bold; si no hay cifra, otra tarjeta de ícono) y 5 cierre (azul marino, comillas rojas y logos RC Farías + Constellation). La generación devuelve `diseno` con titular, texto, nota, `prompt_krea` (tarjetas 1 y 2) e `icono` (clave del ícono de línea para la tarjeta 3). Los reels usan la misma paleta y tipografías.
 
 ## Guion visual de los reels
@@ -106,6 +110,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `005_ilustraciones.sql`: variantes de ilustración generadas en Krea (solo enlaces y estado).
 - `006_ilustracion_elegida.sql`: variante elegida por tarjeta y escena usada.
 - `007_ilustracion_tarjeta_3.sql`: la tarjeta 3 (ícono de línea) también guarda variantes de Krea.
+- `008_ilustracion_automatica.sql`: marca las imágenes generadas automáticamente al terminar los textos.
 
 ## Desarrollo local
 

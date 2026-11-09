@@ -86,7 +86,18 @@ class TestKrea(unittest.TestCase):
     def test_prompt_de_icono_con_el_estilo_de_la_guia(self):
         p = krea.construir_prompt("a shelf with a screen and a cart.", "icono")
         self.assertIn("a shelf with a screen and a cart.", p)
-        for rasgo in ("isometric", "#005EFF", "#FF0006", "flat solid navy #12244A", "No text"):
+        for rasgo in ("isometric", "#005EFF", "#FF0006", "flat solid dark navy #12244A", "No text"):
+            self.assertIn(rasgo, p)
+
+    def test_los_iconos_se_generan_sobre_el_color_de_su_tarjeta(self):
+        self.assertIn("flat solid bright red #FF1F35", krea.construir_prompt("una alcancía", "icono", "rojo2"))
+        p = krea.construir_prompt("una lupa", "linea", "marino")
+        self.assertIn("Strokes in white #FFFFFF with ONE small accent stroke or detail in bright red #FF0006", p)
+        self.assertIn("flat solid dark navy #12244A", p)
+
+    def test_las_fotos_muestran_eventos_con_tecnologia(self):
+        p = krea.construir_prompt("una mujer probando gafas VR", "foto")
+        for rasgo in ("technology-driven brand event", "VR headsets", "holograms", "phygital"):
             self.assertIn(rasgo, p)
 
     def test_prompt_de_icono_de_linea(self):

@@ -47,6 +47,16 @@ class TestTarjetas(unittest.TestCase):
         self.assertGreater(cifra["size"], 150)
         self.assertIn("SpaceGrotesk-Bold", cifra["font"])
 
+    def test_los_colores_rotan_por_semana(self):
+        self.assertEqual([tarjetas.color_de_tarjeta(1, tarjetas.inicio_de_semana(s)) for s in (1, 2, 3, 4)],
+                         ["marino", "azul", "gris", "rojo2"])                  # cada semana empieza con otro color
+        self.assertEqual([tarjetas.color_de_tarjeta(n, 1) for n in range(1, 6)],
+                         ["azul", "gris", "rojo2", "marino", "azul"])         # y las tarjetas siguen el mismo orden
+        for inicio, esperado in ((0, (0x12, 0x24, 0x4A)), (2, (0xC9, 0xCA, 0xCB))):
+            pix = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), inicio=inicio), filetype="pdf")[0] \
+                .get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2))
+            self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(pix.pixel(2, 2), esperado)))
+
     def test_icono_de_linea_elegido_o_alternativo(self):
         claves = tarjetas.iconos_linea()
         self.assertGreaterEqual(len(claves), 10)

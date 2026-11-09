@@ -387,6 +387,35 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(sorted(canceladas), ["b", "c"])
         self.assertEqual([f["estado"] for f in self.bd.tablas["ilustraciones"]], ["lista", "fallida", "fallida"])
 
+    def test_imagenes_automaticas_al_terminar_los_textos(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        trabajos = iter(f"auto-{i}" for i in range(1, 50))
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=lambda *a: next(trabajos)), \
+                mock.patch.object(servicio.generador, "describir_ilustracion", return_value="una lupa"):
+            for p in servicio.estado_mes(mes)["piezas"]:
+                servicio.generar_pieza(p["id"])
+        filas = self.bd.tablas["ilustraciones"]
+        carruseles = {p["id"] for p in servicio.estado_mes(mes)["piezas"] if p["formato"] == "Carrusel"}
+        self.assertEqual(len(filas), 3 * len(carruseles))                       # una por tarjeta 1-3, solo carruseles
+        self.assertTrue(all(f["automatica"] and f["pieza_id"] in carruseles for f in filas))
+        pieza_id = filas[0]["pieza_id"]
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "consultar", return_value={"estado": "lista", "url": "https://gen.krea.ai/images/x.png", "error": None}):
+            servicio.ilustraciones(pieza_id)
+        elegidas = [f["tarjeta"] for f in filas if f["pieza_id"] == pieza_id and f["elegida"]]
+        self.assertEqual(sorted(elegidas), [1, 2, 3])                          # la primera lista se usa sola
+
+    def test_krea_caido_no_rompe_la_generacion_de_textos(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=servicio.ErrorNegocio("Krea caído")), \
+                mock.patch.object(servicio.generador, "describir_ilustracion", return_value="x"):
+            fila = servicio.generar_pieza(servicio.estado_mes(mes)["piezas"][0]["id"])
+        self.assertEqual(fila["estado"], "generada")
+
     def _mes_generado(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)
