@@ -72,7 +72,7 @@ class _Hoja:
 
 # Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
 # la 5 (cierre) no lleva imagen.
-AREA_ICONO, AREA_LINEA = 640, 300
+AREA_ICONO, AREA_LINEA = 860, 300
 
 
 def tipos_imagen(contenido: dict) -> dict[int, str]:
@@ -84,40 +84,71 @@ def tipos_imagen(contenido: dict) -> dict[int, str]:
     return tipos
 
 
+ARRIBA, ABAJO = ZONA_ARRIBA, H - ZONA_ABAJO - 20  # zona segura: el contenido se centra verticalmente en ella
+SEPARACION = 60
+
+
+def _alto_texto(texto, tam_max, ancho, alto_max, inter=1.05):
+    if not (texto or "").strip():
+        return 0
+    tam, lineas = ajustar(texto, TITULO, ancho, alto_max, tam_max, inter)
+    return len(lineas) * tam * inter
+
+
+def _y_centrado(total: float) -> float:
+    """Borde superior para centrar un bloque de alto `total` en la página (mismo espacio arriba y abajo), sin salirse
+    de la zona segura de Instagram."""
+    return max(ARRIBA, min((H - total) / 2, ABAJO - total))
+
+
+def _tam_cifra(cifra):
+    tam = 320
+    while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
+        tam -= 10
+    return tam
+
+
+def caja_icono(contenido: dict) -> tuple[float, float, float]:
+    """(x, y desde arriba, lado) del ícono isométrico de la escena 1, para superponer su video en la vista previa."""
+    lado = AREA_ICONO
+    alto_texto = _alto_texto(contenido.get(CAMPOS[0]) or "", 96, W - 2 * M, ABAJO - ARRIBA - lado - SEPARACION)
+    return (W - lado) / 2, _y_centrado(lado + SEPARACION + alto_texto), lado
+
+
 def _pagina(L, numero: int, texto: str, variante: int) -> None:
     cierre = numero == len(CAMPOS)  # la última escena lleva los logos y no lleva imagen
     fondo = "marino" if cierre else FONDOS[(variante + numero - 1) % len(FONDOS)][0]
     tema = tarjetas.TEMAS[fondo]
-    rol, tiempo = ROLES[numero - 1]
     L.fondo_clave, L.tarjeta = fondo, numero
     datos = None if cierre else tarjetas._fondo_con_imagen(L, L.imagenes.get(numero))
     if cierre:
         L.fondo(fondo)
-    if L.guias:  # la etiqueta con escena, rol y tiempo solo se ve en la vista previa
-        L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", TEXTO, tema["texto"], M, ZONA_ARRIBA + 20,
-                 W - 2 * M, 50, 30)
-    arriba, limite = ZONA_ARRIBA + 110, H - ZONA_ABAJO - 20
-    if cierre:
         L.bloque(texto, TITULO, "blanco", M, 700, W - 2 * M, 1180 - 700 - 20, 96, inter=1.05)
         _logos(L)
         return
+    ancho = W - 2 * M
     antes, cifra, despues = tarjetas.separar_cifra(texto) if numero > 1 else (texto, "", "")
-    if cifra:  # cifra gigante entre dos líneas de texto, como la tarjeta de dato del carrusel
-        usado = L.bloque(antes, TITULO, tema["texto"], M, arriba, W - 2 * M, 300, 72, inter=1.05)
-        y = arriba + usado + 40
-        tam = 320
-        while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
-            tam -= 10
+    if cifra:  # cifra gigante entre dos líneas de texto, como la tarjeta de dato del carrusel; todo centrado
+        tam = _tam_cifra(cifra)
+        h_antes = _alto_texto(antes, 72, ancho, 300)
+        h_despues = _alto_texto(despues, 72, ancho, 400)
+        total = h_antes + (40 if h_antes else 0) + tam * 0.86 + (SEPARACION + h_despues if h_despues else 0)
+        y = _y_centrado(total)
+        usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho, 300, 72, inter=1.05)
+        y += usado + (40 if usado else 0)
         L.c.setFillColor(L.col[tema["cifra"]])
         L.c.setFont(TITULO, tam)
         L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
-        y += tam * 0.86 + 60
-        L.bloque(despues, TITULO, tema["texto"], M, y, W - 2 * M, limite - y, 72, inter=1.05)
+        y += tam * 0.86 + SEPARACION
+        L.bloque(despues, TITULO, tema["texto"], M, y, ancho, ABAJO - y, 72, inter=1.05)
         return
     if numero == 1:
-        lado, x, y_img = AREA_ICONO, (W - AREA_ICONO) / 2, arriba
+        x, y_img, lado = caja_icono({CAMPOS[0]: texto})
     else:
-        lado, x, y_img = AREA_LINEA, M - 30, arriba
+        lado = AREA_LINEA if datos else 200
+        alto_texto = _alto_texto(texto, 96, ancho, ABAJO - ARRIBA - lado - SEPARACION)
+        y_img = _y_centrado(lado + SEPARACION + alto_texto)
+        x = M - 30 if datos else M
     puesto = False
     if datos:
         try:
@@ -135,14 +166,10 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
                 L.col[tema["linea"]], L.col[tema["acento"]])
             k = 200 / dib.width
             dib.scale(k, k)
-            renderPDF.draw(dib, L.c, M, H - arriba - 40 - dib.height * k)
-    elif numero == 1 and L.guias:
-        L.c.setFillColor(L.col[tema["texto"]])
-        L.c.setFont(TEXTO, 24)
-        L.c.drawCentredString(W / 2, H - y_img - lado - 4, "Animado: el video se descarga desde la app")
-    y_texto = y_img + lado + 60
-    L.bloque(texto, TITULO, tema["titulo"] if numero == 1 else tema["texto"], M, y_texto, W - 2 * M,
-             limite - y_texto, 96, inter=1.05)
+            renderPDF.draw(dib, L.c, x, H - y_img - dib.height * k)
+    y_texto = y_img + lado + SEPARACION
+    L.bloque(texto, TITULO, tema["titulo"] if numero == 1 else tema["texto"], M, y_texto, ancho,
+             ABAJO - y_texto, 96, inter=1.05)
 
 
 # En el logo de Constellation, la línea de base de la palabra CONSTELLATION está a esta fracción de su alto (desde

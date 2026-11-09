@@ -282,3 +282,6 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .gancho-editor { display: grid; gap: 6px; margin: 4px 0; }
 .gancho-editor__entrada { width: 100%; font: inherit; font-size: 1.05rem; padding: 8px 10px; border: 1px solid var(--borde, #c9cacb); border-radius: 8px; }
 .galeria__video { display: grid; gap: 6px; margin-top: 6px; } .galeria__video video { width: 100%; border-radius: 8px; }
+.carrusel__escena { position: relative; flex: 0 0 100%; width: 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+.carrusel__escena img { width: 100%; aspect-ratio: var(--rel, 0.8); object-fit: contain; display: block; background: var(--fondo); }
+.carrusel__escena video { position: absolute; object-fit: contain; pointer-events: none; }

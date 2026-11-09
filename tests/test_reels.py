@@ -16,6 +16,20 @@ REEL = {
 
 
 class TestReels(unittest.TestCase):
+    def test_contenido_centrado_verticalmente(self):
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (512, 512), (200, 60, 60)).save(buf, "PNG")
+        imagenes = {n: buf.getvalue() for n in (1, 2, 3, 4)}
+        for pagina in pymupdf.open(stream=reels.generar_pdf(REEL, imagenes=imagenes), filetype="pdf")[:4]:
+            cajas = [b["bbox"] for b in pagina.get_text("dict")["blocks"]] + [pagina.get_image_bbox(i) for i in pagina.get_images(full=True)]
+            arriba, abajo = min(c[1] for c in cajas), max(c[3] for c in cajas)
+            hueco_arriba, hueco_abajo = arriba, reels.H - abajo           # centrado en la página…
+            self.assertLess(abs(hueco_arriba - hueco_abajo), 160, (hueco_arriba, hueco_abajo))
+            self.assertGreaterEqual(arriba, reels.ZONA_ARRIBA - 5)          # …sin salir de la zona segura
+            self.assertLessEqual(abajo, reels.H - reels.ZONA_ABAJO + 5)
+
     def test_cifras_en_grande_y_iconos_en_las_escenas_sin_cifra(self):
         reel = dict(REEL, escena_2_desarrollo_a="Sube 35% el recuerdo de marca", escena_3_desarrollo_b="Sin cifras aquí")
         self.assertEqual(reels.tipos_imagen(reel), {1: "icono", 3: "linea", 4: "linea"} if not __import__("rc.tarjetas",
@@ -38,7 +52,8 @@ class TestReels(unittest.TestCase):
             self.assertIn(REEL[campo], texto)
             self.assertNotIn("FOTO O VIDEO", texto)                     # ya no hay recuadro de foto/video
         self.assertIn("ÍCONO ISOMÉTRICO ANIMADO", doc[0].get_text())
-        self.assertIn("ESCENA 1 · GANCHO · 0–5 s", " ".join(doc[0].get_text().split()))
+        self.assertNotIn("ESCENA", doc[0].get_text())          # sin rótulos de escena ni notas en la vista previa
+        self.assertNotIn("Animado:", doc[0].get_text())
 
     def test_solo_el_cierre_lleva_logos_y_se_adaptan_al_fondo(self):
         for variante in range(5):

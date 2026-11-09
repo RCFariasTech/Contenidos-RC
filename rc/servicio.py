@@ -454,7 +454,21 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     # Imágenes automáticas que Krea aún no termina: la pantalla vuelve a pedir la vista en unos segundos.
     en_cola = len(db.seleccionar("ilustraciones", select="id", pieza_id=f"eq.{int(pieza_id)}", automatica="is.true",
                                  estado="eq.en_cola"))
-    return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5, "imagenes_en_cola": en_cola}
+    respuesta = {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5,
+                 "imagenes_en_cola": en_cola}
+    if pieza["formato"] == "Reel":
+        # Animación del ícono de la escena 1: la pantalla la superpone sobre la imagen, en la posición del ícono.
+        filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{int(pieza_id)}",
+                               tarjeta="eq.1", elegida="is.true")
+        video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"
+                      and str(f.get("video_url") or "").startswith("https://")), None)
+        if video:
+            from rc import reels
+            x, y, lado = reels.caja_icono(pieza["contenido"])
+            respuesta["video_escena_1"] = {"url": video, "x": x / reels.W, "y": y / reels.H,
+                                           "ancho": lado / reels.W, "alto": lado / reels.H}
+        respuesta["video_en_cola"] = any(f.get("video_estado") == "en_cola" for f in filas)
+    return respuesta
 
 
 # ---------- ilustraciones 3D (Krea) ----------

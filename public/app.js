@@ -631,7 +631,7 @@ function actualizarCarrusel() {
 }
 
 async function cargarVistaTarjetas(piezaId, indice = 0) {
-  const { imagenes, relacion } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaDe(piezaId)}`);
+  const { imagenes, relacion, video_escena_1: video } = await api(`tarjetas-vista?pieza=${piezaId}&semilla=${semillaDe(piezaId)}`);
   const posicion = $("dialogo-tarjetas").open ? tarjetaActual() : indice;
   piezaTarjetas = piezaId;
   const pieza = miniaturas.piezas.get(piezaId);
@@ -641,10 +641,18 @@ async function cargarVistaTarjetas(piezaId, indice = 0) {
   }
   $("dialogo-tarjetas").style.setProperty("--rel", String(relacion));
   $("tarjetas-ayuda").textContent = relacion < 0.7
-    ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable. Ábrelo en Adobe Express con «Empezar con tu contenido». La etiqueta de cada escena solo se ve aquí, no en el PDF."
+    ? "9:16 · 1080 × 1920. Un PDF por reel: una página por escena, con el texto en pantalla editable. Ábrelo en Adobe Express con «Empezar con tu contenido». En la escena 1 se ve aquí el ícono animado; el video se descarga desde «Ícono animado de la escena 1»."
     : "4:5 · 1080 × 1350. Los recuadros del ícono (tarjeta 1) y la foto (tarjeta 2) solo se ven aquí: el PDF descargado deja ese espacio libre. «Rehacer» cambia el ícono de línea cuando la tarjeta no pidió uno.";
   $("tarjetas-titulo").textContent = relacion < 0.7 ? "Vista previa del guion visual" : "Vista previa del carrusel";
-  $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` })));
+  $("tarjetas-pista").replaceChildren(...imagenes.map((src, i) => {
+    const img = el("img", { src, alt: `${relacion < 0.7 ? "Escena" : "Tarjeta"} ${i + 1} de ${imagenes.length}` });
+    if (i !== 0 || !video?.url) return img;
+    // Escena 1 del reel: el video del ícono animado se reproduce encima de la imagen, en el lugar del ícono.
+    return el("div", { clase: "carrusel__escena" }, img,
+      el("video", { src: video.url, autoplay: true, loop: true, muted: true, playsinline: true,
+        "aria-label": "Ícono animado de la escena 1",
+        style: `left:${video.x * 100}%;top:${video.y * 100}%;width:${video.ancho * 100}%;height:${video.alto * 100}%` }));
+  }));
   if (!$("dialogo-tarjetas").open) $("dialogo-tarjetas").showModal();
   $("tarjetas-pista").scrollLeft = posicion * $("tarjetas-pista").clientWidth;
   actualizarCarrusel();
