@@ -290,3 +290,12 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
   -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
   mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
 }
+.dialogo--reel { width: min(calc(100vw - 24px), 900px); }
+.reel-cuerpo { display: grid; grid-template-columns: minmax(0, 300px) 1fr; gap: 20px; align-items: start; }
+.reel-lienzo { width: 100%; aspect-ratio: 9 / 16; border-radius: 10px; background: #12244a; }
+.reel-panel { display: grid; gap: 12px; }
+.reel-transiciones-caja { border: 1px solid var(--borde, #c9cacb); border-radius: 8px; padding: 8px 12px; }
+#reel-transiciones { display: grid; gap: 8px; }
+.reel-trans { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: .95rem; }
+#reel-progreso { width: 100%; }
+@media (max-width: 640px) { .reel-cuerpo { grid-template-columns: 1fr; } .reel-lienzo { max-width: 260px; margin: 0 auto; } }

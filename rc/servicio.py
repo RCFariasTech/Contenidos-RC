@@ -471,6 +471,27 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     return respuesta
 
 
+def reel_animable(pieza_id: int) -> dict:
+    """Datos para armar el reel terminado en la pantalla: fondo de cada escena sin textos, textos con su posición y
+    el video del ícono animado de la escena 1 (si está listo)."""
+    from rc import reels, tarjetas
+    pieza = _pieza(int(pieza_id))
+    if pieza["formato"] != "Reel" or not pieza.get("contenido"):
+        raise ErrorNegocio("El video terminado es para reels con contenido.")
+    inicio = tarjetas.inicio_de_semana(pieza.get("semana"))
+    escenas = reels.escenas_animables(pieza["contenido"], inicio, _imagenes_elegidas(pieza["id"]))
+    filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{pieza['id']}",
+                           tarjeta="eq.1", elegida="is.true")
+    video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"
+                  and str(f.get("video_url") or "").startswith("https://")), None)
+    respuesta = {"ancho": reels.W, "alto": reels.H, "escenas": escenas, "video_escena_1": None,
+                 "tema": pieza["contenido"].get("tema_especifico", "")}
+    if video:
+        x, y, lado = reels.caja_icono(pieza["contenido"])
+        respuesta["video_escena_1"] = {"url": video, "x": x, "y": y, "lado": lado}
+    return respuesta
+
+
 # ---------- ilustraciones 3D (Krea) ----------
 
 MINUTOS_MAX_ILUSTRACION = 10

@@ -163,6 +163,25 @@
       </div>
     </dialog>
 
+    <dialog id="dialogo-reel" class="dialogo dialogo--reel" aria-labelledby="titulo-reel">
+      <h2 id="titulo-reel">Reel terminado</h2>
+      <div class="reel-cuerpo">
+        <canvas id="reel-lienzo" class="reel-lienzo" width="1080" height="1920" aria-label="Vista previa del reel"></canvas>
+        <div class="reel-panel">
+          <p class="ayuda">Los textos entran animados y la escena 1 lleva el ícono animado. Elige la transición entre escenas, mira la vista previa y descarga el video (sin sonido; 30 s, 1080 × 1920).</p>
+          <fieldset class="reel-transiciones-caja"><legend>Transiciones</legend><div id="reel-transiciones"></div></fieldset>
+          <progress id="reel-progreso" max="1" value="0"></progress>
+          <p id="reel-estado" class="ayuda" role="status"></p>
+          <div class="dialogo__acciones">
+            <button type="button" id="reel-cerrar" class="btn btn--secundario">Cerrar</button>
+            <button type="button" id="reel-detener" class="btn btn--secundario" hidden>Detener</button>
+            <button type="button" id="reel-reproducir" class="btn btn--secundario">Reproducir</button>
+            <button type="button" id="reel-descargar" class="btn btn--primario" title="Graba el reel en tiempo real (30 s) y lo descarga">Descargar video</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="dialogo-ilustraciones" class="dialogo dialogo--ilus" aria-labelledby="titulo-ilustraciones">
       <h2 id="titulo-ilustraciones">Imágenes</h2>
       <p class="ilus-tarjeta"><span class="ilus-tarjeta__rotulo">Texto de esta tarjeta:</span> <span id="ilus-texto"></span></p>
@@ -202,5 +221,6 @@
   </main>
 
   <script src="/app.js"></script>
+  <script src="/reel.js"></script>
 </body>
 </html>

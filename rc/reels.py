@@ -26,8 +26,11 @@ FONDOS = (("marino", "gris", "blanco"), ("azul", "blanco", "blanco"), ("gris", "
 
 
 class _Hoja:
-    def __init__(self, c, col, guias, imagenes=None):
+    def __init__(self, c, col, guias, imagenes=None, registro=None):
         self.c, self.col, self.guias, self.imagenes = c, col, guias, imagenes or {}
+        # registro (lista): para el reel animado, los textos no se dibujan sino que se anotan con su posición, y
+        # la pantalla los anima encima del fondo.
+        self.registro = registro
         self.fondo_clave, self.tarjeta, self.ancho, self.alto = "marino", 0, W, H
 
     def fondo(self, color):
@@ -38,13 +41,21 @@ class _Hoja:
         if not (texto or "").strip():
             return 0
         tam, lineas = ajustar(texto, fuente, ancho, alto, tam_max, inter)
-        self.c.setFillColor(self.col[color])
-        self.c.setFont(fuente, tam)
         y = H - y_sup - tam * 0.9
-        for ln in lineas:
-            self.c.drawString(x, y, ln)
+        for i, ln in enumerate(lineas):
+            self.texto(ln, fuente, tam, color, x, y, linea=i)
             y -= tam * inter
         return len(lineas) * tam * inter
+
+    def texto(self, ln, fuente, tam, color, x, y, linea=0, rol="texto"):
+        """Una línea de texto (y = línea de base desde abajo), dibujada o anotada para animarla."""
+        if self.registro is not None:
+            self.registro.append({"texto": ln, "fuente": fuente, "tam": tam, "x": x, "y": H - y, "linea": linea,
+                                  "color": "#" + self.col[color].hexval()[2:].upper(), "rol": rol})
+            return
+        self.c.setFillColor(self.col[color])
+        self.c.setFont(fuente, tam)
+        self.c.drawString(x, y, ln)
 
     def png(self, datos, x, y_sup, ancho, alto):
         from reportlab.lib.utils import ImageReader
@@ -136,9 +147,7 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         y = _y_centrado(total)
         usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho, 300, 72, inter=1.05)
         y += usado + (40 if usado else 0)
-        L.c.setFillColor(L.col[tema["cifra"]])
-        L.c.setFont(TITULO, tam)
-        L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
+        L.texto(cifra, TITULO, tam, tema["cifra"], M - tam * 0.04, H - y - tam * 0.86, rol="cifra")
         y += tam * 0.86 + SEPARACION
         L.bloque(despues, TITULO, tema["texto"], M, y, ancho, ABAJO - y, 72, inter=1.05)
         return
@@ -211,6 +220,40 @@ def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semill
         c.showPage()
     c.save()
     return buffer.getvalue()
+
+
+def duraciones() -> list[float]:
+    """Segundos de cada escena según ROLES («0–5 s» → 5)."""
+    salida = []
+    for _rol, tiempo in ROLES:
+        a, b = tiempo.replace(" s", "").split("–")
+        salida.append(float(b) - float(a))
+    return salida
+
+
+def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, bytes] | None = None,
+                      ancho: int = 1080) -> list[dict]:
+    """Para armar el reel en video: cada escena como imagen de fondo SIN textos (JPEG en data URI) y los textos con
+    su posición, fuente, tamaño y color (en px de 1080 x 1920; y = línea de base desde arriba), para que la pantalla
+    los anime encima."""
+    import base64
+    import pymupdf
+    tarjetas._registrar_fuentes()
+    registros = [[] for _ in CAMPOS]
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(W, H))
+    for i, campo in enumerate(CAMPOS, 1):
+        L = _Hoja(c, tarjetas._colores(), False, imagenes, registro=registros[i - 1])
+        _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
+        c.showPage()
+    c.save()
+    escenas = []
+    with pymupdf.open(stream=buffer.getvalue(), filetype="pdf") as doc:
+        for i, (pagina, segundos) in enumerate(zip(doc, duraciones())):
+            jpg = pagina.get_pixmap(matrix=pymupdf.Matrix(ancho / W, ancho / W)).tobytes("jpg", jpg_quality=88)
+            escenas.append({"fondo": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
+                            "duracion": segundos, "textos": registros[i]})
+    return escenas
 
 
 def nombre_archivo(contenido: dict, mes_iso: str) -> str:

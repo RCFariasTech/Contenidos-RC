@@ -109,10 +109,12 @@ def crear_video(imagen_url: str, fondo: str = "") -> str:
     `fondo`: hex del fondo de la escena, para pedir que no cambie durante la animación."""
     k = ajustes()["krea"]
     color = f"color {fondo}" if fondo else "background color identical to the first frame"
+    modelo = k.get("modelo_video", "kling/kling-2.5")  # Kling 2.5: sin audio nativo
     cuerpo = {"prompt": PROMPT_ANIMACION.format(fondo=color), "start_image": imagen_url, "end_image": imagen_url,
-              "aspect_ratio": "1:1", "duration": k.get("duracion_video", 5),
-              "resolution": k.get("resolucion_video", "720p")}
-    resp = _peticion("POST", f"/generate/video/{k.get('modelo_video', 'bytedance/seedance-2-mini')}", cuerpo)
+              "aspect_ratio": "1:1", "duration": k.get("duracion_video", 5)}
+    if k.get("resolucion_video"):
+        cuerpo["resolution"] = k["resolucion_video"]
+    resp = _peticion("POST", f"/generate/video/{modelo}", cuerpo)
     job_id = resp.get("job_id")
     if not job_id:
         raise ErrorNegocio("Krea no devolvió el id del trabajo de video.")

@@ -53,8 +53,7 @@
     "resolucion": "1K",
     "variantes_por_clic": 2,
     "url_publica": "https://contenidos-rc.vercel.app",
-    "modelo_video": "bytedance/seedance-2-mini",
-    "duracion_video": 5,
-    "resolucion_video": "720p"
+    "modelo_video": "kling/kling-2.5",
+    "duracion_video": 5
   }
 }

@@ -279,6 +279,15 @@ def ruta_editar_gancho(req):
     return 200, _servicio().editar_gancho(_entero(cuerpo, "pieza_id"), str(cuerpo.get("gancho") or "")[:300])
 
 
+def ruta_reel_animable(req):
+    _dueno(req)
+    try:
+        pieza_id = int(req["query"].get("pieza", ""))
+    except ValueError:
+        raise ErrorCliente(400, "Falta la pieza.")
+    return 200, _servicio().reel_animable(pieza_id)
+
+
 def ruta_ilustracion_animar(req):
     _dueno(req)
     return 200, _servicio().animar_ilustracion(_entero(req["cuerpo"], "id"))
@@ -385,6 +394,7 @@ RUTAS = {
     ("POST", "ilustracion-sugerir"): ruta_ilustracion_sugerir,
     ("POST", "detener-pieza"): ruta_detener_pieza,
     ("POST", "ilustracion-animar"): ruta_ilustracion_animar,
+    ("GET", "reel-animable"): ruta_reel_animable,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,

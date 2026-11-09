@@ -268,8 +268,13 @@ function renderTextos(pieza, conMiniaturas = true) {
       pedirMiniaturas(pieza);
     },
   }, reel ? "Rehacer escenas" : "Rehacer tarjetas") : null;
+  const animado = reel && pieza.id && conMiniaturas ? el("button", {
+    clase: "btn btn--primario", type: "button",
+    title: "Arma el reel en video con textos animados, el ícono animado y transiciones; lo previsualizas y lo descargas",
+    onclick: () => window.abrirReel(pieza),
+  }, "Reel terminado") : null;
   return el("section", { clase: "bloque" },
-    el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), el("div", { clase: "bloque__botones" }, rehacer, boton)),
+    el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), el("div", { clase: "bloque__botones" }, rehacer, boton, animado)),
     el("ol", { clase: "textos" }, items));
 }
 
@@ -807,8 +812,10 @@ function renderVideo(it) {
     } }, texto);
   if (it.video_estado === "lista" && it.video_url?.startsWith("https://")) {
     return el("div", { clase: "galeria__video" },
-      el("video", { src: it.video_url, autoplay: true, loop: true, muted: true, playsinline: true, controls: true }),
-      el("a", { href: it.video_url, target: "_blank", rel: "noopener noreferrer", download: "" }, "Descargar video"));
+      el("video", { src: it.video_url, autoplay: true, loop: true, muted: true, playsinline: true }),
+      el("div", { clase: "gancho-acciones" },
+        el("a", { href: it.video_url, target: "_blank", rel: "noopener noreferrer", download: "" }, "Descargar video"),
+        animar("Regenerar video")));
   }
   if (it.video_estado === "en_cola") return el("p", { clase: "ayuda" }, "Animando en Krea… (1-3 minutos)");
   if (it.video_estado === "fallida") return el("div", { clase: "galeria__video" },

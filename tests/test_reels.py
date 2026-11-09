@@ -16,6 +16,17 @@ REEL = {
 
 
 class TestReels(unittest.TestCase):
+    def test_escenas_animables_sin_textos_en_el_fondo(self):
+        escenas = reels.escenas_animables(REEL)
+        self.assertEqual([e["duracion"] for e in escenas], [5, 7, 8, 5, 5])        # 30 s en total
+        self.assertTrue(all(e["fondo"].startswith("data:image/jpeg;base64,") for e in escenas))
+        textos = " ".join(t["texto"] for t in escenas[0]["textos"])
+        self.assertEqual(textos, REEL["escena_1_gancho"])                         # el texto va aparte, para animarlo
+        t = escenas[0]["textos"][0]
+        self.assertEqual((t["fuente"], t["color"][0]), ("SpaceGrotesk-Bold", "#"))
+        self.assertTrue(reels.ZONA_ARRIBA <= t["y"] <= reels.H - reels.ZONA_ABAJO)
+
+
     def test_contenido_centrado_verticalmente(self):
         import io
         from PIL import Image
