@@ -669,7 +669,7 @@ def animar_ilustracion(ilustracion_id: int) -> dict:
         raise ErrorNegocio("Solo se puede animar una imagen que ya terminó de generarse.")
     if fila.get("video_estado") == "en_cola":
         raise ErrorNegocio("Este ícono ya se está animando.")
-    job_id = krea.crear_video(fila["url"])
+    job_id = krea.crear_video(fila["url"], fila.get("fondo") or "")
     cambios = {"video_job_id": job_id, "video_estado": "en_cola", "video_url": None, "video_error": None}
     db.actualizar("ilustraciones", cambios, id=f"eq.{fila['id']}")
     return {**fila, **cambios}

@@ -97,16 +97,21 @@ def crear_trabajo(prompt: str, proporcion: str, referencias: list[str] | None = 
 
 PROMPT_ANIMACION = (
     "Simple, subtle seamless loop animation of this exact isometric 3D icon: it floats gently up and down and its "
-    "parts move slightly (a small rotation, a soft glow pulse). Static camera, the background stays the same flat "
-    "solid color, no new objects, no text, no scene changes. Clean motion graphics style."
+    "parts move slightly (a small rotation of one element). Static locked camera. The background is a perfectly flat, "
+    "uniform solid {fondo} that stays EXACTLY the same color in every frame: no lighting changes, no glow, no flicker, "
+    "no gradients, no vignette, no shadows or reflections on the background, no exposure or color shifts. No new "
+    "objects, no text, no scene changes. Clean motion graphics style."
 )
 
 
-def crear_video(imagen_url: str) -> str:
-    """Anima un ícono (imagen de inicio) con el modelo de video configurado; devuelve el id del trabajo."""
+def crear_video(imagen_url: str, fondo: str = "") -> str:
+    """Anima un ícono (imagen de inicio) con el modelo de video configurado; devuelve el id del trabajo.
+    `fondo`: hex del fondo de la escena, para pedir que no cambie durante la animación."""
     k = ajustes()["krea"]
-    cuerpo = {"prompt": PROMPT_ANIMACION, "start_image": imagen_url, "aspect_ratio": "1:1",
-              "duration": k.get("duracion_video", 5), "resolution": k.get("resolucion_video", "720p")}
+    color = f"color {fondo}" if fondo else "background color identical to the first frame"
+    cuerpo = {"prompt": PROMPT_ANIMACION.format(fondo=color), "start_image": imagen_url, "end_image": imagen_url,
+              "aspect_ratio": "1:1", "duration": k.get("duracion_video", 5),
+              "resolution": k.get("resolucion_video", "720p")}
     resp = _peticion("POST", f"/generate/video/{k.get('modelo_video', 'bytedance/seedance-2-mini')}", cuerpo)
     job_id = resp.get("job_id")
     if not job_id:

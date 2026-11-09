@@ -285,3 +285,8 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .carrusel__escena { position: relative; flex: 0 0 100%; width: 100%; scroll-snap-align: center; scroll-snap-stop: always; }
 .carrusel__escena img { width: 100%; aspect-ratio: var(--rel, 0.8); object-fit: contain; display: block; background: var(--fondo); }
 .carrusel__escena video { position: absolute; object-fit: contain; pointer-events: none; }
+/* El video del ícono animado se funde con la escena: bordes difuminados para que no se note si el fondo varía. */
+.carrusel__escena video {
+  -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+}

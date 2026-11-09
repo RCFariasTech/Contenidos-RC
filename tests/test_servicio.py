@@ -420,7 +420,7 @@ class TestFlujo(unittest.TestCase):
                 mock.patch.object(krea, "consultar", side_effect=[listo, {"estado": "en_cola", "url": None, "error": None}]), \
                 mock.patch.object(krea, "crear_video", return_value="v1") as video:
             fila = servicio.ilustraciones(reel["id"])["items"][0]
-        video.assert_called_once_with("https://gen.krea.ai/images/i1.png")
+        video.assert_called_once_with("https://gen.krea.ai/images/i1.png", self.bd.tablas["ilustraciones"][0]["fondo"])
         self.assertEqual((fila["elegida"], fila["video_estado"], fila["video_job_id"]), (True, "en_cola", "v1"))
         mp4 = {"estado": "lista", "url": "https://gen.krea.ai/videos/v1.mp4", "error": None}
         with mock.patch.object(krea, "configurado", return_value=True), \
