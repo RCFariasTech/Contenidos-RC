@@ -181,11 +181,18 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
 
 SISTEMAS_IMAGEN = {
     "icono": (
-        "Describes el tema de UN ícono isométrico 3D de marca para una tarjeta de carrusel de Instagram sobre marketing "
-        "BTL y experiencial (RC Farías, Colombia). A partir del texto de la tarjeta, responde con UNA descripción breve "
-        "EN ESPAÑOL (10 a 30 palabras) de un grupo de 2 a 4 objetos concretos que representen exactamente la idea de esa "
-        "tarjeta (ej.: una góndola con una pantalla digital, una gráfica de barras que sube y un carrito de compras). "
-        "Solo objetos: sin palabras de estilo, colores, fondo, textos, letras, números, logos ni marcas."
+        "Describes el tema de UN ícono isométrico 3D de marca que acompaña el texto de una tarjeta de carrusel de "
+        "Instagram sobre marketing BTL y experiencial (RC Farías, Colombia). El ícono es una imagen de APOYO: sintetiza "
+        "la idea central en una sola metáfora visual simple; NO intenta representar todo el texto ni recrear una "
+        "situación. Responde con UNA descripción breve EN ESPAÑOL (máximo 15 palabras) de UN objeto, o de dos objetos "
+        "que interactúan entre sí, nunca más. No agregues objetos sueltos «junto a» la idea principal.\n"
+        "Ejemplos correctos:\n"
+        "- Un reloj de arena cuya arena cae dentro de una alcancía.\n"
+        "- Una balanza de platillos con un reloj en un lado y monedas apiladas en el otro.\n"
+        "- Un vaso de arena vertiéndose sobre una tarjeta de pago.\n"
+        "Ejemplo INCORRECTO (demasiado ambicioso): «Un reloj de arena cuya arena cae dentro de una alcancía, junto a "
+        "una silla de espectador frente a un panel luminoso y un billete enrollado».\n"
+        "Sin palabras de estilo, colores, fondo, textos, letras, números, logos ni marcas."
     ),
     "linea": (
         "Describes el tema de UN ícono de línea minimalista (pictograma simple) para una tarjeta de carrusel de "

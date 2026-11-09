@@ -42,9 +42,10 @@ FORMATO CARRUSEL:
   "icono" (solo tarjeta 3, y la 4 si no tiene cifra; vacío en las demás): el ícono de línea que mejor representa la idea, EXACTAMENTE una de estas claves:
   ${iconos_linea}.
   "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás), EN INGLÉS:
-  · Tarjeta 1 = ícono isométrico 3D de marca: describe 2 a 4 objetos concretos que representen la idea del post (10 a 30 palabras),
-    sin estilo, colores, fondo, texto ni logos (el estilo lo agrega el sistema). Ej.: "a supermarket shelf with a small digital screen
-    showing a rising bar chart, a shopping cart and a price tag".
+  · Tarjeta 1 = ícono isométrico 3D de marca, imagen de APOYO que sintetiza la idea en una metáfora simple (no representa todo
+    el texto): UN objeto, o dos que interactúan, máximo 15 palabras, sin objetos extra «junto a», sin estilo, colores, fondo,
+    texto ni logos. Ej.: "an hourglass whose sand falls into a piggy bank", "a balance scale with a clock on one side and
+    stacked coins on the other".
   · Tarjeta 2 = foto documental realista: quién (personas latinas comunes de clase media, edad y género), dónde (lugar concreto,
     limpio y moderno) y qué hacen, con uno o dos objetos (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto ni logos.
     Ej.: "a woman in her 40s in a supermarket aisle looking at a small digital screen on the shelf while holding a basket".
