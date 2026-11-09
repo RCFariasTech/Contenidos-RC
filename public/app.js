@@ -230,7 +230,20 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("span", { clase: "texto-item__num", "aria-hidden": "true" }, String(i + 1)),
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
-        el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
+        i === 0 && estado.editandoGancho === pieza.id ? editorGancho(pieza, campo, max)
+          : el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
+        i === 0 && pieza.id && pieza.estado === "generada" && estado.editandoGancho !== pieza.id
+          ? el("div", { clase: "gancho-acciones" },
+            el("button", {
+              clase: "btn btn--secundario btn--chico", type: "button",
+              title: "Propone con IA un gancho nuevo, distinto de los anteriores (guarda una versión nueva)",
+              onclick: () => procesar(pieza.id, "regenerar-gancho"),
+            }, "Otro gancho"),
+            el("button", {
+              clase: "btn btn--texto btn--chico", type: "button", title: "Escribe el gancho a mano",
+              onclick: () => { estado.editandoGancho = pieza.id; render(); $(`gancho-${pieza.id}`)?.focus(); },
+            }, "Editar gancho"))
+          : null,
         pieza.formato === "Carrusel" && i < 3 && conMiniaturas ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
           title: IMAGEN_TARJETA[i + 1].ayuda,
@@ -376,6 +389,32 @@ function renderCabecera(pieza, bloqueada) {
         onchange: (ev) => accion(pieza.id, () => api("aprobar", { metodo: "POST", cuerpo: { pieza_id: pieza.id, aprobada: ev.target.checked } })),
       }),
       aprobada ? "Aprobado" : "Aprobar")));
+}
+
+function editorGancho(pieza, campo, max) {
+  const entrada = el("input", { id: `gancho-${pieza.id}`, clase: "gancho-editor__entrada", type: "text",
+    maxlength: "200", value: pieza.contenido[campo] || "", "aria-label": "Nuevo gancho" });
+  const cuenta = el("span", { clase: "contador" }, "");
+  const contar = () => {
+    const n = contarPalabras(entrada.value);
+    cuenta.textContent = `${n}/${max} palabras`;
+    cuenta.className = `contador${n > max ? " contador--excede" : ""}`;
+  };
+  entrada.addEventListener("input", contar);
+  contar();
+  const guardar = () => {
+    estado.editandoGancho = null;
+    accion(pieza.id, () => api("editar-gancho", { metodo: "POST", cuerpo: { pieza_id: pieza.id, gancho: entrada.value } }));
+  };
+  entrada.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); guardar(); }
+    if (ev.key === "Escape") { estado.editandoGancho = null; render(); }
+  });
+  return el("div", { clase: "gancho-editor" }, entrada, cuenta,
+    el("div", { clase: "gancho-acciones" },
+      el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: guardar }, "Guardar"),
+      el("button", { clase: "btn btn--texto btn--chico", type: "button",
+        onclick: () => { estado.editandoGancho = null; render(); } }, "Cancelar")));
 }
 
 function renderProceso(pieza) {

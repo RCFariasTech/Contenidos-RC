@@ -273,6 +273,65 @@ def ajustar_pieza(pieza_id: int) -> dict:
         raise
 
 
+# ---------- gancho ----------
+
+CAMPO_GANCHO = {"Carrusel": "slide_1_gancho", "Reel": "escena_1_gancho"}
+
+
+def _cambiar_gancho(pieza_id: int, gancho: str, motivo: str) -> dict:
+    """Guarda una versión nueva con el gancho cambiado (el resto del contenido queda igual)."""
+    pieza = _pieza(int(pieza_id))
+    campo = CAMPO_GANCHO[pieza["formato"]]
+    gancho = " ".join((gancho or "").split())
+    maximo = validador.LIMITES[pieza["formato"]][campo]
+    if not gancho:
+        raise ErrorNegocio("El gancho no puede quedar vacío.")
+    if len(gancho.split()) > maximo:
+        raise ErrorNegocio(f"El gancho tiene {len(gancho.split())} palabras; el máximo es {maximo}.")
+    if gancho == (pieza.get("contenido") or {}).get(campo):
+        raise ErrorNegocio("El gancho no cambió.")
+    reclamada = _reclamar(pieza["id"], "generada", "ajustando")
+    if reclamada is None:
+        raise ErrorNegocio("El gancho no se puede cambiar ahora (la pieza está aprobada o en proceso).")
+    try:
+        contenido = {**reclamada["contenido"], campo: gancho}
+        if contenido.get("diseno"):
+            diseno = [dict(d) for d in contenido["diseno"]]
+            diseno[0].update(titular=gancho, texto="")
+            contenido["diseno"] = diseno
+        validacion = reclamada.get("validacion") or {}
+        informe = {"errores": validacion.get("errores", []), "advertencias": validacion.get("advertencias", [])}
+        return _guardar_version(reclamada, contenido, informe, validacion.get("urls", []), {}, motivo)
+    except Detenida:
+        raise
+    except Exception:
+        db.actualizar("piezas", {"estado": "generada"}, id=f"eq.{pieza['id']}", estado="eq.ajustando")
+        raise
+
+
+def regenerar_gancho(pieza_id: int) -> dict:
+    """Propone con IA un gancho nuevo, distinto de todos los que ya tuvo la pieza, y lo guarda como versión."""
+    pieza = _pieza(int(pieza_id))
+    if pieza["estado"] != "generada" or not pieza.get("contenido"):
+        raise ErrorNegocio("El gancho no se puede cambiar ahora (la pieza está aprobada o en proceso).")
+    campo = CAMPO_GANCHO[pieza["formato"]]
+    previos = [v["contenido"].get(campo, "") for v in
+               db.seleccionar("versiones_pieza", select="contenido", pieza_id=f"eq.{pieza['id']}", order="version")]
+    evitar = list(dict.fromkeys([pieza["contenido"].get(campo, "")] + previos))
+    try:
+        gancho = generador.proponer_gancho(pieza["formato"], pieza["contenido"], evitar,
+                                           validador.LIMITES[pieza["formato"]][campo])
+    except generador.ErrorGeneracion as e:
+        raise ErrorNegocio(str(e)) from e
+    maximo = validador.LIMITES[pieza["formato"]][campo]
+    gancho = " ".join(gancho.split()[:maximo])  # por si el modelo se pasa del límite
+    return _cambiar_gancho(pieza["id"], gancho, "gancho")
+
+
+def editar_gancho(pieza_id: int, gancho: str) -> dict:
+    return _cambiar_gancho(pieza_id, gancho, "edicion")
+
+
 # ---------- revisión ----------
 
 def comentar(pieza_id: int, texto: str) -> dict:

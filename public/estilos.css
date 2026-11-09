@@ -278,3 +278,6 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .galeria__acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ilus-sugerir { display: flex; justify-content: flex-end; margin: 6px 0 4px; }
 .estado-proceso__detener { margin-left: 12px; }
+.gancho-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.gancho-editor { display: grid; gap: 6px; margin: 4px 0; }
+.gancho-editor__entrada { width: 100%; font: inherit; font-size: 1.05rem; padding: 8px 10px; border: 1px solid var(--borde, #c9cacb); border-radius: 8px; }

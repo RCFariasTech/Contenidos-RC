@@ -87,7 +87,9 @@ Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo c
 
 Cada reel tiene el botón **Ver guion visual**: vista previa y descarga de un PDF 9:16 (1080 × 1920) con una página por escena (etiqueta con rol y tiempo, espacio **IMAGEN O VIDEO** y el texto en pantalla editable, dentro de la zona segura de Instagram). El diseñador lo abre en Adobe Express con «Empezar con tu contenido», inserta los medios y anima. Código en `rc/reels.py`.
 
-Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). **Detener.** Mientras una pieza se genera, rehace o ajusta, aparece **Detener**: la pieza vuelve a su versión anterior (o queda con «Reintentar» si aún no tenía contenido) y, si era un lote, no sigue con las demás. La llamada a Claude que ya estaba en curso termina en el servidor (se paga), pero su resultado se descarta y no se hacen más reparaciones. En el panel de imágenes, **Detener generación** cancela en Krea las variantes en cola (Krea no cobra las canceladas) y **Detener sugerencia** corta la sugerencia de descripción.
+Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). **Gancho.** En la tarjeta 1 de cada carrusel y la escena 1 de cada reel (pieza sin aprobar) están **Otro gancho**, que propone con IA un gancho nuevo distinto de todos los anteriores de esa pieza, y **Editar gancho**, para escribirlo a mano (Enter guarda, Esc cancela). Cada cambio se guarda como versión nueva (motivos `gancho` y `edicion`) y respeta el límite de palabras (8 en carrusel, 6 en reel); el resto del contenido no cambia.
+
+**Detener.** Mientras una pieza se genera, rehace o ajusta, aparece **Detener**: la pieza vuelve a su versión anterior (o queda con «Reintentar» si aún no tenía contenido) y, si era un lote, no sigue con las demás. La llamada a Claude que ya estaba en curso termina en el servidor (se paga), pero su resultado se descarta y no se hacen más reparaciones. En el panel de imágenes, **Detener generación** cancela en Krea las variantes en cola (Krea no cobra las canceladas) y **Detener sugerencia** corta la sugerencia de descripción.
 
 La vista previa (tarjetas y guion visual) tiene el botón **Rehacer**, que cambia el ícono de línea (si la tarjeta no pidió uno) o los colores de las escenas del reel sin cambiar el texto; el PDF que se descarga coincide con lo que se ve. Los recuadros de ilustración con su nota y la etiqueta de cada escena solo aparecen en la vista previa, no en el PDF descargado.
 
@@ -111,6 +113,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `006_ilustracion_elegida.sql`: variante elegida por tarjeta y escena usada.
 - `007_ilustracion_tarjeta_3.sql`: la tarjeta 3 (ícono de línea) también guarda variantes de Krea.
 - `008_ilustracion_automatica.sql`: marca las imágenes generadas automáticamente al terminar los textos.
+- `009_motivo_gancho.sql`: versiones por gancho regenerado o editado a mano.
 
 ## Desarrollo local
 

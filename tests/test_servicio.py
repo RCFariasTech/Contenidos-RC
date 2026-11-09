@@ -416,6 +416,34 @@ class TestFlujo(unittest.TestCase):
             fila = servicio.generar_pieza(servicio.estado_mes(mes)["piezas"][0]["id"])
         self.assertEqual(fila["estado"], "generada")
 
+    def test_regenerar_y_editar_el_gancho(self):
+        carrusel, reel = self._mes_generado()
+        viejo = carrusel["contenido"]["slide_1_gancho"]
+        recibido = {}
+
+        def proponer(formato, contenido, evitar, maximo):
+            recibido.update(formato=formato, evitar=evitar, maximo=maximo)
+            return "Tu stand ya no basta"
+
+        with mock.patch.object(servicio.generador, "proponer_gancho", side_effect=proponer):
+            fila = servicio.regenerar_gancho(carrusel["id"])
+        self.assertEqual(fila["contenido"]["slide_1_gancho"], "Tu stand ya no basta")
+        self.assertEqual(fila["contenido"]["diseno"][0]["titular"], "Tu stand ya no basta")   # la tarjeta 1 también
+        self.assertEqual(fila["contenido"]["slide_2"], carrusel["contenido"]["slide_2"])       # el resto no cambia
+        self.assertEqual((fila["version"], fila["estado"]), (carrusel["version"] + 1, "generada"))
+        self.assertIn(viejo, recibido["evitar"])
+        self.assertEqual(recibido["maximo"], 8)
+
+        fila = servicio.editar_gancho(reel["id"], "  ¿Y tu marca   qué siente? ")
+        self.assertEqual(fila["contenido"]["escena_1_gancho"], "¿Y tu marca qué siente?")
+        self.assertEqual({v["motivo"] for v in servicio.versiones(reel["id"])}, {"generacion", "edicion"})
+        for malo in ("", "una dos tres cuatro cinco seis siete"):                        # vacío o > 6 palabras
+            with self.assertRaises(servicio.ErrorNegocio):
+                servicio.editar_gancho(reel["id"], malo)
+        servicio.aprobar(reel["id"], True)
+        with self.assertRaises(servicio.ErrorNegocio):                                     # aprobada: no se cambia
+            servicio.editar_gancho(reel["id"], "Otro gancho")
+
     def _mes_generado(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

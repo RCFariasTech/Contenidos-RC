@@ -237,6 +237,33 @@ def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", t
     return " ".join(descripcion.split()).strip('"').strip()[:500]
 
 
+def proponer_gancho(formato: str, contenido: dict, evitar: list[str], max_palabras: int) -> str:
+    """Un gancho nuevo para la pieza (tarjeta 1 o escena 1), distinto de los anteriores. Sin búsqueda web."""
+    campos = {"Carrusel": ("slide_2", "slide_3", "slide_4", "slide_5_cierre"),
+                               "Reel": ("escena_2_desarrollo_a", "escena_3_desarrollo_b", "escena_4_desarrollo_c",
+                                        "escena_5_cta")}[formato]
+    resto = "\n".join(f"- {contenido.get(c, '')}" for c in campos)
+    previos = "\n".join(f"- {g}" for g in evitar if g)
+    usuario = (f"Formato: {formato} de Instagram de RC Farías (agencia BTL de Colombia).\n"
+               f"Tema: {contenido.get('tema_especifico', '')}\nResto del contenido:\n{resto}\n"
+               f"Ganchos ya usados (propón uno claramente DISTINTO):\n{previos}\n\n"
+               f"Escribe UN gancho nuevo en español, de máximo {max_palabras} palabras: una afirmación provocadora o "
+               "una pregunta disruptiva, coherente con el resto del contenido, sin hashtags ni emojis y sin inventar "
+               "datos. Responde solo con el gancho.")
+    try:
+        respuesta = _cliente().messages.create(
+            model=ajustes()["modelo"], max_tokens=300,
+            system="Eres redactor creativo senior de una agencia de marketing BTL y experiencial.",
+            messages=[{"role": "user", "content": usuario}], output_config={"effort": "low"})
+    except anthropic.APIError as e:
+        raise ErrorGeneracion(f"No se pudo proponer un gancho: {e}") from e
+    gancho = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
+    gancho = " ".join(gancho.split()).strip('"«»“”').strip()
+    if not gancho:
+        raise ErrorGeneracion("El modelo no devolvió un gancho.")
+    return gancho
+
+
 def generar(slot: dict, historial: list[dict], hermanas: list[dict], descartados: list[dict] | None = None) -> dict:
     usuario = prompts.generar(slot, historial, hermanas, descartados)
     return llamar(usuario, slot["formato"], ajustes()["web_search_max_uses_generar"])
