@@ -52,6 +52,9 @@
     "modelo": "google/nano-banana-pro",
     "resolucion": "1K",
     "variantes_por_clic": 2,
-    "url_publica": "https://contenidos-rc.vercel.app"
+    "url_publica": "https://contenidos-rc.vercel.app",
+    "modelo_video": "bytedance/seedance-2-mini",
+    "duracion_video": 5,
+    "resolucion_video": "720p"
   }
 }

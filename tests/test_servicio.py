@@ -397,15 +397,43 @@ class TestFlujo(unittest.TestCase):
             for p in servicio.estado_mes(mes)["piezas"]:
                 servicio.generar_pieza(p["id"])
         filas = self.bd.tablas["ilustraciones"]
-        carruseles = {p["id"] for p in servicio.estado_mes(mes)["piezas"] if p["formato"] == "Carrusel"}
-        self.assertEqual(len(filas), 3 * len(carruseles))                       # una por tarjeta 1-3, solo carruseles
-        self.assertTrue(all(f["automatica"] and f["pieza_id"] in carruseles for f in filas))
-        pieza_id = filas[0]["pieza_id"]
+        piezas = servicio.estado_mes(mes)["piezas"]
+        esperadas = sum(len(servicio._tipos_imagen(servicio._pieza(p["id"]))) for p in piezas)
+        self.assertEqual(len(filas), esperadas)                                 # una por tarjeta o escena con imagen
+        self.assertTrue(all(f["automatica"] for f in filas))
+        self.assertTrue(all(f["tarjeta"] != 5 for f in filas))                  # el cierre nunca lleva imagen
+        carruseles = {p["id"] for p in piezas if p["formato"] == "Carrusel"}
+        pieza_id = next(f["pieza_id"] for f in filas if f["pieza_id"] in carruseles)
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "consultar", return_value={"estado": "lista", "url": "https://gen.krea.ai/images/x.png", "error": None}):
             servicio.ilustraciones(pieza_id)
         elegidas = [f["tarjeta"] for f in filas if f["pieza_id"] == pieza_id and f["elegida"]]
         self.assertEqual(sorted(elegidas), [1, 2, 3])                          # la primera lista se usa sola
+
+    def test_el_icono_de_la_escena_1_del_reel_se_anima_solo(self):
+        _, reel = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["i1"]):
+            servicio.generar_ilustraciones(reel["id"], 1, descripcion="una alcancía", cantidad=1, automatica=True)
+        listo = {"estado": "lista", "url": "https://gen.krea.ai/images/i1.png", "error": None}
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "consultar", side_effect=[listo, {"estado": "en_cola", "url": None, "error": None}]), \
+                mock.patch.object(krea, "crear_video", return_value="v1") as video:
+            fila = servicio.ilustraciones(reel["id"])["items"][0]
+        video.assert_called_once_with("https://gen.krea.ai/images/i1.png")
+        self.assertEqual((fila["elegida"], fila["video_estado"], fila["video_job_id"]), (True, "en_cola", "v1"))
+        mp4 = {"estado": "lista", "url": "https://gen.krea.ai/videos/v1.mp4", "error": None}
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "consultar", return_value=mp4):
+            fila = servicio.ilustraciones(reel["id"])["items"][0]
+        self.assertEqual((fila["video_estado"], fila["video_url"]), ("lista", "https://gen.krea.ai/videos/v1.mp4"))
+        carrusel = next(p for p in servicio.estado_mes(date(2026, 11, 1))["piezas"] if p["formato"] == "Carrusel")
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["c1"]):
+            otra = servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="x", cantidad=1)["items"][0]
+        self.bd.tablas["ilustraciones"][-1].update(estado="lista", url="https://gen.krea.ai/images/c1.png")
+        with self.assertRaises(servicio.ErrorNegocio):                         # en carruseles no se anima
+            servicio.animar_ilustracion(otra["id"])
 
     def test_krea_caido_no_rompe_la_generacion_de_textos(self):
         mes = date(2026, 11, 1)
@@ -481,7 +509,7 @@ class TestFlujo(unittest.TestCase):
             self.assertIn("minimalist line icon", prompt)                      # tarjeta 3: ícono de línea
             self.assertIn("una lupa", prompt)
             self.assertTrue(referencias and all("/marca/linea/" in r for r in referencias))
-            for caso in ((carrusel["id"], 4), (reel["id"], 1)):
+            for caso in ((carrusel["id"], 4), (reel["id"], 5)):
                 with self.assertRaises(servicio.ErrorNegocio):
                     servicio.generar_ilustraciones(*caso)
         with mock.patch.object(krea, "configurado", return_value=False):

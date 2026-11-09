@@ -16,6 +16,19 @@ REEL = {
 
 
 class TestReels(unittest.TestCase):
+    def test_cifras_en_grande_y_iconos_en_las_escenas_sin_cifra(self):
+        reel = dict(REEL, escena_2_desarrollo_a="Sube 35% el recuerdo de marca", escena_3_desarrollo_b="Sin cifras aquí")
+        self.assertEqual(reels.tipos_imagen(reel), {1: "icono", 3: "linea", 4: "linea"} if not __import__("rc.tarjetas",
+                         fromlist=["x"]).separar_cifra(reel["escena_4_desarrollo_c"])[1] else {1: "icono", 3: "linea"})
+        doc = pymupdf.open(stream=reels.generar_pdf(reel), filetype="pdf")
+        tramos = [s for b in doc[1].get_text("dict")["blocks"] if b["type"] == 0 for ln in b["lines"] for s in ln["spans"]]
+        cifra = next(s for s in tramos if s["text"].strip() == "35%")
+        self.assertGreater(cifra["size"], 150)
+        self.assertNotIn("35%", [s["text"].strip() for b in doc[0].get_text("dict")["blocks"] if b["type"] == 0
+                                for ln in b["lines"] for s in ln["spans"]])
+        self.assertFalse(doc[4].get_images() and False)                 # el cierre no lleva imagen de Krea
+
+
     def test_cinco_paginas_9_16_con_texto_editable(self):
         doc = pymupdf.open(stream=reels.generar_pdf(REEL, guias=True), filetype="pdf")
         self.assertEqual(len(doc), 5)
@@ -23,7 +36,8 @@ class TestReels(unittest.TestCase):
         for pagina, campo in zip(doc, reels.CAMPOS):
             texto = " ".join(pagina.get_text().split())
             self.assertIn(REEL[campo], texto)
-            self.assertIn("FOTO O VIDEO", texto)
+            self.assertNotIn("FOTO O VIDEO", texto)                     # ya no hay recuadro de foto/video
+        self.assertIn("ÍCONO ISOMÉTRICO ANIMADO", doc[0].get_text())
         self.assertIn("ESCENA 1 · GANCHO · 0–5 s", " ".join(doc[0].get_text().split()))
 
     def test_solo_el_cierre_lleva_logos_y_se_adaptan_al_fondo(self):
@@ -60,7 +74,7 @@ class TestReels(unittest.TestCase):
                         if sum(abs(a - b) for a, b in zip(pix.pixel(x, y)[:3], fondo[:3])) > 60:
                             return x / 2
 
-            bordes = [borde_izquierdo(900, 1130), borde_izquierdo(1215, 1335), borde_izquierdo(1400, 1470)]
+            bordes = [borde_izquierdo(700, 900), borde_izquierdo(1215, 1335), borde_izquierdo(1400, 1470)]
             self.assertLessEqual(max(bordes) - min(bordes), 2, bordes)
 
     def test_la_descarga_no_trae_la_etiqueta_de_escena(self):

@@ -279,6 +279,11 @@ def ruta_editar_gancho(req):
     return 200, _servicio().editar_gancho(_entero(cuerpo, "pieza_id"), str(cuerpo.get("gancho") or "")[:300])
 
 
+def ruta_ilustracion_animar(req):
+    _dueno(req)
+    return 200, _servicio().animar_ilustracion(_entero(req["cuerpo"], "id"))
+
+
 def ruta_detener_pieza(req):
     _dueno(req)
     return 200, _servicio().detener_pieza(_entero(req["cuerpo"], "pieza_id"))
@@ -379,6 +384,7 @@ RUTAS = {
     ("POST", "ilustracion-elegir"): ruta_ilustracion_elegir,
     ("POST", "ilustracion-sugerir"): ruta_ilustracion_sugerir,
     ("POST", "detener-pieza"): ruta_detener_pieza,
+    ("POST", "ilustracion-animar"): ruta_ilustracion_animar,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,

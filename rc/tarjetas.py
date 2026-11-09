@@ -244,7 +244,7 @@ def _fondo_con_imagen(L, datos):
         except Exception:
             datos = None
     L.c.setFillColor(fondo)
-    L.c.rect(0, 0, W, H, stroke=0, fill=1)
+    L.c.rect(0, 0, getattr(L, "ancho", W), getattr(L, "alto", H), stroke=0, fill=1)  # también sirve al reel
     return datos
 
 

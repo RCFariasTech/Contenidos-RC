@@ -95,6 +95,25 @@ def crear_trabajo(prompt: str, proporcion: str, referencias: list[str] | None = 
     return job_id
 
 
+PROMPT_ANIMACION = (
+    "Simple, subtle seamless loop animation of this exact isometric 3D icon: it floats gently up and down and its "
+    "parts move slightly (a small rotation, a soft glow pulse). Static camera, the background stays the same flat "
+    "solid color, no new objects, no text, no scene changes. Clean motion graphics style."
+)
+
+
+def crear_video(imagen_url: str) -> str:
+    """Anima un ícono (imagen de inicio) con el modelo de video configurado; devuelve el id del trabajo."""
+    k = ajustes()["krea"]
+    cuerpo = {"prompt": PROMPT_ANIMACION, "start_image": imagen_url, "aspect_ratio": "1:1",
+              "duration": k.get("duracion_video", 5), "resolution": k.get("resolucion_video", "720p")}
+    resp = _peticion("POST", f"/generate/video/{k.get('modelo_video', 'bytedance/seedance-2-mini')}", cuerpo)
+    job_id = resp.get("job_id")
+    if not job_id:
+        raise ErrorNegocio("Krea no devolvió el id del trabajo de video.")
+    return job_id
+
+
 def cancelar(job_id: str) -> None:
     """Cancela un trabajo en cola o en proceso (DELETE /jobs/{id}); Krea no cobra los cancelados."""
     _peticion("DELETE", f"/jobs/{job_id}")

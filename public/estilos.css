@@ -281,3 +281,4 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .gancho-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
 .gancho-editor { display: grid; gap: 6px; margin: 4px 0; }
 .gancho-editor__entrada { width: 100%; font: inherit; font-size: 1.05rem; padding: 8px 10px; border: 1px solid var(--borde, #c9cacb); border-radius: 8px; }
+.galeria__video { display: grid; gap: 6px; margin-top: 6px; } .galeria__video video { width: 100%; border-radius: 8px; }

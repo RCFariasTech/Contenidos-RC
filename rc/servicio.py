@@ -435,7 +435,8 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
     titulo = f"{'Reel' if pieza['formato'] == 'Reel' else 'Carrusel'} · {contenido.get('tema_especifico', '')}"
     if pieza["formato"] == "Reel":
         modulo = reels
-        pdf = reels.generar_pdf(contenido, titulo, inicio, semilla=max(0, int(semilla)), guias=guias)
+        pdf = reels.generar_pdf(contenido, titulo, inicio, semilla=max(0, int(semilla)), guias=guias,
+                                imagenes=_imagenes_elegidas(pieza["id"]))
     else:
         modulo = tarjetas
         pdf = tarjetas.generar_pdf(contenido, titulo, variante, semilla=max(0, int(semilla)), guias=guias,
@@ -452,7 +453,7 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     imagenes = ["data:image/png;base64," + base64.b64encode(png).decode() for png in tarjetas.imagenes_png(pdf, max(200, min(int(ancho), 900)))]
     # Imágenes automáticas que Krea aún no termina: la pantalla vuelve a pedir la vista en unos segundos.
     en_cola = len(db.seleccionar("ilustraciones", select="id", pieza_id=f"eq.{int(pieza_id)}", automatica="is.true",
-                                 estado="eq.en_cola")) if pieza["formato"] == "Carrusel" else 0
+                                 estado="eq.en_cola"))
     return {"imagenes": imagenes, "relacion": 9 / 16 if pieza["formato"] == "Reel" else 4 / 5, "imagenes_en_cola": en_cola}
 
 
@@ -467,6 +468,25 @@ def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
     return tarjetas.datos_tarjetas(contenido)[tarjeta - 1]
 
 
+def _tipos_imagen(pieza: dict) -> dict[int, str]:
+    """{tarjeta o escena: tipo de imagen} que lleva la pieza (carrusel: 1 ícono, 2 foto, 3 línea; reel: 1 ícono
+    isométrico animado y 2-4 ícono de línea si la escena no tiene cifra; el cierre nunca lleva imagen)."""
+    from rc import reels, tarjetas
+    if not pieza.get("contenido"):
+        return {}
+    if pieza["formato"] == "Reel":
+        return reels.tipos_imagen(pieza["contenido"])
+    return dict(tarjetas.TIPO_IMAGEN)
+
+
+def _texto_imagen(pieza: dict, numero: int) -> dict:
+    """Titular, texto y nota de la tarjeta o escena para describir su imagen."""
+    from rc import reels
+    if pieza["formato"] == "Reel":
+        return {"titular": "", "texto": pieza["contenido"].get(reels.CAMPOS[numero - 1], ""), "nota": ""}
+    return _texto_tarjeta(pieza["contenido"], numero)
+
+
 def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None,
                           cantidad: int | None = None, automatica: bool = False) -> dict:
     """Pide a Krea (Nano Banana Pro) varias variantes de la imagen de la tarjeta 1 (ícono isométrico en el estilo de
@@ -478,22 +498,24 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
     from rc import estilo_iconos, tarjetas
     pieza = _pieza(int(pieza_id))
     tarjeta = int(tarjeta)
-    if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
-        raise ErrorNegocio("Las imágenes son para tarjetas de carruseles con contenido.")
-    if tarjeta not in tarjetas.TIPO_IMAGEN:
-        raise ErrorNegocio("Solo las tarjetas 1 (ícono), 2 (foto) y 3 (ícono de línea) llevan imagen.")
+    tipos = _tipos_imagen(pieza)
+    if not tipos:
+        raise ErrorNegocio("Esta pieza aún no tiene contenido.")
+    if tarjeta not in tipos:
+        raise ErrorNegocio("Esa tarjeta o escena no lleva imagen (el cierre no lleva y las escenas con cifra la "
+                           "muestran en grande).")
     if not krea.configurado():
         raise ErrorNegocio("Las imágenes no están activadas: falta KREA_API_TOKEN en Vercel (ver README).")
-    tipo = tarjetas.TIPO_IMAGEN[tarjeta]
+    tipo = tipos[tarjeta]
     k = ajustes()["krea"]
     ancho, alto = (1376, 768) if tipo == "foto" else (1024, 1024)
     contenido = pieza["contenido"]
     descripcion = " ".join((descripcion or "").split())[:500]
-    if not descripcion:
+    if not descripcion and pieza["formato"] == "Carrusel":
         diseno = contenido.get("diseno") or []
         descripcion = (diseno[tarjeta - 1].get("prompt_krea") if len(diseno) >= tarjeta else "") or ""
     if not descripcion:
-        t = _texto_tarjeta(contenido, tarjeta)
+        t = _texto_imagen(pieza, tarjeta)
         try:
             descripcion = generador.describir_ilustracion(contenido.get("tema_especifico", ""), t["titular"],
                                                           t["texto"], t.get("nota", ""), tipo=tipo)
@@ -506,7 +528,7 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
     filas, fallo = [], None
     for _ in range(cantidad or k["variantes_por_clic"]):
         try:
-            job_id = krea.crear_trabajo(prompt, tarjetas.PROPORCION_KREA[tarjeta], referencias)
+            job_id = krea.crear_trabajo(prompt, "16:9" if tipo == "foto" else "1:1", referencias)
         except ErrorNegocio as e:
             fallo = e
             break
@@ -521,36 +543,33 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
 
 def sugerir_descripcion(pieza_id: int, tarjeta: int, previas: list[str] | None = None) -> dict:
     """Descripción sugerida en español de qué mostrar en la imagen de la tarjeta; con `previas`, una opción distinta."""
-    from rc import tarjetas
     pieza = _pieza(int(pieza_id))
     tarjeta = int(tarjeta)
-    if pieza["formato"] != "Carrusel" or not pieza.get("contenido"):
-        raise ErrorNegocio("Las imágenes son para tarjetas de carruseles con contenido.")
-    if tarjeta not in tarjetas.TIPO_IMAGEN:
-        raise ErrorNegocio("Solo las tarjetas 1, 2 y 3 llevan imagen.")
+    tipos = _tipos_imagen(pieza)
+    if tarjeta not in tipos:
+        raise ErrorNegocio("Esa tarjeta o escena no lleva imagen.")
     contenido = pieza["contenido"]
-    t = _texto_tarjeta(contenido, tarjeta)
+    t = _texto_imagen(pieza, tarjeta)
     try:
         descripcion = generador.describir_ilustracion(
             contenido.get("tema_especifico", ""), t["titular"], t["texto"], t.get("nota", ""),
-            tipo=tarjetas.TIPO_IMAGEN[tarjeta], evitar=[str(p)[:500] for p in (previas or [])][:10])
+            tipo=tipos[tarjeta], evitar=[str(p)[:500] for p in (previas or [])][:10])
     except generador.ErrorGeneracion as e:
         raise ErrorNegocio(str(e)) from e
     return {"descripcion": descripcion}
 
 
 def imagenes_automaticas(pieza_id: int) -> int:
-    """Al terminar los textos de un carrusel, pide a Krea una imagen por tarjeta (1 ícono isométrico, 2 foto, 3 ícono
-    de línea); la primera que queda lista se usa en su tarjeta (ver `ilustraciones`). Nunca hace fallar la generación
-    de textos: si Krea no está configurado o falla, el carrusel queda con los espacios para generar a mano."""
-    from rc import tarjetas
+    """Al terminar los textos, pide a Krea una imagen por tarjeta o escena que la lleve (ver `_tipos_imagen`); la primera
+    que queda lista se usa (y en la escena 1 del reel, se anima: ver `ilustraciones`). Nunca hace fallar la generación
+    de textos: si Krea no está configurado o falla, la pieza queda con los espacios para generar a mano."""
     pieza = _pieza(int(pieza_id))
-    if pieza["formato"] != "Carrusel" or not pieza.get("contenido") or not krea.configurado():
+    if not pieza.get("contenido") or not krea.configurado():
         return 0
     if not ajustes()["krea"].get("automaticas", True):
         return 0
     pedidas = 0
-    for tarjeta in tarjetas.TIPO_IMAGEN:
+    for tarjeta in _tipos_imagen(pieza):
         try:
             pedidas += len(generar_ilustraciones(pieza["id"], tarjeta, cantidad=1, automatica=True)["items"])
         except Exception:  # noqa: BLE001 (las imágenes son un extra: no deben romper la entrega de textos)
@@ -570,7 +589,16 @@ def detener_ilustraciones(pieza_id: int, tarjeta: int) -> dict:
             log.warning("Krea no canceló el trabajo %s (quizá ya había terminado)", f["job_id"])
         db.actualizar("ilustraciones", {"estado": "fallida", "error": "Detenida por el usuario."},
                       id=f"eq.{f['id']}", estado="eq.en_cola")
-    return {"detenidas": len(filas)}
+    videos = db.seleccionar("ilustraciones", select="id,video_job_id", pieza_id=f"eq.{int(pieza_id)}",
+                            tarjeta=f"eq.{int(tarjeta)}", video_estado="eq.en_cola")
+    for f in videos:
+        try:
+            krea.cancelar(f["video_job_id"])
+        except ErrorNegocio:
+            log.warning("Krea no canceló el video %s", f["video_job_id"])
+        db.actualizar("ilustraciones", {"video_estado": "fallida", "video_error": "Detenido por el usuario."},
+                      id=f"eq.{f['id']}", video_estado="eq.en_cola")
+    return {"detenidas": len(filas) + len(videos)}
 
 
 def elegir_ilustracion(ilustracion_id: int, elegida: bool = True) -> dict:
@@ -611,27 +639,66 @@ def _imagenes_elegidas(pieza_id: int) -> dict[int, bytes]:
     return imagenes
 
 
+MINUTOS_MAX_VIDEO = 20
+
+
+def animar_ilustracion(ilustracion_id: int) -> dict:
+    """Pide a Krea el video corto (ícono isométrico animado, en bucle) de una imagen lista de la escena 1 de un reel."""
+    filas = db.seleccionar("ilustraciones", select="*", id=f"eq.{int(ilustracion_id)}")
+    if not filas:
+        raise ErrorNegocio("La imagen no existe.")
+    fila = filas[0]
+    pieza = _pieza(fila["pieza_id"])
+    if pieza["formato"] != "Reel" or int(fila["tarjeta"]) != 1:
+        raise ErrorNegocio("Solo se anima el ícono isométrico de la escena 1 de los reels.")
+    if fila["estado"] != "lista" or not str(fila.get("url") or "").startswith("https://"):
+        raise ErrorNegocio("Solo se puede animar una imagen que ya terminó de generarse.")
+    if fila.get("video_estado") == "en_cola":
+        raise ErrorNegocio("Este ícono ya se está animando.")
+    job_id = krea.crear_video(fila["url"])
+    cambios = {"video_job_id": job_id, "video_estado": "en_cola", "video_url": None, "video_error": None}
+    db.actualizar("ilustraciones", cambios, id=f"eq.{fila['id']}")
+    return {**fila, **cambios}
+
+
 def ilustraciones(pieza_id: int) -> dict:
-    """Variantes de la pieza (más recientes primero); actualiza las que siguen en cola consultando a Krea."""
+    """Variantes de la pieza (más recientes primero); actualiza las que siguen en cola (imágenes y videos) consultando
+    a Krea. Las automáticas que quedan listas se eligen solas y, en la escena 1 de un reel, se animan."""
     filas = db.seleccionar("ilustraciones", select="*", pieza_id=f"eq.{int(pieza_id)}", order="id.desc", limit="30")
-    limite = (datetime.now(timezone.utc) - timedelta(minutes=MINUTOS_MAX_ILUSTRACION)).isoformat()
+    ahora = datetime.now(timezone.utc)
+    limite = (ahora - timedelta(minutes=MINUTOS_MAX_ILUSTRACION)).isoformat()
     for f in filas:
-        if f["estado"] != "en_cola":
-            continue
-        try:
-            nuevo = krea.consultar(f["job_id"])
-        except ErrorNegocio:
-            continue  # error transitorio al consultar: se reintenta en la siguiente consulta
-        if nuevo["estado"] == "en_cola" and f["creado_en"] < limite:
-            nuevo = {"estado": "fallida", "url": None, "error": "Krea tardó demasiado en responder."}
-        if nuevo["estado"] != "en_cola":
-            db.actualizar("ilustraciones", nuevo, id=f"eq.{f['id']}", estado="eq.en_cola")
-            f.update(nuevo)
-            # Imagen automática lista y la tarjeta aún sin imagen elegida: se usa directamente.
-            if f.get("automatica") and nuevo["estado"] == "lista" and not any(
-                    o.get("elegida") and o["tarjeta"] == f["tarjeta"] for o in filas):
-                db.actualizar("ilustraciones", {"elegida": True}, id=f"eq.{f['id']}")
-                f["elegida"] = True
+        if f["estado"] == "en_cola":
+            try:
+                nuevo = krea.consultar(f["job_id"])
+            except ErrorNegocio:
+                continue  # error transitorio al consultar: se reintenta en la siguiente consulta
+            if nuevo["estado"] == "en_cola" and f["creado_en"] < limite:
+                nuevo = {"estado": "fallida", "url": None, "error": "Krea tardó demasiado en responder."}
+            if nuevo["estado"] != "en_cola":
+                db.actualizar("ilustraciones", nuevo, id=f"eq.{f['id']}", estado="eq.en_cola")
+                f.update(nuevo)
+                # Imagen automática lista y la tarjeta aún sin imagen elegida: se usa directamente.
+                if f.get("automatica") and nuevo["estado"] == "lista" and not any(
+                        o.get("elegida") and o["tarjeta"] == f["tarjeta"] for o in filas):
+                    db.actualizar("ilustraciones", {"elegida": True}, id=f"eq.{f['id']}")
+                    f["elegida"] = True
+                    if int(f["tarjeta"]) == 1 and _pieza(f["pieza_id"])["formato"] == "Reel":
+                        try:
+                            f.update(animar_ilustracion(f["id"]))
+                        except ErrorNegocio:
+                            log.warning("No se pudo animar el ícono %s", f["id"], exc_info=True)
+        if f.get("video_estado") == "en_cola" and f.get("video_job_id"):
+            try:
+                video = krea.consultar(f["video_job_id"])
+            except ErrorNegocio:
+                continue
+            if video["estado"] == "en_cola" and f["creado_en"] < (ahora - timedelta(minutes=MINUTOS_MAX_VIDEO)).isoformat():
+                video = {"estado": "fallida", "url": None, "error": "Krea tardó demasiado en animar el ícono."}
+            if video["estado"] != "en_cola":
+                cambios = {"video_estado": video["estado"], "video_url": video["url"], "video_error": video["error"]}
+                db.actualizar("ilustraciones", cambios, id=f"eq.{f['id']}", video_estado="eq.en_cola")
+                f.update(cambios)
     return {"configurado": krea.configurado(), "items": filas}
 
 

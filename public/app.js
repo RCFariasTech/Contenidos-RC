@@ -244,11 +244,11 @@ function renderTextos(pieza, conMiniaturas = true) {
               onclick: () => { estado.editandoGancho = pieza.id; render(); $(`gancho-${pieza.id}`)?.focus(); },
             }, "Editar gancho"))
           : null,
-        pieza.formato === "Carrusel" && i < 3 && conMiniaturas ? el("button", {
+        conMiniaturas && infoImagen(pieza, i + 1) ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
-          title: IMAGEN_TARJETA[i + 1].ayuda,
+          title: infoImagen(pieza, i + 1).ayuda,
           onclick: () => abrirIlustraciones(pieza, i + 1, c[campo] || ""),
-        }, IMAGEN_TARJETA[i + 1].boton) : null),
+        }, infoImagen(pieza, i + 1).boton) : null),
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
       conMiniaturas ? miniatura(pieza, i) : null);
   });
@@ -719,6 +719,21 @@ const IMAGEN_TARJETA = {
        ayuda: "Genera en Krea variantes del ícono de línea de la tarjeta 3, con el estilo de los íconos de la guía visual" },
 };
 
+// Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.
+const RE_CIFRA = /[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?/;
+
+/** Qué imagen lleva la tarjeta o escena `n` de la pieza (null si no lleva). */
+function infoImagen(pieza, n) {
+  if (pieza.formato !== "Reel") return IMAGEN_TARJETA[n] || null;
+  if (n === 1) return { reel: true, boton: "Ícono animado de la escena 1", titulo: "Ícono isométrico animado · Escena 1",
+    generar: "Generar íconos", alt: "Ícono generado en Krea",
+    ayuda: "Genera en Krea el ícono isométrico de la escena 1 y su animación corta en video" };
+  const texto = pieza.contenido?.[CAMPOS.Reel[n - 1]?.campo] || "";
+  if (n > 4 || RE_CIFRA.test(texto)) return null; // el cierre no lleva imagen; con cifra, la cifra va en grande
+  return { reel: true, boton: `Ícono de la escena ${n}`, titulo: `Ícono de línea · Escena ${n}`, generar: "Generar íconos",
+    alt: "Ícono de línea generado en Krea", ayuda: `Genera en Krea un ícono de línea simple para la escena ${n}, basado en su texto` };
+}
+
 const ilus = { pieza: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "",
   sugiriendo: false, previas: [], controlSugerir: null };
 
@@ -733,7 +748,7 @@ async function elegirIlustracion(it, elegida) {
   try {
     await api("ilustracion-elegir", { metodo: "POST", cuerpo: { id: it.id, elegida } });
     refrescarMiniaturasDe(ilus.pieza);
-    if (elegida) { $("dialogo-ilustraciones").close(); return; } // elegida: se cierra y se ve en la miniatura
+    if (elegida && !(ilus.pieza.formato === "Reel" && ilus.tarjeta === 1)) { $("dialogo-ilustraciones").close(); return; } // elegida: se cierra y se ve en la miniatura
   } catch (e) {
     ilus.mensaje = `No se pudo ${elegida ? "usar" : "quitar"} la imagen: ${e.message}`;
   }
@@ -741,12 +756,14 @@ async function elegirIlustracion(it, elegida) {
 }
 
 function renderIlustraciones() {
-  const hayEnCola = ilus.items.some((it) => it.estado === "en_cola");
+  const hayEnCola = ilus.items.some((it) => it.estado === "en_cola" || it.video_estado === "en_cola");
+  const conVideo = ilus.pieza?.formato === "Reel" && ilus.tarjeta === 1;
+  const donde = ilus.info?.reel ? "la escena" : "la tarjeta";
   const mensaje = ilus.mensaje || (ilus.configurado ? "" : "Las imágenes aún no están activadas: falta configurar KREA_API_TOKEN en Vercel (ver README).");
   $("ilus-aviso").hidden = !mensaje;
   $("ilus-aviso").textContent = mensaje;
   $("ilus-generar").disabled = ilus.enviando || ilus.sugiriendo || !ilus.configurado;
-  $("ilus-generar").textContent = ilus.enviando ? "Enviando a Krea…" : (ilus.items.length ? "Generar más" : IMAGEN_TARJETA[ilus.tarjeta].generar);
+  $("ilus-generar").textContent = ilus.enviando ? "Enviando a Krea…" : (ilus.items.length ? "Generar más" : ilus.info.generar);
   $("ilus-sugerir").disabled = ilus.enviando;
   $("ilus-sugerir").textContent = ilus.sugiriendo ? "Detener sugerencia" : "Sugerir otra descripción";
   $("ilus-detener").hidden = !hayEnCola;
@@ -756,19 +773,39 @@ function renderIlustraciones() {
       clase: `galeria__marco${it.estado === "en_cola" ? " galeria__marco--cargando" : ""}${it.estado === "fallida" ? " galeria__marco--fallida" : ""}`,
       style: `background-color: ${/^#[0-9A-Fa-f]{6}$/.test(it.fondo) ? it.fondo : "#D8D6D2"}; aspect-ratio: ${it.ancho || 4} / ${it.alto || 3}`,
     });
-    if (lista) marco.append(el("img", { src: it.url, alt: IMAGEN_TARJETA[ilus.tarjeta].alt, loading: "lazy" }));
+    if (lista) marco.append(el("img", { src: it.url, alt: ilus.info.alt, loading: "lazy" }));
     else if (it.estado === "en_cola") marco.append("Generando en Krea…");
     else marco.append(it.error || "No se pudo generar");
     return el("figure", { clase: `galeria__item${it.elegida ? " galeria__item--elegida" : ""}` }, marco,
       el("figcaption", { clase: "galeria__pie" },
         el("div", { clase: "galeria__acciones" },
-          lista && !it.elegida ? el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: () => elegirIlustracion(it, true) }, "Usar en la tarjeta") : null,
-          it.elegida ? el("span", {}, el("strong", {}, "✓ En la tarjeta")) : null,
+          lista && !it.elegida ? el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: () => elegirIlustracion(it, true) }, `Usar en ${donde}`) : null,
+          it.elegida ? el("span", {}, el("strong", {}, `✓ En ${donde}`)) : null,
           it.elegida ? el("button", { clase: "btn btn--texto", type: "button", onclick: () => elegirIlustracion(it, false) }, "Quitar") : null),
-        lista ? el("a", { href: it.url, target: "_blank", rel: "noopener noreferrer" }, "Abrir en Krea") : el("span", {}, `${it.ancho}×${it.alto}`)));
+        lista ? el("a", { href: it.url, target: "_blank", rel: "noopener noreferrer" }, "Abrir en Krea") : el("span", {}, `${it.ancho}×${it.alto}`),
+        conVideo && lista ? renderVideo(it) : null));
   }) : [el("p", { clase: "ayuda" }, "Aún no hay imágenes para esta tarjeta. Revisa la descripción y pulsa «Generar».")]));
   clearTimeout(ilus.timer);
   if (hayEnCola && $("dialogo-ilustraciones").open) ilus.timer = setTimeout(cargarIlustraciones, 4000);
+}
+
+function renderVideo(it) {
+  const animar = (texto) => el("button", { clase: "btn btn--secundario btn--chico", type: "button",
+    title: "Krea anima este ícono en un video corto en bucle (consume saldo de Krea)",
+    onclick: async () => {
+      try { await api("ilustracion-animar", { metodo: "POST", cuerpo: { id: it.id } }); }
+      catch (e) { ilus.mensaje = `No se pudo animar: ${e.message}`; }
+      await cargarIlustraciones();
+    } }, texto);
+  if (it.video_estado === "lista" && it.video_url?.startsWith("https://")) {
+    return el("div", { clase: "galeria__video" },
+      el("video", { src: it.video_url, autoplay: true, loop: true, muted: true, playsinline: true, controls: true }),
+      el("a", { href: it.video_url, target: "_blank", rel: "noopener noreferrer", download: "" }, "Descargar video"));
+  }
+  if (it.video_estado === "en_cola") return el("p", { clase: "ayuda" }, "Animando en Krea… (1-3 minutos)");
+  if (it.video_estado === "fallida") return el("div", { clase: "galeria__video" },
+    el("p", { clase: "ayuda" }, it.video_error || "No se pudo animar."), animar("Reintentar animación"));
+  return animar("Animar ícono");
 }
 
 async function cargarIlustraciones() {
@@ -784,7 +821,8 @@ async function cargarIlustraciones() {
 
 async function abrirIlustraciones(pieza, tarjeta, texto) {
   Object.assign(ilus, { pieza, tarjeta, items: [], enviando: false, mensaje: "", sugiriendo: false, previas: [] });
-  $("titulo-ilustraciones").textContent = IMAGEN_TARJETA[tarjeta].titulo;
+  ilus.info = infoImagen(pieza, tarjeta);
+  $("titulo-ilustraciones").textContent = ilus.info.titulo;
   $("ilus-texto").textContent = texto || "—";
   $("ilus-descripcion").value = "";
   renderIlustraciones();

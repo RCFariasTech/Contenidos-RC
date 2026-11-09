@@ -1,7 +1,8 @@
 """Guion visual de un reel en PDF vertical 9:16 (1080 x 1920) · sistema gráfico 2026: una página por escena.
 
-Cada página trae el texto en pantalla (editable), el espacio para la imagen o el video y los tiempos.
-El diseñador lo abre en Adobe Express ("Empezar con tu contenido"), inserta los medios y anima.
+Cada página trae el texto en pantalla (editable) y los tiempos. Escena 1: ícono isométrico de Krea (su versión
+animada en video se descarga desde la app). Escenas 2-4: la primera cifra del texto en grande o, si no hay cifra, un
+ícono de línea de Krea. Escena 5: cierre con logos, sin imagen.
 Todo queda dentro de la zona segura de Instagram (sin texto en los ~220 px de arriba ni los ~450 px de abajo).
 """
 
@@ -25,8 +26,9 @@ FONDOS = (("marino", "gris", "blanco"), ("azul", "blanco", "blanco"), ("gris", "
 
 
 class _Hoja:
-    def __init__(self, c, col, guias):
-        self.c, self.col, self.guias = c, col, guias
+    def __init__(self, c, col, guias, imagenes=None):
+        self.c, self.col, self.guias, self.imagenes = c, col, guias, imagenes or {}
+        self.fondo_clave, self.tarjeta, self.ancho, self.alto = "marino", 0, W, H
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color])
@@ -44,38 +46,103 @@ class _Hoja:
             y -= tam * inter
         return len(lineas) * tam * inter
 
+    def png(self, datos, x, y_sup, ancho, alto):
+        from reportlab.lib.utils import ImageReader
+        self.c.drawImage(ImageReader(io.BytesIO(datos)), x, H - y_sup - alto, ancho, alto, mask="auto",
+                         preserveAspectRatio=True, anchor="sw")
+
+    def guia(self, x, y_sup, ancho, alto, rotulo, tinta):
+        """Recuadro punteado con el rótulo de qué va (solo en la vista previa)."""
+        if not self.guias:
+            return
+        c, y = self.c, H - y_sup - alto
+        c.saveState()
+        c.setFillColor(self.col[tinta])
+        c.setFillAlpha(0.12)
+        c.setStrokeColor(self.col[tinta])
+        c.setStrokeAlpha(0.7)
+        c.setLineWidth(3)
+        c.setDash(14, 10)
+        c.roundRect(x, y, ancho, alto, 28, stroke=1, fill=1)
+        c.restoreState()
+        c.setFillColor(self.col[tinta])
+        c.setFont(TITULO, 28)
+        c.drawCentredString(x + ancho / 2, y + alto / 2 - 10, rotulo)
+
+
+# Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
+# la 5 (cierre) no lleva imagen.
+AREA_ICONO, AREA_LINEA = 640, 300
+
+
+def tipos_imagen(contenido: dict) -> dict[int, str]:
+    """{escena: tipo} de las escenas que llevan imagen de Krea en este reel."""
+    tipos = {1: "icono"}
+    for n in (2, 3, 4):
+        if not tarjetas.separar_cifra((contenido.get(CAMPOS[n - 1]) or ""))[1]:
+            tipos[n] = "linea"
+    return tipos
+
 
 def _pagina(L, numero: int, texto: str, variante: int) -> None:
-    cierre = numero == len(CAMPOS)  # la última escena lleva los logos en vez de los nombres de las empresas
-    fondo, c_texto, c_apoyo = ("marino", "blanco", "blanco") if cierre else FONDOS[(variante + numero - 1) % len(FONDOS)]
+    cierre = numero == len(CAMPOS)  # la última escena lleva los logos y no lleva imagen
+    fondo = "marino" if cierre else FONDOS[(variante + numero - 1) % len(FONDOS)][0]
+    tema = tarjetas.TEMAS[fondo]
     rol, tiempo = ROLES[numero - 1]
-    c = L.c
-    L.fondo(fondo)
-    if L.guias:  # la etiqueta con escena, rol y tiempo solo se ve en la vista previa
-        L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", TEXTO, c_apoyo, M, ZONA_ARRIBA + 20, W - 2 * M, 50, 30)
-    # Espacio para la foto o el video (con velo azul, como la tarjeta 2 del carrusel)
-    y_caja, alto_caja = ZONA_ARRIBA + 110, 520 if cierre else 800
-    tinta = L.col["marino"] if fondo == "gris" else L.col["blanco"]
-    c.saveState()
-    c.setFillColor(tinta)
-    c.setFillAlpha(0.12)
-    c.setStrokeColor(tinta)
-    c.setStrokeAlpha(0.7)
-    c.setLineWidth(3)
-    c.setDash(14, 10)
-    c.roundRect(M, H - y_caja - alto_caja, W - 2 * M, alto_caja, 28, stroke=1, fill=1)
-    c.restoreState()
-    c.setFillColor(tinta)
-    c.setFont(TITULO, 30)
-    c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 + 10, "FOTO O VIDEO · con velo azul")
-    if L.guias:
-        c.setFont(TEXTO, 24)
-        c.drawCentredString(W / 2, H - y_caja - alto_caja / 2 - 28, f"Escena {numero} · {tiempo}")
-    y_texto = y_caja + alto_caja + 60
-    limite = 1180 if cierre else H - ZONA_ABAJO
-    L.bloque(texto, TITULO, c_texto, M, y_texto, W - 2 * M, limite - y_texto - 20, 96, inter=1.05)
+    L.fondo_clave, L.tarjeta = fondo, numero
+    datos = None if cierre else tarjetas._fondo_con_imagen(L, L.imagenes.get(numero))
     if cierre:
+        L.fondo(fondo)
+    if L.guias:  # la etiqueta con escena, rol y tiempo solo se ve en la vista previa
+        L.bloque(f"ESCENA {numero} · {rol.upper()} · {tiempo}", TEXTO, tema["texto"], M, ZONA_ARRIBA + 20,
+                 W - 2 * M, 50, 30)
+    arriba, limite = ZONA_ARRIBA + 110, H - ZONA_ABAJO - 20
+    if cierre:
+        L.bloque(texto, TITULO, "blanco", M, 700, W - 2 * M, 1180 - 700 - 20, 96, inter=1.05)
         _logos(L)
+        return
+    antes, cifra, despues = tarjetas.separar_cifra(texto) if numero > 1 else (texto, "", "")
+    if cifra:  # cifra gigante entre dos líneas de texto, como la tarjeta de dato del carrusel
+        usado = L.bloque(antes, TITULO, tema["texto"], M, arriba, W - 2 * M, 300, 72, inter=1.05)
+        y = arriba + usado + 40
+        tam = 320
+        while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
+            tam -= 10
+        L.c.setFillColor(L.col[tema["cifra"]])
+        L.c.setFont(TITULO, tam)
+        L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
+        y += tam * 0.86 + 60
+        L.bloque(despues, TITULO, tema["texto"], M, y, W - 2 * M, limite - y, 72, inter=1.05)
+        return
+    if numero == 1:
+        lado, x, y_img = AREA_ICONO, (W - AREA_ICONO) / 2, arriba
+    else:
+        lado, x, y_img = AREA_LINEA, M - 30, arriba
+    puesto = False
+    if datos:
+        try:
+            L.png(tarjetas.recortar(datos, lado, lado, borde_suave=True), x, y_img, lado, lado)
+            puesto = True
+        except Exception:
+            pass
+    if not puesto:
+        if numero == 1:
+            L.guia(x, y_img, lado, lado, "ÍCONO ISOMÉTRICO ANIMADO · Krea", tema["texto"])
+        else:
+            from reportlab.graphics import renderPDF
+            dib = tarjetas._svg_recoloreado(
+                tarjetas.DIR_ICONOS / f"{tarjetas._icono_de({}, variante + numero * 5)}.svg",
+                L.col[tema["linea"]], L.col[tema["acento"]])
+            k = 200 / dib.width
+            dib.scale(k, k)
+            renderPDF.draw(dib, L.c, M, H - arriba - 40 - dib.height * k)
+    elif numero == 1 and L.guias:
+        L.c.setFillColor(L.col[tema["texto"]])
+        L.c.setFont(TEXTO, 24)
+        L.c.drawCentredString(W / 2, H - y_img - lado - 4, "Animado: el video se descarga desde la app")
+    y_texto = y_img + lado + 60
+    L.bloque(texto, TITULO, tema["titulo"] if numero == 1 else tema["texto"], M, y_texto, W - 2 * M,
+             limite - y_texto, 96, inter=1.05)
 
 
 # En el logo de Constellation, la línea de base de la palabra CONSTELLATION está a esta fracción de su alto (desde
@@ -104,14 +171,14 @@ def _logos(L) -> None:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,
-                guias: bool = False) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None) -> bytes:
     """guias=True añade la etiqueta de cada escena (vista previa); False la omite (descarga)."""
     tarjetas._registrar_fuentes()
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(W, H))
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
-    L = _Hoja(c, tarjetas._colores(), guias)
+    L = _Hoja(c, tarjetas._colores(), guias, imagenes)
     for i, campo in enumerate(CAMPOS, 1):
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante + semilla)
         c.showPage()

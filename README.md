@@ -87,7 +87,9 @@ Cada carrusel tiene el botón **Ver tarjetas**, que abre una vista previa tipo c
 
 Cada reel tiene el botón **Ver guion visual**: vista previa y descarga de un PDF 9:16 (1080 × 1920) con una página por escena (etiqueta con rol y tiempo, espacio **IMAGEN O VIDEO** y el texto en pantalla editable, dentro de la zona segura de Instagram). El diseñador lo abre en Adobe Express con «Empezar con tu contenido», inserta los medios y anima. Código en `rc/reels.py`.
 
-Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). **Gancho.** En la tarjeta 1 de cada carrusel y la escena 1 de cada reel (pieza sin aprobar) están **Otro gancho**, que propone con IA un gancho nuevo distinto de todos los anteriores de esa pieza, y **Editar gancho**, para escribirlo a mano (Enter guarda, Esc cancela). Cada cambio se guarda como versión nueva (motivos `gancho` y `edicion`) y respeta el límite de palabras (8 en carrusel, 6 en reel); el resto del contenido no cambia.
+Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el principio (clic para verla en grande). **Reels.** Escena 1: ícono isométrico de Krea y su versión animada (video corto en bucle de `krea.modelo_video`, Seedance 2.0 Mini, 5 s, 720p) que se ve y descarga desde el panel «Ícono animado de la escena 1»; el PDF lleva el ícono fijo. Escenas 2-4: si el texto tiene una cifra, se muestra en grande; si no, un ícono de línea de Krea basado en el texto de esa escena. Escena 5: cierre con logos, sin imagen. Las imágenes automáticas también se piden para los reels y el ícono de la escena 1 se anima solo cuando queda listo.
+
+**Gancho.** En la tarjeta 1 de cada carrusel y la escena 1 de cada reel (pieza sin aprobar) están **Otro gancho**, que propone con IA un gancho nuevo distinto de todos los anteriores de esa pieza, y **Editar gancho**, para escribirlo a mano (Enter guarda, Esc cancela). Cada cambio se guarda como versión nueva (motivos `gancho` y `edicion`) y respeta el límite de palabras (8 en carrusel, 6 en reel); el resto del contenido no cambia.
 
 **Detener.** Mientras una pieza se genera, rehace o ajusta, aparece **Detener**: la pieza vuelve a su versión anterior (o queda con «Reintentar» si aún no tenía contenido) y, si era un lote, no sigue con las demás. La llamada a Claude que ya estaba en curso termina en el servidor (se paga), pero su resultado se descarta y no se hacen más reparaciones. En el panel de imágenes, **Detener generación** cancela en Krea las variantes en cola (Krea no cobra las canceladas) y **Detener sugerencia** corta la sugerencia de descripción.
 
@@ -114,6 +116,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `007_ilustracion_tarjeta_3.sql`: la tarjeta 3 (ícono de línea) también guarda variantes de Krea.
 - `008_ilustracion_automatica.sql`: marca las imágenes generadas automáticamente al terminar los textos.
 - `009_motivo_gancho.sql`: versiones por gancho regenerado o editado a mano.
+- `010_reels_iconos_video.sql`: imágenes en las escenas del reel y video del ícono animado.
 
 ## Desarrollo local
 
