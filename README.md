@@ -64,7 +64,7 @@ El mensaje es una Adaptive Card dentro de `{"type": "message", "attachments": [.
 
 Sistema gráfico 2026 (guía visual de noviembre de 2026): paleta `paleta_2026` de `config/marca.json`, títulos en Space Grotesk y párrafos en Sora (`plantilla/fuentes/`), logo RC / FARÍAS blanco (`plantilla/logo_rc_blanco_2026.png`) e íconos de línea de la guía como vectores (`plantilla/iconos_linea/`, uno por concepto). Ya no se usan personajes ilustrados.
 
-En las tarjetas 1 y 2 de cada carrusel, los botones **Ícono de la tarjeta 1** y **Foto de la tarjeta 2** generan 3 variantes con **Nano Banana Pro** en Krea (`config/ajustes.json` → `krea`). Los prompts de estilo están en `rc/estilo_iconos.py`:
+En las tarjetas 1, 2 y 3 de cada carrusel, los botones **Ícono de la tarjeta 1**, **Foto de la tarjeta 2** e **Ícono de la tarjeta 3** generan 2 variantes por clic con **Nano Banana Pro** en Krea (`config/ajustes.json` → `krea`). Los prompts de estilo están en `rc/estilo_iconos.py`:
 - **Ícono (tarjeta 1):** ícono isométrico con el estilo de la guía, sobre azul marino; se envían como referencia los íconos isométricos de la guía publicados en `public/marca/iso/` (por eso `krea.url_publica` o `APP_URL` debe apuntar a la URL pública de la app).
 - **Foto (tarjeta 2):** foto documental realista de personas latinas comunes de clase media, bien presentadas, con piel real y luz natural; se monta con velo azul.
 

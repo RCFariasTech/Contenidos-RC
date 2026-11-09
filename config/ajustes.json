@@ -51,7 +51,7 @@
   "krea": {
     "modelo": "google/nano-banana-pro",
     "resolucion": "1K",
-    "variantes_por_clic": 3,
+    "variantes_por_clic": 2,
     "url_publica": "https://contenidos-rc.vercel.app"
   }
 }

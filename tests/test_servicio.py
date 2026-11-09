@@ -379,7 +379,7 @@ class TestFlujo(unittest.TestCase):
         carrusel, _ = self._mes_generado()
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=["a", "b", "c"]):
-            servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="una alcancía")
+            servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="una alcancía", cantidad=3)
         self.bd.tablas["ilustraciones"][0].update(estado="lista", url="https://gen.krea.ai/images/a.png")
         canceladas = []
         with mock.patch.object(krea, "cancelar", side_effect=canceladas.append):
@@ -436,19 +436,19 @@ class TestFlujo(unittest.TestCase):
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=crear):
             filas = servicio.generar_ilustraciones(carrusel["id"], 1)["items"]
-            self.assertEqual(len(filas), 3)
-            self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2", "job-3"})
+            self.assertEqual(len(filas), 2)                                    # 2 opciones por clic (ahorro)
+            self.assertEqual({f["job_id"] for f in filas}, {"job-1", "job-2"})
             self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
             prompt, proporcion, referencias = enviados[0]
             self.assertIn("A 3D character pushing a shopping cart", prompt)      # el prompt_krea de la tarjeta
             self.assertIn("isometric", prompt)                                  # tarjeta 1: ícono isométrico
             self.assertEqual(proporcion, "1:1")
             self.assertTrue(referencias and all(r.endswith(".png") for r in referencias))
-            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 3)
+            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 2)
             prompt, proporcion, referencias = enviados[-1]
             self.assertIn("documentary photograph", prompt)                    # tarjeta 2: foto
             self.assertEqual((proporcion, referencias), ("16:9", []))
-            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 3, descripcion="una lupa")["items"]), 3)
+            self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 3, descripcion="una lupa")["items"]), 2)
             prompt, proporcion, referencias = enviados[-1]
             self.assertIn("minimalist line icon", prompt)                      # tarjeta 3: ícono de línea
             self.assertIn("una lupa", prompt)
@@ -543,7 +543,7 @@ class TestFlujo(unittest.TestCase):
         carrusel, _ = self._mes_generado()
         with mock.patch.object(krea, "configurado", return_value=True), \
                 mock.patch.object(krea, "crear_trabajo", side_effect=["j1", "j2", "j3"]):
-            servicio.generar_ilustraciones(carrusel["id"], 1)
+            servicio.generar_ilustraciones(carrusel["id"], 1, cantidad=3)
         estados = {"j1": {"estado": "lista", "url": "https://gen.krea.ai/images/x.png", "error": None},
                    "j2": {"estado": "en_cola", "url": None, "error": None},
                    "j3": {"estado": "fallida", "url": None, "error": "Krea no pudo generarla."}}
