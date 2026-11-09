@@ -88,6 +88,11 @@ def crear_trabajo(prompt: str, proporcion: str, referencias: list[str] | None = 
     return job_id
 
 
+def cancelar(job_id: str) -> None:
+    """Cancela un trabajo en cola o en proceso (DELETE /jobs/{id}); Krea no cobra los cancelados."""
+    _peticion("DELETE", f"/jobs/{job_id}")
+
+
 def consultar(job_id: str) -> dict:
     """{"estado": "en_cola"|"lista"|"fallida", "url": str|None, "error": str|None}."""
     resp = _peticion("GET", f"/jobs/{job_id}")

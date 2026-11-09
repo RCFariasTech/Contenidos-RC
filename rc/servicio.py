@@ -96,6 +96,32 @@ def iniciar_mes(mes: date) -> dict:
 
 # ---------- generación y ajuste ----------
 
+class Detenida(ErrorNegocio):
+    """El usuario detuvo la generación: el resultado se descarta sin tocar el estado que dejó «Detener»."""
+
+
+EN_PROCESO = "generando,ajustando"
+
+
+def _sigue_activa(pieza_id: int) -> None:
+    """Corta el trabajo (antes de cada llamada costosa) si el usuario lo detuvo."""
+    if not db.seleccionar("piezas", select="id", id=f"eq.{int(pieza_id)}", estado=f"in.({EN_PROCESO})"):
+        raise Detenida("Generación detenida.")
+
+
+def detener_pieza(pieza_id: int) -> dict:
+    """Detiene la generación, el rehacer o el ajuste en curso: la pieza vuelve a su última versión (o queda para
+    reintentar si aún no tenía contenido). Lo que esté calculando el servidor se descarta al terminar."""
+    pieza = _pieza(int(pieza_id))
+    nuevo = ({"estado": "generada", "error_msg": "Detuviste la generación; se conserva la versión anterior."}
+             if pieza.get("contenido") else
+             {"estado": "error", "error_msg": "Detuviste la generación. Pulsa «Reintentar» cuando quieras generarla."})
+    filas = db.actualizar("piezas", nuevo, id=f"eq.{pieza['id']}", estado=f"in.({EN_PROCESO})")
+    if not filas:
+        raise ErrorNegocio("Esta pieza no se está generando.")
+    return filas[0]
+
+
 def _reclamar(pieza_id: int, desde: str, hacia: str) -> dict | None:
     """Cambio de estado atómico; también rescata piezas bloqueadas por una invocación caída."""
     filas = db.actualizar("piezas", {"estado": hacia, "error_msg": None},
@@ -122,6 +148,7 @@ def _validar_y_reparar(pieza_fila: dict, resultado: dict, urls_validas: list[str
     for _ in range(a["max_reparaciones"]):
         if not informe["reparables"]:
             break
+        _sigue_activa(pieza_fila["id"])
         reparado = generador.reparar(_slot(pieza_fila), contenido, informe["reparables"])
         for k, v in reparado["uso"].items():
             uso[k] = uso.get(k, 0) + v
@@ -138,12 +165,15 @@ def _guardar_version(pieza: dict, contenido: dict, informe: dict, urls: list[str
     acumulado = dict(pieza.get("uso_tokens") or {})
     for k, v in uso.items():
         acumulado[k] = acumulado.get(k, 0) + v
-    fila = db.actualizar("piezas", {
+    filas = db.actualizar("piezas", {
         "contenido": contenido, "version": version, "estado": "generada", "error_msg": None,
         "validacion": {"errores": informe["errores"], "advertencias": informe["advertencias"],
                        "urls": urls},
         "uso_tokens": acumulado,
-    }, id=f"eq.{pieza['id']}")[0]
+    }, id=f"eq.{pieza['id']}", estado=f"in.({EN_PROCESO})")  # si el usuario la detuvo, no se guarda
+    if not filas:
+        raise Detenida("Generación detenida.")
+    fila = filas[0]
     db.insertar("versiones_pieza", {"pieza_id": pieza["id"], "version": version,
                                     "contenido": contenido, "motivo": motivo})
     return fila
@@ -176,6 +206,8 @@ def generar_pieza(pieza_id: int) -> dict:
         fila = _guardar_version(pieza, contenido, informe, urls, uso, "generacion")
         _actualizar_estado_mes(pieza["mes_id"])
         return fila
+    except Detenida:
+        raise
     except Exception as e:
         log.exception("Fallo al generar la pieza %s", pieza_id)
         db.actualizar("piezas", {"estado": "error", "error_msg": str(e)[:500]}, id=f"eq.{pieza['id']}")
@@ -200,6 +232,8 @@ def rehacer_pieza(pieza_id: int) -> dict:
         contenido, informe, uso = _validar_y_reparar(pieza, resultado, urls, historial, hermanas + descartados)
         fila = _guardar_version(pieza, contenido, informe, urls, uso, "rehacer")
         return fila
+    except Detenida:
+        raise
     except Exception as e:
         log.exception("Fallo al rehacer la pieza %s", pieza_id)
         db.actualizar("piezas", {"estado": "generada", "error_msg": f"No se pudo rehacer la propuesta: {str(e)[:400]}"},
@@ -226,6 +260,8 @@ def ajustar_pieza(pieza_id: int) -> dict:
         db.actualizar("comentarios", {"aplicado_en": _ahora(), "version_resultante": fila["version"]},
                       id=f"in.({ids})")
         return fila
+    except Detenida:
+        raise
     except Exception as e:
         log.exception("Fallo al ajustar la pieza %s", pieza_id)
         db.actualizar("piezas", {"estado": "generada", "error_msg": f"El ajuste falló: {str(e)[:400]}"},
@@ -428,6 +464,20 @@ def sugerir_descripcion(pieza_id: int, tarjeta: int, previas: list[str] | None =
     except generador.ErrorGeneracion as e:
         raise ErrorNegocio(str(e)) from e
     return {"descripcion": descripcion}
+
+
+def detener_ilustraciones(pieza_id: int, tarjeta: int) -> dict:
+    """Cancela en Krea las variantes en cola de esa tarjeta (Krea no cobra los trabajos cancelados)."""
+    filas = db.seleccionar("ilustraciones", select="id,job_id", pieza_id=f"eq.{int(pieza_id)}",
+                           tarjeta=f"eq.{int(tarjeta)}", estado="eq.en_cola")
+    for f in filas:
+        try:
+            krea.cancelar(f["job_id"])
+        except ErrorNegocio:
+            log.warning("Krea no canceló el trabajo %s (quizá ya había terminado)", f["job_id"])
+        db.actualizar("ilustraciones", {"estado": "fallida", "error": "Detenida por el usuario."},
+                      id=f"eq.{f['id']}", estado="eq.en_cola")
+    return {"detenidas": len(filas)}
 
 
 def elegir_ilustracion(ilustracion_id: int, elegida: bool = True) -> dict:

@@ -28,11 +28,12 @@ async function authSupabase(grantType, cuerpo) {
   Sesion.guardar({ access_token: datos.access_token, refresh_token: datos.refresh_token });
 }
 
-async function api(ruta, { metodo = "GET", cuerpo } = {}, reintentar = true) {
+async function api(ruta, { metodo = "GET", cuerpo, senal } = {}, reintentar = true) {
   const sesion = Sesion.leer();
   const opciones = {
     method: metodo,
     headers: { Authorization: `Bearer ${sesion?.access_token || ""}` },
+    signal: senal,
   };
   if (cuerpo !== undefined) {
     opciones.headers["Content-Type"] = "application/json";
@@ -42,7 +43,7 @@ async function api(ruta, { metodo = "GET", cuerpo } = {}, reintentar = true) {
   if (r.status === 401 && reintentar && sesion?.refresh_token) {
     try {
       await authSupabase("refresh_token", { refresh_token: sesion.refresh_token });
-      return api(ruta, { metodo, cuerpo }, false);
+      return api(ruta, { metodo, cuerpo, senal }, false);
     } catch { Sesion.borrar(); }
   }
   const datos = await r.json().catch(() => ({}));
@@ -387,7 +388,14 @@ function renderProceso(pieza) {
         onclick: () => generarPieza(pieza.id),
       }, "Reintentar")));
   }
-  return el("div", { clase: "estado-proceso", role: "status" }, el("span", { clase: "giro", "aria-hidden": "true" }), textos[pieza.estado] || "Procesando…");
+  const detenible = ["generando", "ajustando"].includes(pieza.estado);
+  return el("div", { clase: "estado-proceso", role: "status" },
+    el("span", { clase: "giro", "aria-hidden": "true" }), textos[pieza.estado] || "Procesando…",
+    detenible ? el("button", {
+      clase: "btn btn--secundario btn--chico estado-proceso__detener", type: "button",
+      title: "Detiene esta generación: la pieza vuelve a su versión anterior (o queda para reintentar)",
+      onclick: () => detenerPieza(pieza.id),
+    }, "Detener") : null);
 }
 
 function renderPieza(pieza) {
@@ -442,18 +450,34 @@ async function accion(piezaId, fn) {
   await cargarMes().catch((e) => aviso(`No se pudo actualizar: ${e.message}`));
 }
 
+const controles = new Map(); // piezaId → AbortController de la petición en curso
+
 async function procesar(piezaId, ruta) {
+  const control = new AbortController();
+  controles.set(piezaId, control);
   estado.ocupadas.add(piezaId);
   estado.mensajes[piezaId] = null;
   render();
   try {
-    await api(ruta, { metodo: "POST", cuerpo: { pieza_id: piezaId } });
+    await api(ruta, { metodo: "POST", cuerpo: { pieza_id: piezaId }, senal: control.signal });
   } catch (e) {
-    estado.mensajes[piezaId] = e.message;
+    if (!control.signal.aborted) estado.mensajes[piezaId] = e.message;
   } finally {
+    controles.delete(piezaId);
     estado.ocupadas.delete(piezaId);
     await cargarMes().catch(() => render());
   }
+}
+
+async function detenerPieza(piezaId) {
+  estado.detenerLote = true; // si había una generación o unos ajustes en lote, no sigue con las demás piezas
+  try {
+    await api("detener-pieza", { metodo: "POST", cuerpo: { pieza_id: piezaId } });
+  } catch (e) {
+    estado.mensajes[piezaId] = `No se pudo detener: ${e.message}`;
+  }
+  controles.get(piezaId)?.abort();
+  await cargarMes().catch(() => render());
 }
 
 const generarPieza = (id) => procesar(id, "generar-pieza");
@@ -461,8 +485,10 @@ const generarPieza = (id) => procesar(id, "generar-pieza");
 async function generarPendientes() {
   if (estado.generandoTodo) return;
   estado.generandoTodo = true;
+  estado.detenerLote = false;
   try {
     for (const pieza of estado.piezas.filter((p) => p.estado === "pendiente")) {
+      if (estado.detenerLote) break;
       aviso(`Generando la pieza de la semana ${pieza.semana}… Puedes dejar esta pestaña abierta.`);
       await generarPieza(pieza.id);
     }
@@ -487,7 +513,9 @@ $("btn-generar").addEventListener("click", async () => {
 
 $("btn-ajustes").addEventListener("click", async () => {
   const conComentarios = estado.piezas.filter((p) => pendientes(p).length && p.estado === "generada");
+  estado.detenerLote = false;
   for (const [i, pieza] of conComentarios.entries()) {
+    if (estado.detenerLote) break;
     aviso(`Aplicando ajustes ${i + 1} de ${conComentarios.length} (semana ${pieza.semana})…`);
     await procesar(pieza.id, "ajustar-pieza");
   }
@@ -649,7 +677,7 @@ const IMAGEN_TARJETA = {
 };
 
 const ilus = { pieza: null, tarjeta: 1, items: [], configurado: true, timer: null, enviando: false, mensaje: "",
-  sugiriendo: false, previas: [] };
+  sugiriendo: false, previas: [], controlSugerir: null };
 
 function refrescarMiniaturasDe(pieza) {
   miniaturas.rev.set(pieza.id, (miniaturas.rev.get(pieza.id) || 0) + 1);
@@ -675,8 +703,9 @@ function renderIlustraciones() {
   $("ilus-aviso").textContent = mensaje;
   $("ilus-generar").disabled = ilus.enviando || ilus.sugiriendo || !ilus.configurado;
   $("ilus-generar").textContent = ilus.enviando ? "Enviando a Krea…" : (ilus.items.length ? "Generar más" : IMAGEN_TARJETA[ilus.tarjeta].generar);
-  $("ilus-sugerir").disabled = ilus.enviando || ilus.sugiriendo;
-  $("ilus-sugerir").textContent = ilus.sugiriendo ? "Pensando otra opción…" : "Sugerir otra descripción";
+  $("ilus-sugerir").disabled = ilus.enviando;
+  $("ilus-sugerir").textContent = ilus.sugiriendo ? "Detener sugerencia" : "Sugerir otra descripción";
+  $("ilus-detener").hidden = !hayEnCola;
   $("ilus-galeria").replaceChildren(...(ilus.items.length ? ilus.items.map((it) => {
     const lista = it.estado === "lista" && it.url?.startsWith("https://");
     const marco = el("div", {
@@ -728,24 +757,37 @@ async function abrirIlustraciones(pieza, tarjeta, texto) {
 }
 
 async function sugerirDescripcion() {
+  if (ilus.sugiriendo) { ilus.controlSugerir?.abort(); return; }
   const actual = $("ilus-descripcion").value.trim();
   if (actual && !ilus.previas.includes(actual)) ilus.previas.push(actual);
   ilus.sugiriendo = true;
+  ilus.controlSugerir = new AbortController();
   ilus.mensaje = "";
   renderIlustraciones();
   try {
-    const r = await api("ilustracion-sugerir", { metodo: "POST", cuerpo: {
+    const r = await api("ilustracion-sugerir", { metodo: "POST", senal: ilus.controlSugerir.signal, cuerpo: {
       pieza_id: ilus.pieza.id, tarjeta: ilus.tarjeta, previas: ilus.previas.slice(-6) } });
     $("ilus-descripcion").value = r.descripcion;
     ilus.previas.push(r.descripcion);
   } catch (e) {
-    ilus.mensaje = `No se pudo sugerir una descripción: ${e.message}`;
+    if (!ilus.controlSugerir.signal.aborted) ilus.mensaje = `No se pudo sugerir una descripción: ${e.message}`;
   }
   ilus.sugiriendo = false;
+  ilus.controlSugerir = null;
   renderIlustraciones();
 }
 
 $("ilus-sugerir").addEventListener("click", sugerirDescripcion);
+$("ilus-detener").addEventListener("click", async () => {
+  $("ilus-detener").disabled = true;
+  try {
+    await api("ilustraciones-detener", { metodo: "POST", cuerpo: { pieza_id: ilus.pieza.id, tarjeta: ilus.tarjeta } });
+  } catch (e) {
+    ilus.mensaje = `No se pudo detener: ${e.message}`;
+  }
+  $("ilus-detener").disabled = false;
+  await cargarIlustraciones();
+});
 
 $("ilus-generar").addEventListener("click", async () => {
   ilus.enviando = true;
@@ -764,7 +806,7 @@ $("ilus-generar").addEventListener("click", async () => {
   await cargarIlustraciones();
 });
 $("ilus-cerrar").addEventListener("click", () => $("dialogo-ilustraciones").close());
-$("dialogo-ilustraciones").addEventListener("close", () => clearTimeout(ilus.timer));
+$("dialogo-ilustraciones").addEventListener("close", () => { clearTimeout(ilus.timer); ilus.controlSugerir?.abort(); });
 
 // ---------- repositorio ----------
 

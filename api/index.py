@@ -268,6 +268,17 @@ def ruta_ilustracion_sugerir(req):
                                                 [str(p) for p in previas])
 
 
+def ruta_detener_pieza(req):
+    _dueno(req)
+    return 200, _servicio().detener_pieza(_entero(req["cuerpo"], "pieza_id"))
+
+
+def ruta_ilustraciones_detener(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    return 200, _servicio().detener_ilustraciones(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"))
+
+
 def ruta_ilustracion_elegir(req):
     _dueno(req)
     cuerpo = req["cuerpo"]
@@ -356,6 +367,8 @@ RUTAS = {
     ("POST", "ilustraciones"): ruta_ilustraciones_generar,
     ("POST", "ilustracion-elegir"): ruta_ilustracion_elegir,
     ("POST", "ilustracion-sugerir"): ruta_ilustracion_sugerir,
+    ("POST", "detener-pieza"): ruta_detener_pieza,
+    ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,

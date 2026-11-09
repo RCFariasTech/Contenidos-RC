@@ -277,3 +277,4 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .galeria__item--elegida .galeria__marco { outline: 4px solid var(--azul-medio); outline-offset: -4px; }
 .galeria__acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ilus-sugerir { display: flex; justify-content: flex-end; margin: 6px 0 4px; }
+.estado-proceso__detener { margin-left: 12px; }

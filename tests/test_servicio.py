@@ -345,6 +345,48 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(despues["contenido"], pieza["contenido"])
         self.assertIn("No se pudo rehacer", despues["error_msg"])
 
+    def test_detener_descarta_el_resultado_y_conserva_la_version_anterior(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        primera = servicio.estado_mes(mes)["piezas"][0]
+
+        def generar_y_detener(pieza_id):
+            def falso(slot, historial, hermanas, descartados=None):
+                servicio.detener_pieza(pieza_id)          # el usuario pulsa «Detener» mientras Claude trabaja
+                return {"pieza": pieza_generada(slot["formato"], "Tema que no debe guardarse"), "urls": [URL],
+                        "uso": {"input_tokens": 1, "output_tokens": 1}}
+            return mock.patch.object(servicio.generador, "generar", side_effect=falso)
+
+        with generar_y_detener(primera["id"]), self.assertRaises(servicio.Detenida):
+            servicio.generar_pieza(primera["id"])
+        sin_contenido = servicio.estado_mes(mes)["piezas"][0]
+        self.assertEqual((sin_contenido["estado"], sin_contenido["contenido"]), ("error", None))  # queda para reintentar
+        self.assertIn("Detuviste", sin_contenido["error_msg"])
+
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+        pieza = servicio.estado_mes(mes)["piezas"][0]
+        with generar_y_detener(pieza["id"]), self.assertRaises(servicio.Detenida):
+            servicio.rehacer_pieza(pieza["id"])
+        despues = servicio.estado_mes(mes)["piezas"][0]
+        self.assertEqual((despues["estado"], despues["version"]), ("generada", pieza["version"]))
+        self.assertEqual(despues["contenido"], pieza["contenido"])
+        self.assertEqual(len(servicio.versiones(pieza["id"])), pieza["version"])
+        with self.assertRaises(servicio.ErrorNegocio):          # ya no se está generando
+            servicio.detener_pieza(pieza["id"])
+
+    def test_detener_imagenes_cancela_en_krea_las_que_siguen_en_cola(self):
+        carrusel, _ = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["a", "b", "c"]):
+            servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="una alcancía")
+        self.bd.tablas["ilustraciones"][0].update(estado="lista", url="https://gen.krea.ai/images/a.png")
+        canceladas = []
+        with mock.patch.object(krea, "cancelar", side_effect=canceladas.append):
+            self.assertEqual(servicio.detener_ilustraciones(carrusel["id"], 1), {"detenidas": 2})
+        self.assertEqual(sorted(canceladas), ["b", "c"])
+        self.assertEqual([f["estado"] for f in self.bd.tablas["ilustraciones"]], ["lista", "fallida", "fallida"])
+
     def _mes_generado(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)
