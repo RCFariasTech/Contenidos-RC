@@ -103,6 +103,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `004_motivo_rehacer.sql`: permite el motivo «rehacer» en las versiones (botón «Rehacer propuesta»).
 - `005_ilustraciones.sql`: variantes de ilustración generadas en Krea (solo enlaces y estado).
 - `006_ilustracion_elegida.sql`: variante elegida por tarjeta y escena usada.
+- `007_ilustracion_tarjeta_3.sql`: la tarjeta 3 (ícono de línea) también guarda variantes de Krea.
 
 ## Desarrollo local
 
