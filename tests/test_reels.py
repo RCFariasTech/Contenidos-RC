@@ -39,9 +39,9 @@ class TestReels(unittest.TestCase):
         self.assertGreater(escenas[4]["duracion"], max(2.5, 1 + palabras[4] / 3) - 0.26)
         self.assertTrue(all(e["fondo"].startswith("data:image/jpeg;base64,") for e in escenas))
         textos = " ".join(t["texto"] for t in escenas[0]["textos"])
-        self.assertEqual(textos, REEL["escena_1_gancho"])                         # el texto va aparte, para animarlo
+        self.assertEqual(textos, REEL["escena_1_gancho"].upper())                 # el texto va aparte, para animarlo
         t = escenas[0]["textos"][0]
-        self.assertEqual((t["fuente"], t["color"][0]), ("SpaceGrotesk-Bold", "#"))
+        self.assertEqual((t["fuente"], t["color"][0]), ("SpaceGrotesk-Light", "#"))   # portada en Light
         self.assertTrue(reels.ZONA_ARRIBA <= t["y"] <= reels.H - reels.ZONA_ABAJO)
 
 
@@ -78,7 +78,7 @@ class TestReels(unittest.TestCase):
         self.assertEqual((doc[0].rect.width, doc[0].rect.height), (1080, 1920))
         for pagina, campo in zip(doc, reels.CAMPOS):
             texto = " ".join(pagina.get_text().split())
-            self.assertIn(REEL[campo], texto)
+            self.assertIn(REEL[campo].upper() if campo == reels.CAMPOS[0] else REEL[campo], texto)
             self.assertNotIn("FOTO O VIDEO", texto)                     # ya no hay recuadro de foto/video
         self.assertIn("ÍCONO ISOMÉTRICO ANIMADO", doc[0].get_text())
         self.assertNotIn("ESCENA", doc[0].get_text())          # sin rótulos de escena ni notas en la vista previa
@@ -127,7 +127,7 @@ class TestReels(unittest.TestCase):
             texto = pagina.get_text()
             self.assertNotIn("ESCENA", texto)
             self.assertNotIn("0–5 s", texto)
-        self.assertIn(REEL["escena_1_gancho"], " ".join(descarga[0].get_text().split()))
+        self.assertIn(REEL["escena_1_gancho"].upper(), " ".join(descarga[0].get_text().split()))
 
     def test_cada_escena_tiene_un_fondo_distinto(self):
         doc = pymupdf.open(stream=reels.generar_pdf(REEL, variante=2), filetype="pdf")

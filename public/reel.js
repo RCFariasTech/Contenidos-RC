@@ -38,6 +38,7 @@ function cargarFuentes() {
     fuentesCargadas = Promise.all([
       new FontFace("SpaceGrotesk-Bold", "url(/fuentes/SpaceGrotesk-Bold.ttf)").load(),
       new FontFace("Sora-Regular", "url(/fuentes/Sora-Regular.ttf)").load(),
+      new FontFace("SpaceGrotesk-Light", "url(/fuentes/SpaceGrotesk-Light.ttf)").load(),
     ]).then((caras) => caras.forEach((c) => document.fonts.add(c)));
   }
   return fuentesCargadas;

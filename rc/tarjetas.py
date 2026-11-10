@@ -28,6 +28,7 @@ from rc.config import RAIZ, marca
 
 W, H, M = 1080, 1350, 96
 TITULO, TITULO_MEDIO, TEXTO, TEXTO_SEMI = "SpaceGrotesk-Bold", "SpaceGrotesk-Medium", "Sora-Regular", "Sora-SemiBold"
+TITULO_LIGERO = "SpaceGrotesk-Light"  # portada de los reels
 PLANTILLA = RAIZ / "plantilla"
 DIR_ICONOS = PLANTILLA / "iconos_linea"
 
@@ -45,7 +46,7 @@ RE_CIFRA = re.compile(r"[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?")
 
 @lru_cache(maxsize=1)
 def _registrar_fuentes() -> None:
-    for nombre in (TITULO, TITULO_MEDIO, TEXTO, TEXTO_SEMI):
+    for nombre in (TITULO, TITULO_MEDIO, TITULO_LIGERO, TEXTO, TEXTO_SEMI):
         pdfmetrics.registerFont(TTFont(nombre, str(PLANTILLA / "fuentes" / f"{nombre}.ttf")))
 
 

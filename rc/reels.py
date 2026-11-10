@@ -85,7 +85,7 @@ class _Hoja:
 
 # Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
 # la 5 (cierre) no lleva imagen.
-AREA_ICONO, AREA_LINEA = 860, 300
+AREA_ICONO, AREA_LINEA = 520, 300
 ALTO_FOTO = 1080  # escenas con foto: la foto ocupa el ancho completo desde arriba
 
 
@@ -136,12 +136,29 @@ def _tam_cifra(cifra):
     return tam
 
 
+GANCHO_TAM, GANCHO_INTER, GANCHO_SEPARACION = 170, 0.98, 40
+
+
+def _gancho(texto: str) -> str:
+    return (texto or "").upper()
+
+
+def _alto_gancho(texto: str, alto_max: float) -> float:
+    if not (texto or "").strip():
+        return 0
+    tam, lineas = ajustar(_gancho(texto), tarjetas.TITULO_LIGERO, W - 2 * M, alto_max, GANCHO_TAM, GANCHO_INTER)
+    return len(lineas) * tam * GANCHO_INTER
+
+
 def caja_icono(contenido: dict) -> tuple[float, float, float]:
-    """(x, y desde arriba, lado) del ícono isométrico de la escena 1, para superponer su video en la vista previa."""
+    """(x, y desde arriba, lado) del ícono isométrico de la portada (escena 1): alineado a la izquierda con el texto,
+    encima de él. También sirve para superponer su video en la vista previa."""
     tarjetas._registrar_fuentes()
     lado = AREA_ICONO
-    alto_texto = _alto_texto(contenido.get(CAMPOS[0]) or "", 96, W - 2 * M, ABAJO - ARRIBA - lado - SEPARACION)
-    return (W - lado) / 2, _y_centrado(lado + SEPARACION + alto_texto), lado
+    alto_texto = _alto_gancho(contenido.get(CAMPOS[0]) or "", ABAJO - ARRIBA - lado - GANCHO_SEPARACION - 30)
+    # El ícono trae aire alrededor: se corre un poco a la izquierda para que el objeto quede alineado con el texto.
+    # + margen por los trazos que bajan de la última línea (el interlineado es menor que 1).
+    return M - lado * 0.06, _y_centrado(lado + GANCHO_SEPARACION + alto_texto + GANCHO_TAM * 0.15), lado
 
 
 def _pagina(L, numero: int, texto: str, variante: int) -> None:
@@ -214,9 +231,14 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
             k = 200 / dib.width
             dib.scale(k, k)
             renderPDF.draw(dib, L.c, x, H - y_img - dib.height * k)
+    if numero == 1:  # portada: Space Grotesk Light, en mayúsculas y grande
+        y_texto = y_img + lado + GANCHO_SEPARACION
+        # Mismo alto máximo que en caja_icono: así el tamaño de letra calculado para centrar es el que se dibuja.
+        L.bloque(_gancho(texto), tarjetas.TITULO_LIGERO, tema["texto"], M, y_texto, ancho,
+                 ABAJO - ARRIBA - lado - GANCHO_SEPARACION - 30, GANCHO_TAM, inter=GANCHO_INTER)
+        return
     y_texto = y_img + lado + SEPARACION
-    L.bloque(texto, TITULO, tema["titulo"] if numero == 1 else tema["texto"], M, y_texto, ancho,
-             ABAJO - y_texto, 96, inter=1.05)
+    L.bloque(texto, TITULO, tema["texto"], M, y_texto, ancho, ABAJO - y_texto, 96, inter=1.05)
 
 
 # En el logo de Constellation, la línea de base de la palabra CONSTELLATION está a esta fracción de su alto (desde
