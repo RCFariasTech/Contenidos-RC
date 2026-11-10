@@ -130,12 +130,14 @@ def _y_centrado(total: float) -> float:
 
 
 TAM_TXT_BASE, TAM_TXT_MAX, TAM_TXT_MIN, INTER_TXT = 72, 144, 40, 1.05
+ALTO_MAYUS = 0.70  # alto de las mayúsculas de Space Grotesk, en proporción al tamaño
 
 
 def _tam_texto_cifra(antes: str, despues: str, ancho: float, tam_cifra: float) -> float:
     """Tamaño del texto que acompaña a la cifra: con poco texto crece hasta el doble (144 pt) y se achica a medida que
     hay más, para que todo quepa centrado en la zona segura."""
-    disponible = ABAJO - ARRIBA - tam_cifra * 0.86 - 40 - SEPARACION - 40
+    # Franja simétrica (mismo margen arriba y abajo que el inferior de Instagram) para que el grupo quede centrado.
+    disponible = (H - 2 * ZONA_ABAJO) - tam_cifra * 0.86 - 40 - SEPARACION - 20
     tam = TAM_TXT_MAX
     while tam > TAM_TXT_MIN:
         alto = sum(len(tarjetas.envolver(t, TITULO, tam, ancho)) * tam * INTER_TXT for t in (antes, despues) if t.strip())
@@ -200,7 +202,15 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
             return len(tarjetas.envolver(t, TITULO, tam_txt, ancho_txt)) * tam_txt * INTER_TXT if t.strip() else 0
         h_antes, h_despues = alto(antes), alto(despues)
         total = h_antes + (40 if h_antes else 0) + tam * 0.86 + (SEPARACION + h_despues if h_despues else 0)
-        y = _y_centrado(total + tam_txt * 0.2)
+        # Centrado óptico: lo visible va desde la parte alta de las letras de la primera línea hasta la línea de base
+        # de la última (las cajas de texto traen aire arriba que haría ver el grupo más abajo de lo que está).
+        arriba_vis = (tam_txt * 0.9 - ALTO_MAYUS * tam_txt) if h_antes else (tam * 0.86 - ALTO_MAYUS * tam)
+        if h_despues:
+            abajo_vis = total - h_despues + (h_despues / (tam_txt * INTER_TXT) - 1) * tam_txt * INTER_TXT + tam_txt * 0.9
+        else:
+            abajo_vis = total  # termina en la línea de base de la cifra
+        alto_vis = abajo_vis - arriba_vis
+        y = max(ARRIBA, min((H - alto_vis) / 2 - arriba_vis, ABAJO - total))
         usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho_txt, h_antes + 2, tam_txt, inter=INTER_TXT)
         y += usado + (40 if usado else 0)
         L.texto(cifra, TITULO, tam, tema["cifra"], M - tam * 0.04, H - y - tam * 0.86, rol="cifra")
