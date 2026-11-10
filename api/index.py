@@ -279,6 +279,22 @@ def ruta_editar_gancho(req):
     return 200, _servicio().editar_gancho(_entero(cuerpo, "pieza_id"), str(cuerpo.get("gancho") or "")[:300])
 
 
+def ruta_ilustraciones_borrar(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    ident = cuerpo.get("id")
+    return 200, _servicio().borrar_ilustraciones(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "tarjeta"),
+                                                 int(ident) if ident not in (None, "") else None,
+                                                 bool(cuerpo.get("solo_animacion")))
+
+
+def ruta_reel_foto(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    return 200, _servicio().foto_en_escena(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "escena"),
+                                           bool(cuerpo.get("activa", True)))
+
+
 def ruta_reel_animable(req):
     _dueno(req)
     try:
@@ -395,6 +411,8 @@ RUTAS = {
     ("POST", "detener-pieza"): ruta_detener_pieza,
     ("POST", "ilustracion-animar"): ruta_ilustracion_animar,
     ("GET", "reel-animable"): ruta_reel_animable,
+    ("POST", "ilustraciones-borrar"): ruta_ilustraciones_borrar,
+    ("POST", "reel-foto"): ruta_reel_foto,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,

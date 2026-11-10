@@ -435,6 +435,54 @@ class TestFlujo(unittest.TestCase):
         with self.assertRaises(servicio.ErrorNegocio):                         # en carruseles no se anima
             servicio.animar_ilustracion(otra["id"])
 
+    def test_el_tiempo_maximo_del_video_se_mide_desde_que_se_pidio(self):
+        _, reel = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["i1"]):
+            servicio.generar_ilustraciones(reel["id"], 1, descripcion="x", cantidad=1)
+        fila = self.bd.tablas["ilustraciones"][0]
+        fila.update(estado="lista", url="https://gen.krea.ai/images/i1.png",
+                    creado_en=(datetime.now(timezone.utc) - timedelta(hours=5)).isoformat())   # imagen vieja
+        with mock.patch.object(krea, "crear_video", return_value="v1"):
+            servicio.animar_ilustracion(fila["id"])
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "consultar", return_value={"estado": "en_cola", "url": None, "error": None}):
+            item = servicio.ilustraciones(reel["id"])["items"][0]
+        self.assertEqual(item["video_estado"], "en_cola")                        # no se da por fallido al instante
+
+    def test_borrar_imagenes_y_animaciones_no_usadas(self):
+        carrusel, _ = self._mes_generado()
+        with mock.patch.object(krea, "configurado", return_value=True), \
+                mock.patch.object(krea, "crear_trabajo", side_effect=["a", "b", "c"]):
+            servicio.generar_ilustraciones(carrusel["id"], 1, descripcion="x", cantidad=3)
+        a, b, c = self.bd.tablas["ilustraciones"]
+        for f in (a, b):
+            f.update(estado="lista", url=f"https://gen.krea.ai/images/{f['job_id']}.png", video_estado="lista",
+                     video_url="https://gen.krea.ai/v.mp4")
+        servicio.elegir_ilustracion(a["id"])
+        with mock.patch.object(krea, "cancelar") as cancelar:
+            self.assertEqual(servicio.borrar_ilustraciones(carrusel["id"], 1, b["id"], solo_animacion=True), {"borradas": 1})
+            self.assertEqual((b["video_url"], b["url"] is not None), (None, True))     # solo la animación
+            self.assertEqual(servicio.borrar_ilustraciones(carrusel["id"], 1), {"borradas": 2})
+            cancelar.assert_called_once_with("c")                                       # la que seguía en cola
+        self.assertEqual([f["id"] for f in self.bd.tablas["ilustraciones"]], [a["id"]])  # la elegida se conserva
+        with self.assertRaises(servicio.ErrorNegocio):
+            servicio.borrar_ilustraciones(carrusel["id"], 1, a["id"])
+
+    def test_foto_en_escena_del_reel(self):
+        _, reel = self._mes_generado()
+        from rc import reels
+        sin = reels.escenas_sin_cifra(reel["contenido"])
+        if len(sin) < 2:
+            self.skipTest("el reel de prueba no tiene dos escenas sin cifra")
+        r = servicio.foto_en_escena(reel["id"], sin[0], True)
+        self.assertEqual(r["fotos"], [sin[0]])
+        self.assertEqual(servicio._tipos_imagen(servicio._pieza(reel["id"]))[sin[0]], "foto")
+        with self.assertRaises(servicio.ErrorNegocio):                       # siempre queda al menos un ícono
+            for n in sin[1:]:
+                servicio.foto_en_escena(reel["id"], n, True)
+        self.assertEqual(servicio.foto_en_escena(reel["id"], sin[0], False)["fotos"], sin[1:-1])  # quitar una
+
     def test_krea_caido_no_rompe_la_generacion_de_textos(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

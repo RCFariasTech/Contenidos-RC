@@ -299,3 +299,4 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .reel-trans { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: .95rem; }
 #reel-progreso { width: 100%; }
 @media (max-width: 640px) { .reel-cuerpo { grid-template-columns: 1fr; } .reel-lienzo { max-width: 260px; margin: 0 auto; } }
+.reel-foto { display: inline-flex; gap: 6px; align-items: center; font-size: .9rem; margin: 4px 0; }

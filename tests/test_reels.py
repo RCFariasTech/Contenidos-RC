@@ -16,6 +16,21 @@ REEL = {
 
 
 class TestReels(unittest.TestCase):
+    def test_escena_con_foto_y_velo(self):
+        reel = dict(REEL, escena_2_desarrollo_a="Primera idea sin datos", escena_3_desarrollo_b="Segunda idea sin datos",
+                    escena_4_desarrollo_c="Tercera idea sin datos")
+        self.assertEqual(reels.fotos_validas(reel, [2, 3, 4]), [2, 3])            # siempre queda un ícono
+        self.assertEqual(reels.tipos_imagen(reel, [3])[3], "foto")
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (800, 800), (255, 255, 255)).save(buf, "JPEG")
+        doc = pymupdf.open(stream=reels.generar_pdf(reel, imagenes={3: buf.getvalue()}, fotos=[3]), filetype="pdf")
+        self.assertTrue(doc[2].get_images())
+        r, g, b = doc[2].get_pixmap(matrix=pymupdf.Matrix(0.1, 0.1)).pixel(50, 40)[:3]
+        self.assertNotEqual((r, g, b), (255, 255, 255))                           # la foto lleva velo de color
+        self.assertIn("Segunda idea", " ".join(doc[2].get_text().split()))
+
     def test_escenas_animables_sin_textos_en_el_fondo(self):
         escenas = reels.escenas_animables(REEL)
         self.assertEqual([e["duracion"] for e in escenas], [5, 7, 8, 5, 5])        # 30 s en total

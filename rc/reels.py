@@ -32,6 +32,7 @@ class _Hoja:
         # la pantalla los anima encima del fondo.
         self.registro = registro
         self.fondo_clave, self.tarjeta, self.ancho, self.alto = "marino", 0, W, H
+        self.fotos = ()
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color])
@@ -84,14 +85,29 @@ class _Hoja:
 # Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
 # la 5 (cierre) no lleva imagen.
 AREA_ICONO, AREA_LINEA = 860, 300
+ALTO_FOTO = 1080  # escenas con foto: la foto ocupa el ancho completo desde arriba
 
 
-def tipos_imagen(contenido: dict) -> dict[int, str]:
+def escenas_sin_cifra(contenido: dict) -> list[int]:
+    """Escenas intermedias (2-4) cuyo texto no tiene cifra para mostrar en grande."""
+    return [n for n in (2, 3, 4) if not tarjetas.separar_cifra((contenido.get(CAMPOS[n - 1]) or ""))[1]]
+
+
+def fotos_validas(contenido: dict, fotos) -> list[int]:
+    """Escenas con foto: solo entre las intermedias sin cifra, y solo si hay al menos dos (siempre queda un ícono)."""
+    sin = escenas_sin_cifra(contenido)
+    if len(sin) < 2:
+        return []
+    elegidas = [int(n) for n in (fotos or []) if int(n) in sin]
+    return sorted(set(elegidas))[: len(sin) - 1]
+
+
+def tipos_imagen(contenido: dict, fotos=()) -> dict[int, str]:
     """{escena: tipo} de las escenas que llevan imagen de Krea en este reel."""
+    con_foto = fotos_validas(contenido, fotos)
     tipos = {1: "icono"}
-    for n in (2, 3, 4):
-        if not tarjetas.separar_cifra((contenido.get(CAMPOS[n - 1]) or ""))[1]:
-            tipos[n] = "linea"
+    for n in escenas_sin_cifra(contenido):
+        tipos[n] = "foto" if n in con_foto else "linea"
     return tipos
 
 
@@ -151,6 +167,25 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         y += tam * 0.86 + SEPARACION
         L.bloque(despues, TITULO, tema["texto"], M, y, ancho, ABAJO - y, 72, inter=1.05)
         return
+    if numero in L.fotos:  # foto con velo del color de la escena arriba (como la tarjeta 2 del carrusel) y texto abajo
+        alto_foto = ALTO_FOTO
+        if datos:
+            try:
+                L.png(tarjetas.recortar(datos, W, alto_foto), 0, 0, W, alto_foto)
+                L.c.saveState()
+                L.c.setFillColor(L.col[fondo])
+                L.c.setFillAlpha(0.45)
+                L.c.rect(0, H - alto_foto, W, alto_foto, stroke=0, fill=1)
+                L.c.restoreState()
+            except Exception:
+                datos = None
+        if not datos:
+            L.guia(M, ARRIBA, W - 2 * M, alto_foto - ARRIBA - 40, "FOTO · Krea (con velo)", tema["texto"])
+        arriba_texto = alto_foto + SEPARACION
+        alto_texto = _alto_texto(texto, 96, ancho, ABAJO - arriba_texto)
+        y_texto = arriba_texto + max(0, (ABAJO - arriba_texto - alto_texto) / 2)
+        L.bloque(texto, TITULO, tema["texto"], M, y_texto, ancho, ABAJO - y_texto, 96, inter=1.05)
+        return
     if numero == 1:
         x, y_img, lado = caja_icono({CAMPOS[0]: texto})
     else:
@@ -207,7 +242,7 @@ def _logos(L) -> None:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,
-                guias: bool = False, imagenes: dict[int, bytes] | None = None) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None, fotos=()) -> bytes:
     """guias=True añade la etiqueta de cada escena (vista previa); False la omite (descarga)."""
     tarjetas._registrar_fuentes()
     buffer = io.BytesIO()
@@ -215,6 +250,7 @@ def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semill
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
     L = _Hoja(c, tarjetas._colores(), guias, imagenes)
+    L.fotos = fotos_validas(contenido, fotos)
     for i, campo in enumerate(CAMPOS, 1):
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante + semilla)
         c.showPage()
@@ -232,7 +268,7 @@ def duraciones() -> list[float]:
 
 
 def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, bytes] | None = None,
-                      ancho: int = 1080) -> list[dict]:
+                      ancho: int = 1080, fotos=()) -> list[dict]:
     """Para armar el reel en video: cada escena como imagen de fondo SIN textos (JPEG en data URI) y los textos con
     su posición, fuente, tamaño y color (en px de 1080 x 1920; y = línea de base desde arriba), para que la pantalla
     los anime encima."""
@@ -244,6 +280,7 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
     c = canvas.Canvas(buffer, pagesize=(W, H))
     for i, campo in enumerate(CAMPOS, 1):
         L = _Hoja(c, tarjetas._colores(), False, imagenes, registro=registros[i - 1])
+        L.fotos = fotos_validas(contenido, fotos)
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
         c.showPage()
     c.save()

@@ -91,6 +91,8 @@ Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el pri
 
 **Reel terminado.** El botón **Reel terminado** de cada reel arma el video final en el navegador (`public/reel.js`): 30 s, 1080 × 1920, sin sonido; los textos entran palabra por palabra con un rebote, la cifra crece y cuenta hasta su valor, la escena 1 lleva el ícono animado (con bordes fundidos) y entre escenas se elige la transición (fundido, deslizar, subir, zoom, barrido o corte; se recuerda por pieza en el navegador). «Reproducir» muestra la vista previa y «Descargar video» la graba en tiempo real con MediaRecorder (MP4 en Chrome/Edge actuales; WebM si el navegador no graba MP4). El servidor entrega cada escena sin textos y los textos con su posición (`reel-animable`). El ícono animado se genera con Kling 2.5 (sin audio) y se puede regenerar desde su panel.
 
+**Ver reel.** En los reels, «Ver reel» y las miniaturas abren el reproductor: el reel completo en bucle (desde la escena tocada) con transiciones y textos animados; desde ahí se descarga el video o el PDF del guion. Las ventanas se cierran con clic fuera. Si un reel tiene dos o más escenas intermedias sin cifra, cada una (menos una, que conserva el ícono) puede llevar **foto con velo** del color de la escena (casilla «Usar foto en esta escena»; `piezas.diseno_reel`). En el panel de imágenes, **Borrar**, **Borrar animación** y **Borrar no usadas** quitan de la base de datos las imágenes y animaciones que no están en uso (la elegida nunca se borra; los archivos siguen en Krea).
+
 **Gancho.** En la tarjeta 1 de cada carrusel y la escena 1 de cada reel (pieza sin aprobar) están **Otro gancho**, que propone con IA un gancho nuevo distinto de todos los anteriores de esa pieza, y **Editar gancho**, para escribirlo a mano (Enter guarda, Esc cancela). Cada cambio se guarda como versión nueva (motivos `gancho` y `edicion`) y respeta el límite de palabras (8 en carrusel, 6 en reel); el resto del contenido no cambia.
 
 **Detener.** Mientras una pieza se genera, rehace o ajusta, aparece **Detener**: la pieza vuelve a su versión anterior (o queda con «Reintentar» si aún no tenía contenido) y, si era un lote, no sigue con las demás. La llamada a Claude que ya estaba en curso termina en el servidor (se paga), pero su resultado se descarta y no se hacen más reparaciones. En el panel de imágenes, **Detener generación** cancela en Krea las variantes en cola (Krea no cobra las canceladas) y **Detener sugerencia** corta la sugerencia de descripción.
@@ -119,6 +121,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `008_ilustracion_automatica.sql`: marca las imágenes generadas automáticamente al terminar los textos.
 - `009_motivo_gancho.sql`: versiones por gancho regenerado o editado a mano.
 - `010_reels_iconos_video.sql`: imágenes en las escenas del reel y video del ícono animado.
+- `011_video_pedido_y_fotos_reel.sql`: hora del pedido de animación y escenas del reel con foto.
 
 ## Desarrollo local
 

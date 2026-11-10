@@ -213,7 +213,7 @@ function miniatura(pieza, i) {
     style: `aspect-ratio: ${reel ? "9 / 16" : "4 / 5"}; width: ${reel ? 84 : 112}px`,
     title: "Ver en grande",
     "aria-label": `Ver la propuesta gráfica de la ${reel ? "escena" : "tarjeta"} ${i + 1} en grande`,
-    onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget, i),
+    onclick: (ev) => (reel ? window.abrirReel(pieza, { reproducir: true, desde: i }) : verTarjetas(pieza.id, ev.currentTarget, i)),
   });
   miniaturas.piezas.set(pieza.id, pieza);
   pintarMiniatura(caja, pieza);
@@ -244,6 +244,13 @@ function renderTextos(pieza, conMiniaturas = true) {
               onclick: () => { estado.editandoGancho = pieza.id; render(); $(`gancho-${pieza.id}`)?.focus(); },
             }, "Editar gancho"))
           : null,
+        conMiniaturas && opcionFoto(pieza, i + 1) ? el("label", { clase: "reel-foto",
+          title: "La escena muestra una foto de apoyo con velo de color en vez del ícono de línea" },
+          el("input", { type: "checkbox", checked: (pieza.diseno_reel?.fotos || []).includes(i + 1),
+            disabled: pieza.estado === "aprobada",
+            onchange: (ev) => accion(pieza.id, () => api("reel-foto", { metodo: "POST",
+              cuerpo: { pieza_id: pieza.id, escena: i + 1, activa: ev.target.checked } })) }),
+          " Usar foto en esta escena") : null,
         conMiniaturas && infoImagen(pieza, i + 1) ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
           title: infoImagen(pieza, i + 1).ayuda,
@@ -255,9 +262,9 @@ function renderTextos(pieza, conMiniaturas = true) {
   const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
   const boton = pieza.id ? el("button", {
     clase: "btn btn--secundario", type: "button",
-    title: pieza.formato === "Reel" ? "Vista previa del guion visual (9:16); desde ahí descargas el PDF para Adobe Express" : "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
-    onclick: (ev) => verTarjetas(pieza.id, ev.currentTarget),
-  }, pieza.formato === "Reel" ? "Ver guion visual" : "Ver tarjetas") : null;
+    title: pieza.formato === "Reel" ? "Reproduce el reel completo (transiciones y textos animados); desde ahí descargas el video o el PDF del guion" : "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",
+    onclick: (ev) => (pieza.formato === "Reel" ? window.abrirReel(pieza, { reproducir: true }) : verTarjetas(pieza.id, ev.currentTarget)),
+  }, pieza.formato === "Reel" ? "Ver reel" : "Ver tarjetas") : null;
   const reel = pieza.formato === "Reel";
   const rehacer = conMiniaturas ? el("button", {
     clase: "btn btn--secundario", type: "button",
@@ -268,13 +275,8 @@ function renderTextos(pieza, conMiniaturas = true) {
       pedirMiniaturas(pieza);
     },
   }, reel ? "Rehacer escenas" : "Rehacer tarjetas") : null;
-  const animado = reel && pieza.id && conMiniaturas ? el("button", {
-    clase: "btn btn--primario", type: "button",
-    title: "Arma el reel en video con textos animados, el ícono animado y transiciones; lo previsualizas y lo descargas",
-    onclick: () => window.abrirReel(pieza),
-  }, "Reel terminado") : null;
   return el("section", { clase: "bloque" },
-    el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), el("div", { clase: "bloque__botones" }, rehacer, boton, animado)),
+    el("div", { clase: "bloque__titulo" }, el("h3", {}, titulo), el("div", { clase: "bloque__botones" }, rehacer, boton)),
     el("ol", { clase: "textos" }, items));
 }
 
@@ -735,6 +737,13 @@ const IMAGEN_TARJETA = {
 // Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.
 const RE_CIFRA = /[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?/;
 
+/** Escenas intermedias del reel sin cifra: si hay dos o más, cualquiera (menos una) puede llevar foto. */
+function opcionFoto(pieza, n) {
+  if (pieza.formato !== "Reel" || n < 2 || n > 4) return false;
+  const sin = [2, 3, 4].filter((k) => !RE_CIFRA.test(pieza.contenido?.[CAMPOS.Reel[k - 1].campo] || ""));
+  return sin.length >= 2 && sin.includes(n);
+}
+
 /** Qué imagen lleva la tarjeta o escena `n` de la pieza (null si no lleva). */
 function infoImagen(pieza, n) {
   if (pieza.formato !== "Reel") return IMAGEN_TARJETA[n] || null;
@@ -743,6 +752,9 @@ function infoImagen(pieza, n) {
     ayuda: "Genera en Krea el ícono isométrico de la escena 1 y su animación corta en video" };
   const texto = pieza.contenido?.[CAMPOS.Reel[n - 1]?.campo] || "";
   if (n > 4 || RE_CIFRA.test(texto)) return null; // el cierre no lleva imagen; con cifra, la cifra va en grande
+  if ((pieza.diseno_reel?.fotos || []).includes(n)) return { reel: true, boton: `Foto de la escena ${n}`,
+    titulo: `Foto · Escena ${n}`, generar: "Generar fotos", alt: "Foto generada en Krea",
+    ayuda: `Genera en Krea la foto de apoyo (con velo) de la escena ${n}` };
   return { reel: true, boton: `Ícono de la escena ${n}`, titulo: `Ícono de línea · Escena ${n}`, generar: "Generar íconos",
     alt: "Ícono de línea generado en Krea", ayuda: `Genera en Krea un ícono de línea simple para la escena ${n}, basado en su texto` };
 }
@@ -780,6 +792,7 @@ function renderIlustraciones() {
   $("ilus-sugerir").disabled = ilus.enviando;
   $("ilus-sugerir").textContent = ilus.sugiriendo ? "Detener sugerencia" : "Sugerir otra descripción";
   $("ilus-detener").hidden = !hayEnCola;
+  $("ilus-borrar").hidden = !ilus.items.some((it) => !it.elegida);
   $("ilus-galeria").replaceChildren(...(ilus.items.length ? ilus.items.map((it) => {
     const lista = it.estado === "lista" && it.url?.startsWith("https://");
     const marco = el("div", {
@@ -794,12 +807,26 @@ function renderIlustraciones() {
         el("div", { clase: "galeria__acciones" },
           lista && !it.elegida ? el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: () => elegirIlustracion(it, true) }, `Usar en ${donde}`) : null,
           it.elegida ? el("span", {}, el("strong", {}, `✓ En ${donde}`)) : null,
-          it.elegida ? el("button", { clase: "btn btn--texto", type: "button", onclick: () => elegirIlustracion(it, false) }, "Quitar") : null),
+          it.elegida ? el("button", { clase: "btn btn--texto", type: "button", onclick: () => elegirIlustracion(it, false) }, "Quitar") : null,
+          !it.elegida ? el("button", { clase: "btn btn--texto btn--chico", type: "button", title: "Borra esta imagen (y su animación) de la app",
+            onclick: () => borrarIlustraciones({ id: it.id }) }, "Borrar") : null,
+          !it.elegida && it.video_estado ? el("button", { clase: "btn btn--texto btn--chico", type: "button", title: "Borra solo la animación de esta imagen",
+            onclick: () => borrarIlustraciones({ id: it.id, solo_animacion: true }) }, "Borrar animación") : null),
         lista ? el("a", { href: it.url, target: "_blank", rel: "noopener noreferrer" }, "Abrir en Krea") : el("span", {}, `${it.ancho}×${it.alto}`),
         conVideo && lista ? renderVideo(it) : null));
   }) : [el("p", { clase: "ayuda" }, "Aún no hay imágenes para esta tarjeta. Revisa la descripción y pulsa «Generar».")]));
   clearTimeout(ilus.timer);
   if (hayEnCola && $("dialogo-ilustraciones").open) ilus.timer = setTimeout(cargarIlustraciones, 4000);
+}
+
+async function borrarIlustraciones(extra = {}) {
+  ilus.mensaje = "";
+  try {
+    await api("ilustraciones-borrar", { metodo: "POST", cuerpo: { pieza_id: ilus.pieza.id, tarjeta: ilus.tarjeta, ...extra } });
+  } catch (e) {
+    ilus.mensaje = `No se pudo borrar: ${e.message}`;
+  }
+  await cargarIlustraciones();
 }
 
 function renderVideo(it) {
@@ -875,6 +902,7 @@ async function sugerirDescripcion() {
 }
 
 $("ilus-sugerir").addEventListener("click", sugerirDescripcion);
+$("ilus-borrar").addEventListener("click", () => borrarIlustraciones());
 $("ilus-detener").addEventListener("click", async () => {
   $("ilus-detener").disabled = true;
   try {
@@ -1299,3 +1327,11 @@ $("btn-salir").addEventListener("click", () => { Sesion.borrar(); mostrar("login
   }
   if (Sesion.leer()) await entrarApp(); else mostrar("login");
 })();
+
+// Clic fuera de una ventana (en el fondo oscuro) la cierra.
+document.querySelectorAll("dialog").forEach((d) => d.addEventListener("click", (ev) => {
+  if (ev.target !== d) return;
+  const r = d.getBoundingClientRect();
+  const fuera = ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+  if (fuera) d.close();
+}));

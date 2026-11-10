@@ -178,10 +178,10 @@ function dibujarCuadro(ctx, t) {
 
 // ---------- reproducción y grabación ----------
 
-function animar(onFin) {
+function animar(onFin, desde = 0) {
   const lienzo = $("reel-lienzo"), ctx = lienzo.getContext("2d");
   const total = duracionTotal();
-  const t0 = performance.now();
+  const t0 = performance.now() - desde * 1000;
   REEL.reproduciendo = true;
   if (REEL.video) { REEL.video.currentTime = 0; REEL.video.play().catch(() => {}); }
   const paso = () => {
@@ -219,13 +219,22 @@ function botonesReel(ocupado) {
   document.querySelectorAll(".reel-trans select").forEach((s) => { s.disabled = ocupado; });
 }
 
-function reproducir() {
+function inicioEscena(i) {
+  return REEL.datos.escenas.slice(0, i).reduce((s, e) => s + e.duracion, 0);
+}
+
+function reproducir(desde = 0) {
+  // Reproduce en bucle hasta que se detenga, se descargue o se cierre la ventana.
   botonesReel(true);
-  estadoReel("Reproduciendo…");
-  animar(() => { botonesReel(false); estadoReel(""); });
+  estadoReel("");
+  const vuelta = (d) => animar(() => { if ($("dialogo-reel").open && !REEL.cancelado) vuelta(0); else botonesReel(false); }, d);
+  REEL.cancelado = false;
+  vuelta(desde);
 }
 
 async function descargarReel() {
+  REEL.cancelado = true;
+  detener();
   const mime = formatoGrabacion();
   if (!mime) { estadoReel("Este navegador no puede grabar video. Usa Chrome o Edge actualizados."); return; }
   dibujarCuadro($("reel-lienzo").getContext("2d"), 0.01);
@@ -258,10 +267,11 @@ async function descargarReel() {
   animar(() => { setTimeout(() => REEL.grabador.stop(), 200); });
 }
 
-async function abrirReel(pieza) {
+async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}) {
   REEL.pieza = pieza;
   REEL.conVideo = true;
-  $("titulo-reel").textContent = "Reel terminado";
+  REEL.cancelado = false;
+  $("titulo-reel").textContent = "Reel";
   estadoReel("Preparando escenas…");
   botonesReel(true);
   const trans = transicionesGuardadas(pieza.id);
@@ -284,12 +294,19 @@ async function abrirReel(pieza) {
     dibujarCuadro(lienzo.getContext("2d"), 1.5);
     botonesReel(false);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
+    if (autoplay && $("dialogo-reel").open) reproducir(inicioEscena(Math.min(desde, datos.escenas.length - 1)));
   } catch (e) {
     estadoReel(`No se pudo preparar el reel: ${e.message}`);
   }
 }
 
-$("reel-reproducir").addEventListener("click", reproducir);
+$("reel-reproducir").addEventListener("click", () => reproducir(0));
+$("reel-pdf").addEventListener("click", async (ev) => {
+  ev.currentTarget.disabled = true;
+  try { await descargarArchivo(`/api/tarjetas-pdf?pieza=${REEL.pieza.id}&semilla=0`, "guion-reel.pdf"); }
+  catch (e) { estadoReel(`No se pudo descargar el PDF: ${e.message}`); }
+  ev.currentTarget.disabled = false;
+});
 $("reel-descargar").addEventListener("click", descargarReel);
 $("reel-detener").addEventListener("click", () => { REEL.cancelado = true; detener(); botonesReel(false); estadoReel(""); });
 $("reel-cerrar").addEventListener("click", () => $("dialogo-reel").close());

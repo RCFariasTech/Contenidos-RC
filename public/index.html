@@ -168,13 +168,14 @@
       <div class="reel-cuerpo">
         <canvas id="reel-lienzo" class="reel-lienzo" width="1080" height="1920" aria-label="Vista previa del reel"></canvas>
         <div class="reel-panel">
-          <p class="ayuda">Los textos entran animados y la escena 1 lleva el ícono animado. Elige la transición entre escenas, mira la vista previa y descarga el video (sin sonido; 30 s, 1080 × 1920).</p>
+          <p class="ayuda">El reel se reproduce completo en bucle: textos animados, ícono animado en la escena 1 y la transición elegida entre escenas. «Descargar video» lo graba (sin sonido; 30 s, 1080 × 1920).</p>
           <fieldset class="reel-transiciones-caja"><legend>Transiciones</legend><div id="reel-transiciones"></div></fieldset>
           <progress id="reel-progreso" max="1" value="0"></progress>
           <p id="reel-estado" class="ayuda" role="status"></p>
           <div class="dialogo__acciones">
             <button type="button" id="reel-cerrar" class="btn btn--secundario">Cerrar</button>
             <button type="button" id="reel-detener" class="btn btn--secundario" hidden>Detener</button>
+            <button type="button" id="reel-pdf" class="btn btn--secundario" title="PDF del guion visual para editar en Adobe Express">PDF del guion</button>
             <button type="button" id="reel-reproducir" class="btn btn--secundario">Reproducir</button>
             <button type="button" id="reel-descargar" class="btn btn--primario" title="Graba el reel en tiempo real (30 s) y lo descarga">Descargar video</button>
           </div>
@@ -193,6 +194,7 @@
       <p class="ayuda">Nano Banana Pro en Krea. Tarjeta 1: ícono isométrico sobre azul marino. Tarjeta 2: foto realista de personas comunes de clase media, que se monta con velo azul. Tarjeta 3: ícono de línea (marino con un acento rojo) sobre gris. Los íconos usan los de la guía visual como referencia de estilo. «Usar en la tarjeta» la coloca en la vista previa y en el PDF; las imágenes siguen viviendo en Krea.</p>
       <div class="dialogo__acciones">
         <button type="button" id="ilus-cerrar" class="btn btn--secundario">Cerrar</button>
+        <button type="button" id="ilus-borrar" class="btn btn--secundario" hidden title="Borra de la app todas las imágenes y animaciones de esta tarjeta que no están en uso">Borrar no usadas</button>
         <button type="button" id="ilus-detener" class="btn btn--secundario" hidden title="Cancela en Krea las imágenes que siguen en cola (Krea no cobra las canceladas)">Detener generación</button>
         <button type="button" id="ilus-generar" class="btn btn--primario">Generar</button>
       </div>
