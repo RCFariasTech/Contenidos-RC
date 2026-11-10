@@ -364,6 +364,23 @@ def candidatos_cifra(texto: str) -> list[str]:
     return salida
 
 
+# Palabras que convierten el número siguiente en un orden («Paso 1», «Etapa 2», «Regla #3»), no en una cifra de
+# mercado: esos números no se muestran en grande.
+RE_ORDEN = re.compile(r"(?:\b(?:paso|pasos|etapa|fase|step|nivel|punto|tip|consejo|clave|regla|n[°º.]?|no\.|número|numero)"
+                      r"\s*#?\s*|#\s*)$", re.IGNORECASE)
+
+
+def es_numero_de_orden(texto: str, m: re.Match) -> bool:
+    """El número es un orden (paso, etapa…) o una lista («1.» / «1)» al inicio), sin unidad: no se resalta."""
+    numero = m.group(0).strip()
+    if not re.fullmatch(r"\d{1,2}", numero) or re.match(r"\s?[-–/]\s?\d", texto[m.end():]):
+        return False  # con %, $, decimales o rango («95-5») es una cifra
+    antes = texto[:m.start()]
+    if RE_ORDEN.search(antes[-25:]):
+        return True
+    return not antes.strip() and re.match(r"\s*[.)]", texto[m.end():]) is not None
+
+
 def separar_cifra(texto: str, preferida: str | None = None) -> tuple[str, str, str]:
     """(antes, cifra, después). Con `preferida` (una de candidatos_cifra) se resalta esa; si no, la primera cifra
     del texto. Cifra vacía si no hay."""
@@ -372,10 +389,12 @@ def separar_cifra(texto: str, preferida: str | None = None) -> tuple[str, str, s
         m = re.search(r"(?<![\d.,])" + re.escape(preferida) + (r"(?![\d%])" if preferida[-1].isdigit() else ""), texto)
         if m:
             return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
-    m = RE_CIFRA.search(texto)
-    if not m or not re.search(r"\d", m.group(0)):
-        return texto, "", ""
-    return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
+    for m in RE_CIFRA.finditer(texto):
+        if m.start() and texto[m.start() - 1].isdigit():
+            continue  # «-5» dentro de «95-5»
+        if re.search(r"\d", m.group(0)) and not es_numero_de_orden(texto, m):
+            return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
+    return texto, "", ""
 
 
 def t4_dato(L, d):

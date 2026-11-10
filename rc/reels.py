@@ -129,6 +129,22 @@ def _y_centrado(total: float) -> float:
     return max(ARRIBA, min((H - total) / 2, ABAJO - total))
 
 
+TAM_TXT_BASE, TAM_TXT_MAX, TAM_TXT_MIN, INTER_TXT = 72, 144, 40, 1.05
+
+
+def _tam_texto_cifra(antes: str, despues: str, ancho: float, tam_cifra: float) -> float:
+    """Tamaño del texto que acompaña a la cifra: con poco texto crece hasta el doble (144 pt) y se achica a medida que
+    hay más, para que todo quepa centrado en la zona segura."""
+    disponible = ABAJO - ARRIBA - tam_cifra * 0.86 - 40 - SEPARACION - 40
+    tam = TAM_TXT_MAX
+    while tam > TAM_TXT_MIN:
+        alto = sum(len(tarjetas.envolver(t, TITULO, tam, ancho)) * tam * INTER_TXT for t in (antes, despues) if t.strip())
+        if alto <= disponible and all(len(tarjetas.envolver(t, TITULO, tam, ancho)) <= 5 for t in (antes, despues)):
+            return tam
+        tam -= 4
+    return TAM_TXT_MIN
+
+
 def _tam_cifra(cifra):
     tam = 320
     while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
@@ -177,15 +193,19 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
                              else (texto, "", ""))
     if cifra:  # cifra gigante entre dos líneas de texto, como la tarjeta de dato del carrusel; todo centrado
         tam = _tam_cifra(cifra)
-        h_antes = _alto_texto(antes, 72, ancho, 300)
-        h_despues = _alto_texto(despues, 72, ancho, 400)
+        ancho_txt = ancho * 2 / 3  # el texto llega solo hasta 2 de 3 columnas y baja en más renglones
+        tam_txt = _tam_texto_cifra(antes, despues, ancho_txt, tam)
+
+        def alto(t):
+            return len(tarjetas.envolver(t, TITULO, tam_txt, ancho_txt)) * tam_txt * INTER_TXT if t.strip() else 0
+        h_antes, h_despues = alto(antes), alto(despues)
         total = h_antes + (40 if h_antes else 0) + tam * 0.86 + (SEPARACION + h_despues if h_despues else 0)
-        y = _y_centrado(total)
-        usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho, 300, 72, inter=1.05)
+        y = _y_centrado(total + tam_txt * 0.2)
+        usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho_txt, h_antes + 2, tam_txt, inter=INTER_TXT)
         y += usado + (40 if usado else 0)
         L.texto(cifra, TITULO, tam, tema["cifra"], M - tam * 0.04, H - y - tam * 0.86, rol="cifra")
         y += tam * 0.86 + SEPARACION
-        L.bloque(despues, TITULO, tema["texto"], M, y, ancho, ABAJO - y, 72, inter=1.05)
+        L.bloque(despues, TITULO, tema["texto"], M, y, ancho_txt, h_despues + 2, tam_txt, inter=INTER_TXT)
         return
     if numero in L.fotos:  # foto con velo del color de la escena arriba (como la tarjeta 2 del carrusel) y texto abajo
         alto_foto = ALTO_FOTO

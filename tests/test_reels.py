@@ -16,6 +16,21 @@ REEL = {
 
 
 class TestReels(unittest.TestCase):
+    def test_numeros_de_paso_no_se_agrandan_y_texto_a_dos_tercios(self):
+        from rc import tarjetas
+        self.assertEqual(tarjetas.separar_cifra("Paso 1: mapea los momentos relevantes")[1], "")
+        self.assertEqual(tarjetas.separar_cifra("1. Mapea el recorrido")[1], "")
+        self.assertEqual(tarjetas.separar_cifra("Regla 95-5: solo 5% compra ahora")[1], "95")
+        reel = dict(REEL, escena_2_desarrollo_a="Paso 1: mapea los momentos relevantes",
+                    escena_3_desarrollo_b="Solo 5% compra ahora")
+        self.assertIn(2, reels.escenas_sin_cifra(reel))                          # el paso lleva ícono (o foto)
+        pagina = pymupdf.open(stream=reels.generar_pdf(reel), filetype="pdf")[2]
+        tramos = [s for b in pagina.get_text("dict")["blocks"] if b["type"] == 0 for ln in b["lines"] for s in ln["spans"]]
+        texto = [s for s in tramos if s["text"].strip() != "5%"]
+        self.assertTrue(all(s["size"] > 100 for s in texto))                    # poco texto: más grande (hasta 2x)
+        limite = reels.M + (reels.W - 2 * reels.M) * 2 / 3 + 5
+        self.assertTrue(all(s["bbox"][2] <= limite for s in texto))             # solo hasta 2/3 del ancho
+
     def test_escena_con_foto_y_velo(self):
         reel = dict(REEL, escena_2_desarrollo_a="Primera idea sin datos", escena_3_desarrollo_b="Segunda idea sin datos",
                     escena_4_desarrollo_c="Tercera idea sin datos")

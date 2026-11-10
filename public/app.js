@@ -737,6 +737,20 @@ const IMAGEN_TARJETA = {
 
 // Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.
 const RE_CIFRA = /[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?/;
+const RE_ORDEN = /(?:\b(?:paso|pasos|etapa|fase|step|nivel|punto|tip|consejo|clave|regla|n[°º.]?|no\.|número|numero)\s*#?\s*|#\s*)$/i;
+
+/** ¿El texto tiene una cifra para mostrar en grande? Los números de orden («Paso 1», «1.») no cuentan. */
+function tieneCifra(texto) {
+  for (const m of texto.matchAll(new RegExp(RE_CIFRA.source, "g"))) {
+    if (m.index && /\d/.test(texto[m.index - 1])) continue;
+    if (!/\d/.test(m[0])) continue;
+    const numero = m[0].trim(), despues = texto.slice(m.index + m[0].length), antes = texto.slice(0, m.index);
+    const orden = /^\d{1,2}$/.test(numero) && !/^\s?[-–/]\s?\d/.test(despues)
+      && (RE_ORDEN.test(antes.slice(-25)) || (!antes.trim() && /^\s*[.)]/.test(despues)));
+    if (!orden) return true;
+  }
+  return false;
+}
 
 /** Cifras que se pueden resaltar (misma regla que rc/tarjetas.py · candidatos_cifra): rangos, números y con unidad. */
 function candidatosCifra(texto) {
@@ -755,7 +769,8 @@ function candidatosCifra(texto) {
 function opcionCifra(pieza, n) {
   const campo = CAMPOS[pieza.formato]?.[n - 1]?.campo;
   const enGrande = pieza.formato === "Reel" ? n >= 2 && n <= 4 : n === 4;
-  return enGrande && candidatosCifra(pieza.contenido?.[campo] || "").length > 1;
+  const texto = pieza.contenido?.[campo] || "";
+  return enGrande && tieneCifra(texto) && candidatosCifra(texto).length > 1;
 }
 
 function selectorCifra(pieza, n, texto) {
@@ -772,7 +787,7 @@ function selectorCifra(pieza, n, texto) {
 /** Escenas intermedias del reel sin cifra: si hay dos o más, cualquiera (menos una) puede llevar foto. */
 function opcionFoto(pieza, n) {
   if (pieza.formato !== "Reel" || n < 2 || n > 4) return false;
-  const sin = [2, 3, 4].filter((k) => !RE_CIFRA.test(pieza.contenido?.[CAMPOS.Reel[k - 1].campo] || ""));
+  const sin = [2, 3, 4].filter((k) => !tieneCifra(pieza.contenido?.[CAMPOS.Reel[k - 1].campo] || ""));
   return sin.length >= 2 && sin.includes(n);
 }
 
@@ -783,7 +798,7 @@ function infoImagen(pieza, n) {
     generar: "Generar íconos", alt: "Ícono generado en Krea",
     ayuda: "Genera en Krea el ícono isométrico de la escena 1 y su animación corta en video" };
   const texto = pieza.contenido?.[CAMPOS.Reel[n - 1]?.campo] || "";
-  if (n > 4 || RE_CIFRA.test(texto)) return null; // el cierre no lleva imagen; con cifra, la cifra va en grande
+  if (n > 4 || tieneCifra(texto)) return null; // el cierre no lleva imagen; con cifra, la cifra va en grande
   if ((pieza.diseno_reel?.fotos || []).includes(n)) return { reel: true, boton: `Foto de la escena ${n}`,
     titulo: `Foto · Escena ${n}`, generar: "Generar fotos", alt: "Foto generada en Krea",
     ayuda: `Genera en Krea la foto de apoyo (con velo) de la escena ${n}` };
