@@ -516,6 +516,10 @@ def reel_animable(pieza_id: int) -> dict:
     if video:
         x, y, lado = reels.caja_icono(pieza["contenido"])
         respuesta["video_escena_1"] = {"url": video, "x": x, "y": y, "lado": lado}
+        # Fondo de la escena 1 sin el ícono fijo, para poner encima el animado con su fondo recortado.
+        sin_icono = {k: v for k, v in imagenes.items() if k != 1}
+        respuesta["fondo_escena_1_sin_icono"] = reels.escenas_animables(
+            pieza["contenido"], inicio, sin_icono, fotos=_fotos_reel(pieza))[0]["fondo"]
     return respuesta
 
 

@@ -124,27 +124,56 @@ function dibujarCifra(ctx, tx, t) {
   ctx.restore();
 }
 
+function quitarFondo(a, lado) {
+  // Croma: el fondo del video (muestreado en las esquinas de cada cuadro) se vuelve transparente, con borde suave,
+  // para que el ícono quede sobre el color real de la escena sin halo. Lanza error si el video no es del mismo dominio.
+  const img = a.getImageData(0, 0, lado, lado), d = img.data;
+  const m = Math.max(4, Math.round(lado * 0.02)), muestras = [0, 0, 0];
+  let n = 0;
+  for (const [x0, y0] of [[0, 0], [lado - m, 0], [0, lado - m], [lado - m, lado - m]]) {
+    for (let y = y0; y < y0 + m; y += 2) for (let x = x0; x < x0 + m; x += 2) {
+      const k = (y * lado + x) * 4;
+      muestras[0] += d[k]; muestras[1] += d[k + 1]; muestras[2] += d[k + 2]; n += 1;
+    }
+  }
+  const [fr, fg, fb] = muestras.map((v) => v / n);
+  const t1 = 26, t2 = 80;
+  for (let k = 0; k < d.length; k += 4) {
+    const dist = Math.abs(d[k] - fr) + Math.abs(d[k + 1] - fg) + Math.abs(d[k + 2] - fb);
+    if (dist <= t1) { d[k + 3] = 0; continue; }
+    if (dist < t2) d[k + 3] = Math.round(d[k + 3] * (dist - t1) / (t2 - t1));
+  }
+  a.putImageData(img, 0, 0);
+}
+
 function dibujarVideo(ctx) {
   const v = REEL.video, caja = REEL.datos.video_escena_1;
   if (!REEL.conVideo || !v || !caja || v.readyState < 2) return;
-  // Bordes difuminados (máscara radial) para fundir el video con el fondo de la escena.
-  const lado = caja.lado, aux = REEL.aux, a = aux.getContext("2d");
-  aux.width = aux.height = lado;
-  a.clearRect(0, 0, lado, lado);
+  const lado = caja.lado, aux = REEL.aux, a = aux.getContext("2d", { willReadFrequently: true });
+  if (aux.width !== lado) aux.width = aux.height = lado;
   a.globalCompositeOperation = "source-over";
+  a.clearRect(0, 0, lado, lado);
   a.drawImage(v, 0, 0, lado, lado);
-  a.globalCompositeOperation = "destination-in";
-  const g = a.createRadialGradient(lado / 2, lado / 2, lado * 0.36, lado / 2, lado / 2, lado / 2);
-  g.addColorStop(0, "rgba(0,0,0,1)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  a.fillStyle = g;
-  a.fillRect(0, 0, lado, lado);
+  if (REEL.croma !== false) {
+    try { quitarFondo(a, lado); REEL.croma = true; } catch { REEL.croma = false; }
+  }
+  if (!REEL.croma) {
+    // Sin croma (video directo de Krea): bordes difuminados para fundirlo con la escena.
+    a.globalCompositeOperation = "destination-in";
+    const g = a.createRadialGradient(lado / 2, lado / 2, lado * 0.36, lado / 2, lado / 2, lado / 2);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    a.fillStyle = g;
+    a.fillRect(0, 0, lado, lado);
+  }
   ctx.drawImage(aux, caja.x, caja.y);
 }
 
 function dibujarEscena(ctx, i, t) {
   const { ancho, alto } = REEL.datos;
-  ctx.drawImage(REEL.imagenes[i], 0, 0, ancho, alto);
+  // Escena 1 con video y croma: fondo sin el ícono fijo (si no, se vería el ícono fijo detrás del animado).
+  const fondo = i === 0 && REEL.conVideo && REEL.croma === true && REEL.fondoSinIcono ? REEL.fondoSinIcono : REEL.imagenes[i];
+  ctx.drawImage(fondo, 0, 0, ancho, alto);
   if (i === 0) dibujarVideo(ctx);
   dibujarTextos(ctx, REEL.datos.escenas[i].textos, t);
 }
@@ -314,6 +343,8 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}
       REEL.videoGrabable = r.grabable;
     }
     REEL.conVideo = Boolean(REEL.video);
+    REEL.croma = REEL.videoGrabable ? null : false;
+    REEL.fondoSinIcono = datos.fondo_escena_1_sin_icono ? await cargarImagen(datos.fondo_escena_1_sin_icono) : null;
     dibujarCuadro(lienzo.getContext("2d"), 1.5);
     botonesReel(false);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
