@@ -244,12 +244,13 @@ function renderTextos(pieza, conMiniaturas = true) {
               onclick: () => { estado.editandoGancho = pieza.id; render(); $(`gancho-${pieza.id}`)?.focus(); },
             }, "Editar gancho"))
           : null,
+        conMiniaturas && opcionCifra(pieza, i + 1) ? selectorCifra(pieza, i + 1, c[campo] || "") : null,
         conMiniaturas && opcionFoto(pieza, i + 1) ? el("label", { clase: "reel-foto",
           title: "La escena muestra una foto de apoyo con velo de color en vez del ícono de línea" },
           el("input", { type: "checkbox", checked: (pieza.diseno_reel?.fotos || []).includes(i + 1),
             disabled: pieza.estado === "aprobada",
             onchange: (ev) => accion(pieza.id, () => api("reel-foto", { metodo: "POST",
-              cuerpo: { pieza_id: pieza.id, escena: i + 1, activa: ev.target.checked } })) }),
+              cuerpo: { pieza_id: pieza.id, escena: i + 1, activa: ev.target.checked } })).then(() => refrescarMiniaturasDe(pieza)) }),
           " Usar foto en esta escena") : null,
         conMiniaturas && infoImagen(pieza, i + 1) ? el("button", {
           clase: "btn btn--secundario btn--chico", type: "button",
@@ -736,6 +737,37 @@ const IMAGEN_TARJETA = {
 
 // Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.
 const RE_CIFRA = /[+\-]?(?:US\$|\$)?\d+(?:[.,]\d+)*\s?(?:%|x\b)?/;
+
+/** Cifras que se pueden resaltar (misma regla que rc/tarjetas.py · candidatos_cifra): rangos, números y con unidad. */
+function candidatosCifra(texto) {
+  const hallados = [];
+  for (const m of texto.matchAll(/\d+(?:[.,]\d+)*\s?[-–/]\s?\d+(?:[.,]\d+)*\s?%?/g)) hallados.push([m.index, 0, m[0].trim()]);
+  for (const m of texto.matchAll(/(?:US\$|\$)?\d+(?:[.,]\d+)*/g)) {
+    hallados.push([m.index, 1, m[0]]);
+    const unidad = texto.slice(m.index + m[0].length).match(/^\s?(%|x\b)/);
+    if (unidad) hallados.push([m.index, 2, m[0] + unidad[0]]);
+  }
+  hallados.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  return [...new Set(hallados.map((h) => h[2]))];
+}
+
+/** Tarjeta o escena donde la cifra va en grande y el texto tiene más de una opción para resaltar. */
+function opcionCifra(pieza, n) {
+  const campo = CAMPOS[pieza.formato]?.[n - 1]?.campo;
+  const enGrande = pieza.formato === "Reel" ? n >= 2 && n <= 4 : n === 4;
+  return enGrande && candidatosCifra(pieza.contenido?.[campo] || "").length > 1;
+}
+
+function selectorCifra(pieza, n, texto) {
+  const elegida = pieza.diseno_reel?.cifras?.[String(n)] || "";
+  const opciones = candidatosCifra(texto);
+  return el("label", { clase: "reel-foto", title: "Qué cifra del texto se muestra en grande" }, "Cifra a resaltar: ",
+    el("select", { disabled: pieza.estado === "aprobada",
+      onchange: (ev) => accion(pieza.id, () => api("cifra", { metodo: "POST",
+        cuerpo: { pieza_id: pieza.id, numero: n, cifra: ev.target.value } })).then(() => refrescarMiniaturasDe(pieza)) },
+      el("option", { value: "", selected: !elegida }, `Automática (${opciones[0]})`),
+      ...opciones.map((o) => el("option", { value: o, selected: o === elegida }, o))));
+}
 
 /** Escenas intermedias del reel sin cifra: si hay dos o más, cualquiera (menos una) puede llevar foto. */
 function opcionFoto(pieza, n) {

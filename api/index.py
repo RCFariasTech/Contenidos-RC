@@ -288,6 +288,13 @@ def ruta_ilustraciones_borrar(req):
                                                  bool(cuerpo.get("solo_animacion")))
 
 
+def ruta_cifra(req):
+    _dueno(req)
+    cuerpo = req["cuerpo"]
+    return 200, _servicio().elegir_cifra(_entero(cuerpo, "pieza_id"), _entero(cuerpo, "numero"),
+                                         str(cuerpo.get("cifra") or "")[:40])
+
+
 def ruta_reel_foto(req):
     _dueno(req)
     cuerpo = req["cuerpo"]
@@ -423,6 +430,7 @@ RUTAS = {
     ("GET", "video-icono"): ruta_video_icono,
     ("POST", "ilustraciones-borrar"): ruta_ilustraciones_borrar,
     ("POST", "reel-foto"): ruta_reel_foto,
+    ("POST", "cifra"): ruta_cifra,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,

@@ -170,13 +170,16 @@
         <div class="reel-panel">
           <p class="ayuda">El reel se reproduce completo en bucle: textos animados, ícono animado en la escena 1 y la transición elegida entre escenas. «Descargar video» lo graba (sin sonido, 1080 × 1920). Cada escena dura según su tiempo de lectura (~3 palabras por segundo).</p>
           <fieldset class="reel-transiciones-caja"><legend>Transiciones</legend><div id="reel-transiciones"></div></fieldset>
-          <progress id="reel-progreso" max="1" value="0"></progress>
+          <div class="reel-controles">
+            <button type="button" id="reel-play" class="btn btn--secundario reel-play" aria-label="Reproducir">▶</button>
+            <input type="range" id="reel-barra" min="0" max="1000" value="0" aria-label="Posición en el reel">
+            <span id="reel-tiempo" class="reel-tiempo">0:00 / 0:00</span>
+          </div>
           <p id="reel-estado" class="ayuda" role="status"></p>
           <div class="dialogo__acciones">
             <button type="button" id="reel-cerrar" class="btn btn--secundario">Cerrar</button>
-            <button type="button" id="reel-detener" class="btn btn--secundario" hidden>Detener</button>
+            <button type="button" id="reel-detener" class="btn btn--secundario" hidden>Cancelar grabación</button>
             <button type="button" id="reel-pdf" class="btn btn--secundario" title="PDF del guion visual para editar en Adobe Express">PDF del guion</button>
-            <button type="button" id="reel-reproducir" class="btn btn--secundario">Reproducir</button>
             <button type="button" id="reel-descargar" class="btn btn--primario" title="Graba el reel en tiempo real (30 s) y lo descarga">Descargar video</button>
           </div>
         </div>

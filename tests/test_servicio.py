@@ -483,6 +483,19 @@ class TestFlujo(unittest.TestCase):
                 servicio.foto_en_escena(reel["id"], n, True)
         self.assertEqual(servicio.foto_en_escena(reel["id"], sin[0], False)["fotos"], sin[1:-1])  # quitar una
 
+    def test_elegir_cifra_a_resaltar(self):
+        carrusel, _ = self._mes_generado()
+        from rc import tarjetas
+        texto = tarjetas.datos_tarjetas(carrusel["contenido"])[3]["completo"]
+        opciones = tarjetas.candidatos_cifra(texto)
+        if not opciones:
+            self.skipTest("la tarjeta 4 de prueba no tiene cifras")
+        self.assertEqual(servicio.elegir_cifra(carrusel["id"], 4, opciones[-1]), {"cifras": {"4": opciones[-1]}})
+        self.assertEqual(servicio.elegir_cifra(carrusel["id"], 4, ""), {"cifras": {}})          # vuelve a automática
+        for numero, cifra in ((4, "no-está-9999"), (2, opciones[0])):
+            with self.assertRaises(servicio.ErrorNegocio):
+                servicio.elegir_cifra(carrusel["id"], numero, cifra)
+
     def test_krea_caido_no_rompe_la_generacion_de_textos(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

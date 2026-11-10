@@ -33,6 +33,7 @@ class _Hoja:
         self.registro = registro
         self.fondo_clave, self.tarjeta, self.ancho, self.alto = "marino", 0, W, H
         self.fotos = ()
+        self.cifras = {}  # {"escena": cifra elegida para resaltar}
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color])
@@ -155,7 +156,8 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         _logos(L)
         return
     ancho = W - 2 * M
-    antes, cifra, despues = tarjetas.separar_cifra(texto) if numero > 1 else (texto, "", "")
+    antes, cifra, despues = (tarjetas.separar_cifra(texto, L.cifras.get(str(numero))) if numero > 1
+                             else (texto, "", ""))
     if cifra:  # cifra gigante entre dos líneas de texto, como la tarjeta de dato del carrusel; todo centrado
         tam = _tam_cifra(cifra)
         h_antes = _alto_texto(antes, 72, ancho, 300)
@@ -243,7 +245,7 @@ def _logos(L) -> None:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,
-                guias: bool = False, imagenes: dict[int, bytes] | None = None, fotos=()) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None, fotos=(), cifras=None) -> bytes:
     """guias=True añade la etiqueta de cada escena (vista previa); False la omite (descarga)."""
     tarjetas._registrar_fuentes()
     buffer = io.BytesIO()
@@ -252,6 +254,7 @@ def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semill
     c.setAuthor("RC Farías")
     L = _Hoja(c, tarjetas._colores(), guias, imagenes)
     L.fotos = fotos_validas(contenido, fotos)
+    L.cifras = cifras or {}
     for i, campo in enumerate(CAMPOS, 1):
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante + semilla)
         c.showPage()
@@ -278,7 +281,7 @@ def duraciones(contenido: dict | None = None) -> list[float]:
 
 
 def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, bytes] | None = None,
-                      ancho: int = 1080, fotos=()) -> list[dict]:
+                      ancho: int = 1080, fotos=(), cifras=None) -> list[dict]:
     """Para armar el reel en video: cada escena como imagen de fondo SIN textos (JPEG en data URI) y los textos con
     su posición, fuente, tamaño y color (en px de 1080 x 1920; y = línea de base desde arriba), para que la pantalla
     los anime encima."""
@@ -291,6 +294,7 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
     for i, campo in enumerate(CAMPOS, 1):
         L = _Hoja(c, tarjetas._colores(), False, imagenes, registro=registros[i - 1])
         L.fotos = fotos_validas(contenido, fotos)
+        L.cifras = cifras or {}
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
         c.showPage()
     c.save()

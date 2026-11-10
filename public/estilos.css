@@ -300,3 +300,7 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 #reel-progreso { width: 100%; }
 @media (max-width: 640px) { .reel-cuerpo { grid-template-columns: 1fr; } .reel-lienzo { max-width: 260px; margin: 0 auto; } }
 .reel-foto { display: inline-flex; gap: 6px; align-items: center; font-size: .9rem; margin: 4px 0; }
+.reel-controles { display: flex; align-items: center; gap: 10px; }
+.reel-play { min-width: 44px; }
+#reel-barra { flex: 1; accent-color: #005eff; }
+.reel-tiempo { font-variant-numeric: tabular-nums; font-size: .9rem; white-space: nowrap; }

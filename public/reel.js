@@ -4,7 +4,7 @@
 // y lo descarga. Usa api(), el() y $() de app.js. No graba audio.
 
 const REEL = { datos: null, pieza: null, imagenes: [], video: null, conVideo: false, reproduciendo: false,
-  grabador: null, cuadro: 0 };
+  grabador: null, grabando: false, t: 0, ultimo: 0, bucle: 0, arrastrando: false };
 const TRANSICIONES = [
   ["fundido", "Fundido"], ["deslizar", "Deslizar ←"], ["subir", "Deslizar ↑"], ["zoom", "Zoom"],
   ["barrido", "Barrido"], ["corte", "Corte directo"],
@@ -221,31 +221,68 @@ function dibujarCuadro(ctx, t) {
   ctx.restore();
 }
 
-// ---------- reproducción y grabación ----------
+// ---------- reproducción (vista previa con pausa y barra) y grabación ----------
 
-function animar(onFin, desde = 0, destino = null) {
-  // destino: lienzo de grabación (limpio); se copia cada cuadro a la vista previa.
-  const vista = $("reel-lienzo"), lienzo = destino || vista, ctx = lienzo.getContext("2d");
-  const total = duracionTotal();
-  const t0 = performance.now() - desde * 1000;
-  REEL.reproduciendo = true;
-  if (REEL.video) { REEL.video.currentTime = 0; REEL.video.play().catch(() => {}); }
-  const paso = () => {
-    if (!REEL.reproduciendo) return;
-    const t = (performance.now() - t0) / 1000;
-    dibujarCuadro(ctx, Math.min(t, total - 0.001));
-    if (destino) vista.getContext("2d").drawImage(destino, 0, 0);
-    $("reel-progreso").value = Math.min(1, t / total);
-    if (t >= total) { REEL.reproduciendo = false; onFin?.(); return; }
-    REEL.cuadro = requestAnimationFrame(paso);
-  };
-  paso();
+function inicioEscena(i) {
+  return REEL.datos.escenas.slice(0, i).reduce((s, e) => s + e.duracion, 0);
 }
 
-function detener() {
+function reloj(seg) {
+  const s = Math.max(0, Math.floor(seg));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function sincronizarVideo() {
+  // El ícono animado sigue al reproductor: corre cuando el reel corre y salta cuando se mueve la barra.
+  const v = REEL.video;
+  if (!v || !v.duration) return;
+  const objetivo = REEL.t % v.duration;
+  if (REEL.reproduciendo) {
+    if (v.paused) v.play().catch(() => {});
+    if (Math.abs(v.currentTime - objetivo) > 0.4) v.currentTime = objetivo;
+  } else {
+    if (!v.paused) v.pause();
+    if (Math.abs(v.currentTime - objetivo) > 0.05) v.currentTime = objetivo;
+  }
+}
+
+function pintarVista() {
+  if (!REEL.datos) return;
+  const total = duracionTotal();
+  dibujarCuadro($("reel-lienzo").getContext("2d"), Math.min(REEL.t, total - 0.001));
+  if (!REEL.arrastrando) $("reel-barra").value = String(Math.round((REEL.t / total) * 1000));
+  $("reel-tiempo").textContent = `${reloj(REEL.t)} / ${reloj(total)}`;
+}
+
+function bucleVista(ahora) {
+  if (!$("dialogo-reel").open || REEL.grabando) { REEL.bucle = 0; return; }
+  if (REEL.reproduciendo && REEL.datos) {
+    REEL.t += (ahora - (REEL.ultimo || ahora)) / 1000;
+    if (REEL.t >= duracionTotal()) REEL.t = 0;  // en bucle
+  }
+  REEL.ultimo = ahora;
+  sincronizarVideo();
+  pintarVista();
+  REEL.bucle = requestAnimationFrame(bucleVista);
+}
+
+function arrancarBucle() {
+  if (!REEL.bucle) { REEL.ultimo = 0; REEL.bucle = requestAnimationFrame(bucleVista); }
+}
+
+function reproducir(desde = null) {
+  if (!REEL.datos) return;
+  if (desde !== null) REEL.t = desde;
+  REEL.reproduciendo = true;
+  $("reel-play").textContent = "❚❚";
+  $("reel-play").setAttribute("aria-label", "Pausar");
+  arrancarBucle();
+}
+
+function pausar() {
   REEL.reproduciendo = false;
-  cancelAnimationFrame(REEL.cuadro);
-  if (REEL.grabador?.state === "recording") REEL.grabador.stop();
+  $("reel-play").textContent = "▶";
+  $("reel-play").setAttribute("aria-label", "Reproducir");
 }
 
 function formatoGrabacion() {
@@ -253,47 +290,37 @@ function formatoGrabacion() {
   return opciones.find((m) => window.MediaRecorder?.isTypeSupported?.(m)) || "";
 }
 
-
 function estadoReel(texto) { $("reel-estado").textContent = texto; }
 
-function botonesReel(ocupado) {
-  $("reel-reproducir").disabled = ocupado;
-  $("reel-descargar").disabled = ocupado;
-  $("reel-detener").hidden = !ocupado;
-  document.querySelectorAll(".reel-trans select").forEach((s) => { s.disabled = ocupado; });
-}
-
-function inicioEscena(i) {
-  return REEL.datos.escenas.slice(0, i).reduce((s, e) => s + e.duracion, 0);
-}
-
-function reproducir(desde = 0) {
-  // Reproduce en bucle hasta que se detenga, se descargue o se cierre la ventana.
-  botonesReel(true);
-  estadoReel("");
-  const vuelta = (d) => animar(() => { if ($("dialogo-reel").open && !REEL.cancelado) vuelta(0); else botonesReel(false); }, d);
-  REEL.cancelado = false;
-  vuelta(desde);
+function controlesReel(listo, grabando = false) {
+  $("reel-play").disabled = !listo || grabando;
+  $("reel-barra").disabled = !listo || grabando;
+  $("reel-descargar").disabled = !listo || grabando;
+  $("reel-pdf").disabled = grabando;
+  $("reel-detener").hidden = !grabando;
 }
 
 async function descargarReel() {
-  REEL.cancelado = true;
-  detener();
   const mime = formatoGrabacion();
   if (!mime) { estadoReel("Este navegador no puede grabar video. Usa Chrome o Edge actualizados."); return; }
+  pausar();
   // Se graba en un lienzo nuevo (la vista previa pudo quedar «marcada» por el video directo de Krea).
   const rec = Object.assign(document.createElement("canvas"), { width: REEL.datos.ancho, height: REEL.datos.alto });
+  const ctx = rec.getContext("2d"), vista = $("reel-lienzo").getContext("2d");
   REEL.aux = document.createElement("canvas");
   REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: rec.width, height: rec.height }));
+  const conVideoAntes = REEL.conVideo;
   REEL.conVideo = Boolean(REEL.video && REEL.videoGrabable);
   const avisoVideo = REEL.video && !REEL.videoGrabable
     ? " El ícono animado no se pudo incluir en la grabación (pesa demasiado o Krea no lo permite); se usa el ícono fijo." : "";
-  const flujo = rec.captureStream(30);
   const partes = [];
-  REEL.grabador = new MediaRecorder(flujo, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  REEL.grabador = new MediaRecorder(rec.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8_000_000 });
   REEL.grabador.ondataavailable = (ev) => { if (ev.data.size) partes.push(ev.data); };
   REEL.grabador.onstop = () => {
-    botonesReel(false);
+    REEL.grabando = false;
+    REEL.conVideo = conVideoAntes;
+    controlesReel(true);
+    arrancarBucle();
     if (REEL.cancelado) { estadoReel("Grabación cancelada."); return; }
     const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
     const archivo = new Blob(partes, { type: mime.split(";")[0] });
@@ -306,29 +333,53 @@ async function descargarReel() {
       "Listo: se descargó en WebM (este navegador no graba MP4). Para Instagram, conviértelo a MP4 o usa Chrome actualizado.");
   };
   REEL.cancelado = false;
-  botonesReel(true);
-  estadoReel(`Grabando el reel en tiempo real (${Math.round(duracionTotal())} s). Mantén esta pestaña visible…${avisoVideo}`);
+  REEL.grabando = true;
+  controlesReel(true, true);
+  const total = duracionTotal();
+  estadoReel(`Grabando el reel en tiempo real (${Math.round(total)} s). Mantén esta pestaña visible…${avisoVideo}`);
+  if (REEL.video) { REEL.video.currentTime = 0; REEL.video.play().catch(() => {}); }
   REEL.grabador.start(500);
-  animar(() => { REEL.conVideo = Boolean(REEL.video); setTimeout(() => REEL.grabador.stop(), 200); }, 0, rec);
+  const t0 = performance.now();
+  const paso = () => {
+    if (!REEL.grabando) return;
+    const t = (performance.now() - t0) / 1000;
+    REEL.t = Math.min(t, total - 0.001);
+    dibujarCuadro(ctx, REEL.t);
+    vista.drawImage(rec, 0, 0);
+    $("reel-barra").value = String(Math.round((REEL.t / total) * 1000));
+    $("reel-tiempo").textContent = `${reloj(REEL.t)} / ${reloj(total)}`;
+    if (t >= total) { setTimeout(() => REEL.grabador.stop(), 200); return; }
+    requestAnimationFrame(paso);
+  };
+  paso();
+}
+
+function cancelarGrabacion() {
+  REEL.cancelado = true;
+  if (REEL.grabador?.state === "recording") REEL.grabador.stop();
 }
 
 async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}) {
   REEL.pieza = pieza;
-  REEL.conVideo = true;
-  REEL.cancelado = false;
+  REEL.datos = null;
+  REEL.t = 0;
+  REEL.grabando = false;
+  pausar();
   $("titulo-reel").textContent = "Reel";
   estadoReel("Preparando escenas…");
-  botonesReel(true);
+  controlesReel(false);
+  $("reel-tiempo").textContent = "0:00 / 0:00";
   const trans = transicionesGuardadas(pieza.id);
   $("reel-transiciones").replaceChildren(...[1, 2, 3, 4].map((i) => el("label", { clase: "reel-trans" },
     `Escena ${i} → ${i + 1}`,
     el("select", { id: `reel-trans-${i}`, onchange: () => {
       try { localStorage.setItem(clavesTransicion(pieza.id), JSON.stringify(transicionesActuales())); } catch { /* sin almacenamiento */ }
+      // Para ver la transición elegida, el reel salta a un momento antes de ese cambio de escena.
+      if (REEL.datos) { REEL.t = Math.max(0, inicioEscena(i) - 1); reproducir(); }
     } }, ...TRANSICIONES.map(([v, t]) => el("option", { value: v, selected: v === trans[i - 1] }, t))))));
-  $("dialogo-reel").showModal();
+  if (!$("dialogo-reel").open) $("dialogo-reel").showModal();
   try {
     const [datos] = await Promise.all([api(`reel-animable?pieza=${pieza.id}`), cargarFuentes()]);
-    REEL.datos = datos;
     const lienzo = $("reel-lienzo");
     lienzo.width = datos.ancho;
     lienzo.height = datos.alto;
@@ -345,16 +396,26 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}
     REEL.conVideo = Boolean(REEL.video);
     REEL.croma = REEL.videoGrabable ? null : false;
     REEL.fondoSinIcono = datos.fondo_escena_1_sin_icono ? await cargarImagen(datos.fondo_escena_1_sin_icono) : null;
-    dibujarCuadro(lienzo.getContext("2d"), 1.5);
-    botonesReel(false);
+    REEL.datos = datos;  // listo: recién ahora el reproductor puede dibujar
+    controlesReel(true);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
-    if (autoplay && $("dialogo-reel").open) reproducir(inicioEscena(Math.min(desde, datos.escenas.length - 1)));
+    REEL.t = autoplay ? inicioEscena(Math.min(desde, datos.escenas.length - 1)) : 1.5;
+    if (autoplay) reproducir(); else arrancarBucle();
   } catch (e) {
     estadoReel(`No se pudo preparar el reel: ${e.message}`);
   }
 }
 
-$("reel-reproducir").addEventListener("click", () => reproducir(0));
+$("reel-play").addEventListener("click", () => (REEL.reproduciendo ? pausar() : reproducir()));
+const barra = $("reel-barra");
+barra.addEventListener("pointerdown", () => { REEL.arrastrando = true; });
+barra.addEventListener("input", () => {
+  if (!REEL.datos) return;
+  REEL.t = (Number(barra.value) / 1000) * duracionTotal();
+  pintarVista();
+});
+barra.addEventListener("change", () => { REEL.arrastrando = false; });
+barra.addEventListener("pointerup", () => { REEL.arrastrando = false; });
 $("reel-pdf").addEventListener("click", async (ev) => {
   ev.currentTarget.disabled = true;
   try { await descargarArchivo(`/api/tarjetas-pdf?pieza=${REEL.pieza.id}&semilla=0`, "guion-reel.pdf"); }
@@ -362,7 +423,14 @@ $("reel-pdf").addEventListener("click", async (ev) => {
   ev.currentTarget.disabled = false;
 });
 $("reel-descargar").addEventListener("click", descargarReel);
-$("reel-detener").addEventListener("click", () => { REEL.cancelado = true; detener(); botonesReel(false); estadoReel(""); });
+$("reel-detener").addEventListener("click", cancelarGrabacion);
 $("reel-cerrar").addEventListener("click", () => $("dialogo-reel").close());
-$("dialogo-reel").addEventListener("close", () => { REEL.cancelado = true; detener(); REEL.video?.pause(); });
+$("dialogo-reel").addEventListener("close", () => {
+  cancelarGrabacion();
+  pausar();
+  REEL.grabando = false;
+  REEL.video?.pause();
+  cancelAnimationFrame(REEL.bucle);
+  REEL.bucle = 0;
+});
 window.abrirReel = abrirReel;

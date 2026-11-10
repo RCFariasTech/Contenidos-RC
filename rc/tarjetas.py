@@ -340,9 +340,38 @@ def t3_icono(L, d):
     L.bloque(texto, TEXTO, tema["texto"], M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
 
 
-def separar_cifra(texto: str) -> tuple[str, str, str]:
-    """(antes, cifra, después) con la primera cifra del texto; cifra vacía si no hay."""
-    m = RE_CIFRA.search(texto or "")
+RE_RANGO = re.compile(r"\d+(?:[.,]\d+)*\s?[-–/]\s?\d+(?:[.,]\d+)*\s?%?")
+RE_NUMERO = re.compile(r"(?:US\$|\$)?\d+(?:[.,]\d+)*")
+
+
+def candidatos_cifra(texto: str) -> list[str]:
+    """Cifras que se pueden resaltar en el texto, en orden de aparición y sin repetir: rangos («95-5»), números
+    («95», «5») y números con su unidad («5%», «3x»). Ej.: «Regla 95-5: solo 5% compra» → 95-5, 95, 5, 5%."""
+    texto = texto or ""
+    hallados = []
+    for m in RE_RANGO.finditer(texto):
+        hallados.append((m.start(), 0, m.group(0).strip()))
+    for m in RE_NUMERO.finditer(texto):
+        hallados.append((m.start(), 1, m.group(0)))
+        unidad = re.match(r"\s?(%|x\b)", texto[m.end():])
+        if unidad:
+            hallados.append((m.start(), 2, m.group(0) + unidad.group(0)))
+    salida = []
+    for _pos, _orden, c in sorted(hallados):
+        if c not in salida:
+            salida.append(c)
+    return salida
+
+
+def separar_cifra(texto: str, preferida: str | None = None) -> tuple[str, str, str]:
+    """(antes, cifra, después). Con `preferida` (una de candidatos_cifra) se resalta esa; si no, la primera cifra
+    del texto. Cifra vacía si no hay."""
+    texto = texto or ""
+    if preferida:
+        m = re.search(r"(?<![\d.,])" + re.escape(preferida) + (r"(?![\d%])" if preferida[-1].isdigit() else ""), texto)
+        if m:
+            return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
+    m = RE_CIFRA.search(texto)
     if not m or not re.search(r"\d", m.group(0)):
         return texto, "", ""
     return texto[:m.start()].strip(), m.group(0).strip(), texto[m.end():].strip()
@@ -351,7 +380,7 @@ def separar_cifra(texto: str) -> tuple[str, str, str]:
 def t4_dato(L, d):
     tema = TEMAS[L.fondo_clave]
     todo = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
-    antes, cifra, despues = separar_cifra(todo)
+    antes, cifra, despues = separar_cifra(todo, d.get("cifra"))
     L.fondo(L.fondo_clave)
     usado = L.bloque(antes, TEXTO, tema["texto"], M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
     y = 120 + usado + 30
@@ -426,7 +455,8 @@ def plantillas_de(contenido: dict) -> list[int]:
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
-                guias: bool = False, imagenes: dict[int, bytes] | None = None, inicio: int = 0) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None, inicio: int = 0,
+                cifras: dict | None = None) -> bytes:
     """guias=True dibuja los recuadros de imagen con su nota (vista previa); False los omite (descarga).
 
     inicio: color con que empieza la pieza (según su semana, ver ROTACION).
@@ -440,7 +470,8 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     L = Lienzo(c, _colores(), guias=guias, imagenes=imagenes)
     for numero, (plantilla, datos) in enumerate(zip(plantillas_de(contenido), datos_tarjetas(contenido)), 1):
         L.tarjeta, L.fondo_clave = numero, color_de_tarjeta(numero, inicio)
-        PLANTILLAS[plantilla](L, {**datos, "alternativa": variante + semilla * 3 + numero * 5})
+        PLANTILLAS[plantilla](L, {**datos, "alternativa": variante + semilla * 3 + numero * 5,
+                                  "cifra": (cifras or {}).get(str(numero))})
         c.showPage()
     c.save()
     return buffer.getvalue()

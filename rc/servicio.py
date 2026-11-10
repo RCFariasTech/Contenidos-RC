@@ -436,11 +436,12 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
     if pieza["formato"] == "Reel":
         modulo = reels
         pdf = reels.generar_pdf(contenido, titulo, inicio, semilla=max(0, int(semilla)), guias=guias,
-                                imagenes=_imagenes_elegidas(pieza["id"]), fotos=_fotos_reel(pieza))
+                                imagenes=_imagenes_elegidas(pieza["id"]), fotos=_fotos_reel(pieza),
+                                cifras=_cifras(pieza))
     else:
         modulo = tarjetas
         pdf = tarjetas.generar_pdf(contenido, titulo, variante, semilla=max(0, int(semilla)), guias=guias,
-                                   imagenes=_imagenes_elegidas(pieza["id"]), inicio=inicio)
+                                   imagenes=_imagenes_elegidas(pieza["id"]), inicio=inicio, cifras=_cifras(pieza))
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
@@ -506,7 +507,8 @@ def reel_animable(pieza_id: int) -> dict:
         raise ErrorNegocio("El video terminado es para reels con contenido.")
     inicio = tarjetas.inicio_de_semana(pieza.get("semana"))
     imagenes = _imagenes_elegidas(pieza["id"])  # también actualiza imágenes y videos que seguían en Krea
-    escenas = reels.escenas_animables(pieza["contenido"], inicio, imagenes, fotos=_fotos_reel(pieza))
+    escenas = reels.escenas_animables(pieza["contenido"], inicio, imagenes, fotos=_fotos_reel(pieza),
+                                      cifras=_cifras(pieza))
     filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{pieza['id']}",
                            tarjeta="eq.1", elegida="is.true")
     video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"
@@ -519,7 +521,7 @@ def reel_animable(pieza_id: int) -> dict:
         # Fondo de la escena 1 sin el ícono fijo, para poner encima el animado con su fondo recortado.
         sin_icono = {k: v for k, v in imagenes.items() if k != 1}
         respuesta["fondo_escena_1_sin_icono"] = reels.escenas_animables(
-            pieza["contenido"], inicio, sin_icono, fotos=_fotos_reel(pieza))[0]["fondo"]
+            pieza["contenido"], inicio, sin_icono, fotos=_fotos_reel(pieza), cifras=_cifras(pieza))[0]["fondo"]
     return respuesta
 
 
@@ -532,6 +534,40 @@ def _texto_tarjeta(contenido: dict, tarjeta: int) -> dict:
     """Titular, texto y nota de la tarjeta (usa `diseno` o, en contenidos viejos, la división automática)."""
     from rc import tarjetas
     return tarjetas.datos_tarjetas(contenido)[tarjeta - 1]
+
+
+def _cifras(pieza: dict) -> dict:
+    """{"tarjeta o escena": cifra elegida para resaltar} (se guarda en piezas.diseno_reel, también en carruseles)."""
+    return dict((pieza.get("diseno_reel") or {}).get("cifras") or {})
+
+
+def elegir_cifra(pieza_id: int, numero: int, cifra: str) -> dict:
+    """Elige qué cifra resaltar cuando una tarjeta (carrusel: la 4) o escena (reel: 2-4) tiene varias.
+    Cifra vacía vuelve a la automática (la primera del texto)."""
+    from rc import reels, tarjetas
+    pieza = _pieza(int(pieza_id))
+    numero = int(numero)
+    if not pieza.get("contenido"):
+        raise ErrorNegocio("Esta pieza aún no tiene contenido.")
+    if pieza["formato"] == "Reel":
+        if numero not in (2, 3, 4):
+            raise ErrorNegocio("Solo las escenas 2 a 4 resaltan cifras.")
+        texto = pieza["contenido"].get(reels.CAMPOS[numero - 1], "")
+    else:
+        if numero != 4:
+            raise ErrorNegocio("En los carruseles, la cifra se resalta en la tarjeta 4.")
+        texto = tarjetas.datos_tarjetas(pieza["contenido"])[3]["completo"]
+    cifra = " ".join((cifra or "").split())
+    if cifra and cifra not in tarjetas.candidatos_cifra(texto):
+        raise ErrorNegocio("Esa cifra no está en el texto.")
+    cifras = _cifras(pieza)
+    if cifra:
+        cifras[str(numero)] = cifra
+    else:
+        cifras.pop(str(numero), None)
+    db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "cifras": cifras}},
+                  id=f"eq.{pieza['id']}")
+    return {"cifras": cifras}
 
 
 def _fotos_reel(pieza: dict) -> list[int]:

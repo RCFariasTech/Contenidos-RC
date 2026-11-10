@@ -37,6 +37,18 @@ class TestTarjetas(unittest.TestCase):
         self.assertEqual(tarjetas.plantillas_de({**base, "slide_4": "Las ventas suben 18% con pantallas."}), [1, 2, 3, 4, 5])
         self.assertEqual(tarjetas.plantillas_de({**base, "slide_4": "Sin cifras aquí."}), [1, 2, 3, 3, 5])
 
+    def test_elegir_que_cifra_resaltar(self):
+        texto = "Regla 95-5: solo 5% compra ahora"
+        self.assertEqual(tarjetas.candidatos_cifra(texto), ["95-5", "95", "5", "5%"])
+        self.assertEqual(tarjetas.separar_cifra(texto, "5%"), ("Regla 95-5: solo", "5%", "compra ahora"))
+        self.assertEqual(tarjetas.separar_cifra(texto, "5")[1], "5")
+        self.assertEqual(tarjetas.separar_cifra(texto, "no está")[1], tarjetas.separar_cifra(texto)[1])
+        pieza = {"slide_1_gancho": "a", "slide_2": "b", "slide_3": "c", "slide_4": texto, "slide_5_cierre": "e"}
+        pagina = pymupdf.open(stream=tarjetas.generar_pdf(pieza, cifras={"4": "5%"}), filetype="pdf")[3]
+        grandes = [s["text"].strip() for b in pagina.get_text("dict")["blocks"] if b["type"] == 0
+                   for ln in b["lines"] for s in ln["spans"] if s["size"] > 150]
+        self.assertEqual(grandes, ["5%"])
+
     def test_la_cifra_va_gigante_y_en_bold(self):
         pieza = {"slide_1_gancho": "a", "slide_2": "b", "slide_3": "c", "slide_5_cierre": "e",
                  "slide_4": "La comunicación en punto de venta sube en promedio 18% las ventas anunciadas."}
