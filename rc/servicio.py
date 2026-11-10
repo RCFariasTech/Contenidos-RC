@@ -471,6 +471,32 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
     return respuesta
 
 
+MAX_BYTES_VIDEO = 4 * 1024 * 1024  # límite de respuesta de las funciones de Vercel (~4,5 MB)
+
+
+def video_icono(pieza_id: int) -> bytes:
+    """El MP4 del ícono animado elegido de la escena 1, servido desde la app: así el navegador puede grabarlo dentro
+    del reel (los videos de Krea no permiten usarse en un lienzo desde otro dominio)."""
+    import urllib.parse
+    import urllib.request
+    filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{int(pieza_id)}",
+                           tarjeta="eq.1", elegida="is.true", video_estado="eq.lista")
+    url = next((f["video_url"] for f in filas if str(f.get("video_url") or "").startswith("https://")), None)
+    if not url:
+        raise ErrorNegocio("Esta pieza no tiene ícono animado listo.")
+    host = urllib.parse.urlparse(url).hostname or ""
+    if not (host == "krea.ai" or host.endswith(".krea.ai")):
+        raise ErrorNegocio("El video no viene de Krea.")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "contenidos-rc"}), timeout=25) as r:
+            datos = r.read(MAX_BYTES_VIDEO + 1)
+    except Exception as e:  # noqa: BLE001
+        raise ErrorNegocio("No se pudo descargar el video de Krea.") from e
+    if len(datos) > MAX_BYTES_VIDEO:
+        raise ErrorNegocio("El video del ícono pesa demasiado para servirlo desde la app.")
+    return datos
+
+
 def reel_animable(pieza_id: int) -> dict:
     """Datos para armar el reel terminado en la pantalla: fondo de cada escena sin textos, textos con su posición y
     el video del ícono animado de la escena 1 (si está listo)."""
@@ -479,8 +505,8 @@ def reel_animable(pieza_id: int) -> dict:
     if pieza["formato"] != "Reel" or not pieza.get("contenido"):
         raise ErrorNegocio("El video terminado es para reels con contenido.")
     inicio = tarjetas.inicio_de_semana(pieza.get("semana"))
-    escenas = reels.escenas_animables(pieza["contenido"], inicio, _imagenes_elegidas(pieza["id"]),
-                                      fotos=_fotos_reel(pieza))
+    imagenes = _imagenes_elegidas(pieza["id"])  # también actualiza imágenes y videos que seguían en Krea
+    escenas = reels.escenas_animables(pieza["contenido"], inicio, imagenes, fotos=_fotos_reel(pieza))
     filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{pieza['id']}",
                            tarjeta="eq.1", elegida="is.true")
     video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"

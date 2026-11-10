@@ -33,7 +33,10 @@ class TestReels(unittest.TestCase):
 
     def test_escenas_animables_sin_textos_en_el_fondo(self):
         escenas = reels.escenas_animables(REEL)
-        self.assertEqual([e["duracion"] for e in escenas], [5, 7, 8, 5, 5])        # 30 s en total
+        palabras = [len(REEL[c].split()) for c in reels.CAMPOS]
+        for e, n in zip(escenas[:4], palabras):                                     # ~3 palabras por segundo
+            self.assertAlmostEqual(e["duracion"], max(2.5, 1 + n / 3), delta=0.26)
+        self.assertGreater(escenas[4]["duracion"], max(2.5, 1 + palabras[4] / 3) - 0.26)
         self.assertTrue(all(e["fondo"].startswith("data:image/jpeg;base64,") for e in escenas))
         textos = " ".join(t["texto"] for t in escenas[0]["textos"])
         self.assertEqual(textos, REEL["escena_1_gancho"])                         # el texto va aparte, para animarlo

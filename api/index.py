@@ -295,6 +295,15 @@ def ruta_reel_foto(req):
                                            bool(cuerpo.get("activa", True)))
 
 
+def ruta_video_icono(req):
+    _dueno(req)
+    try:
+        pieza_id = int(req["query"].get("pieza", ""))
+    except ValueError:
+        raise ErrorCliente(400, "Falta la pieza.")
+    return 200, Archivo(f"icono-animado-{pieza_id}.mp4", _servicio().video_icono(pieza_id), "video/mp4")
+
+
 def ruta_reel_animable(req):
     _dueno(req)
     try:
@@ -411,6 +420,7 @@ RUTAS = {
     ("POST", "detener-pieza"): ruta_detener_pieza,
     ("POST", "ilustracion-animar"): ruta_ilustracion_animar,
     ("GET", "reel-animable"): ruta_reel_animable,
+    ("GET", "video-icono"): ruta_video_icono,
     ("POST", "ilustraciones-borrar"): ruta_ilustraciones_borrar,
     ("POST", "reel-foto"): ruta_reel_foto,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,

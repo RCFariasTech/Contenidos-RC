@@ -137,6 +137,7 @@ def _tam_cifra(cifra):
 
 def caja_icono(contenido: dict) -> tuple[float, float, float]:
     """(x, y desde arriba, lado) del ícono isométrico de la escena 1, para superponer su video en la vista previa."""
+    tarjetas._registrar_fuentes()
     lado = AREA_ICONO
     alto_texto = _alto_texto(contenido.get(CAMPOS[0]) or "", 96, W - 2 * M, ABAJO - ARRIBA - lado - SEPARACION)
     return (W - lado) / 2, _y_centrado(lado + SEPARACION + alto_texto), lado
@@ -258,12 +259,21 @@ def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semill
     return buffer.getvalue()
 
 
-def duraciones() -> list[float]:
-    """Segundos de cada escena según ROLES («0–5 s» → 5)."""
+PALABRAS_POR_SEGUNDO = 3
+ENTRADA_S = 1.0     # lo que tarda en entrar el texto animado
+MINIMO_S = 2.5
+EXTRA_CIERRE_S = 1.0  # el cierre se queda un poco más para leer los logos
+
+
+def duraciones(contenido: dict | None = None) -> list[float]:
+    """Segundos de cada escena según su tiempo de lectura (~3 palabras por segundo) más la entrada del texto."""
     salida = []
-    for _rol, tiempo in ROLES:
-        a, b = tiempo.replace(" s", "").split("–")
-        salida.append(float(b) - float(a))
+    for i, campo in enumerate(CAMPOS):
+        palabras = len(((contenido or {}).get(campo) or "").split())
+        segundos = max(MINIMO_S, ENTRADA_S + palabras / PALABRAS_POR_SEGUNDO)
+        if i == len(CAMPOS) - 1:
+            segundos += EXTRA_CIERRE_S
+        salida.append(round(segundos * 2) / 2)  # medios segundos
     return salida
 
 
@@ -286,7 +296,7 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
     c.save()
     escenas = []
     with pymupdf.open(stream=buffer.getvalue(), filetype="pdf") as doc:
-        for i, (pagina, segundos) in enumerate(zip(doc, duraciones())):
+        for i, (pagina, segundos) in enumerate(zip(doc, duraciones(contenido))):
             jpg = pagina.get_pixmap(matrix=pymupdf.Matrix(ancho / W, ancho / W)).tobytes("jpg", jpg_quality=88)
             escenas.append({"fondo": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
                             "duracion": segundos, "textos": registros[i]})

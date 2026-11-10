@@ -47,10 +47,26 @@ function cargarImagen(src) {
   return new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = src; });
 }
 
-function cargarVideo(url) {
+async function cargarVideoIcono(pieza, url) {
+  // 1) Servido por la app (mismo dominio): se ve y además se puede grabar dentro del reel.
+  try {
+    const r = await fetch(`/api/video-icono?pieza=${pieza.id}`,
+      { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
+    if (r.ok) {
+      const v = await cargarVideo(URL.createObjectURL(await r.blob()), false);
+      if (v) return { video: v, grabable: true };
+    }
+  } catch { /* se intenta directo */ }
+  // 2) Directo desde Krea: se ve en la vista previa, pero el navegador no deja grabarlo.
+  const v = await cargarVideo(url, false);
+  return { video: v, grabable: false };
+}
+
+function cargarVideo(url, cors = true) {
   return new Promise((ok) => {
     const v = document.createElement("video");
-    Object.assign(v, { crossOrigin: "anonymous", muted: true, loop: true, playsInline: true, preload: "auto" });
+    Object.assign(v, { muted: true, loop: true, playsInline: true, preload: "auto" });
+    if (cors) v.crossOrigin = "anonymous";
     v.oncanplaythrough = () => ok(v);
     v.onerror = () => ok(null);
     v.src = url;
@@ -178,8 +194,9 @@ function dibujarCuadro(ctx, t) {
 
 // ---------- reproducción y grabación ----------
 
-function animar(onFin, desde = 0) {
-  const lienzo = $("reel-lienzo"), ctx = lienzo.getContext("2d");
+function animar(onFin, desde = 0, destino = null) {
+  // destino: lienzo de grabación (limpio); se copia cada cuadro a la vista previa.
+  const vista = $("reel-lienzo"), lienzo = destino || vista, ctx = lienzo.getContext("2d");
   const total = duracionTotal();
   const t0 = performance.now() - desde * 1000;
   REEL.reproduciendo = true;
@@ -188,6 +205,7 @@ function animar(onFin, desde = 0) {
     if (!REEL.reproduciendo) return;
     const t = (performance.now() - t0) / 1000;
     dibujarCuadro(ctx, Math.min(t, total - 0.001));
+    if (destino) vista.getContext("2d").drawImage(destino, 0, 0);
     $("reel-progreso").value = Math.min(1, t / total);
     if (t >= total) { REEL.reproduciendo = false; onFin?.(); return; }
     REEL.cuadro = requestAnimationFrame(paso);
@@ -206,9 +224,6 @@ function formatoGrabacion() {
   return opciones.find((m) => window.MediaRecorder?.isTypeSupported?.(m)) || "";
 }
 
-function lienzoGrabable() {
-  try { $("reel-lienzo").getContext("2d").getImageData(0, 0, 1, 1); return true; } catch { return false; }
-}
 
 function estadoReel(texto) { $("reel-estado").textContent = texto; }
 
@@ -237,13 +252,14 @@ async function descargarReel() {
   detener();
   const mime = formatoGrabacion();
   if (!mime) { estadoReel("Este navegador no puede grabar video. Usa Chrome o Edge actualizados."); return; }
-  dibujarCuadro($("reel-lienzo").getContext("2d"), 0.01);
-  if (!lienzoGrabable()) {
-    // El servidor del video no permite usarlo en un lienzo: se graba con el ícono fijo.
-    REEL.conVideo = false;
-    estadoReel("El ícono animado no se pudo incluir en la grabación; se usa el ícono fijo.");
-  }
-  const flujo = $("reel-lienzo").captureStream(30);
+  // Se graba en un lienzo nuevo (la vista previa pudo quedar «marcada» por el video directo de Krea).
+  const rec = Object.assign(document.createElement("canvas"), { width: REEL.datos.ancho, height: REEL.datos.alto });
+  REEL.aux = document.createElement("canvas");
+  REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: rec.width, height: rec.height }));
+  REEL.conVideo = Boolean(REEL.video && REEL.videoGrabable);
+  const avisoVideo = REEL.video && !REEL.videoGrabable
+    ? " El ícono animado no se pudo incluir en la grabación (pesa demasiado o Krea no lo permite); se usa el ícono fijo." : "";
+  const flujo = rec.captureStream(30);
   const partes = [];
   REEL.grabador = new MediaRecorder(flujo, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
   REEL.grabador.ondataavailable = (ev) => { if (ev.data.size) partes.push(ev.data); };
@@ -262,9 +278,9 @@ async function descargarReel() {
   };
   REEL.cancelado = false;
   botonesReel(true);
-  estadoReel("Grabando el reel en tiempo real (30 s). Mantén esta pestaña visible…");
+  estadoReel(`Grabando el reel en tiempo real (${Math.round(duracionTotal())} s). Mantén esta pestaña visible…${avisoVideo}`);
   REEL.grabador.start(500);
-  animar(() => { setTimeout(() => REEL.grabador.stop(), 200); });
+  animar(() => { REEL.conVideo = Boolean(REEL.video); setTimeout(() => REEL.grabador.stop(), 200); }, 0, rec);
 }
 
 async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}) {
@@ -290,7 +306,14 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}
     REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: datos.ancho, height: datos.alto }));
     REEL.aux = document.createElement("canvas");
     REEL.imagenes = await Promise.all(datos.escenas.map((e) => cargarImagen(e.fondo)));
-    REEL.video = datos.video_escena_1 ? await cargarVideo(datos.video_escena_1.url) : null;
+    REEL.video = null;
+    REEL.videoGrabable = false;
+    if (datos.video_escena_1) {
+      const r = await cargarVideoIcono(pieza, datos.video_escena_1.url);
+      REEL.video = r.video;
+      REEL.videoGrabable = r.grabable;
+    }
+    REEL.conVideo = Boolean(REEL.video);
     dibujarCuadro(lienzo.getContext("2d"), 1.5);
     botonesReel(false);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
