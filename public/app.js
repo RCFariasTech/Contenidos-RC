@@ -610,7 +610,10 @@ function renderPieza(pieza) {
   const enProceso = estado.ocupadas.has(pieza.id) || ["generando", "ajustando"].includes(pieza.estado);
   const bloqueada = enProceso;
   const c = pieza.contenido;
-  const tarjeta = el("article", { clase: `pieza${pieza.estado === "aprobada" ? " pieza--aprobada" : ""}`, "aria-busy": enProceso ? "true" : null },
+  // Color de fondo según la última etapa aprobada: gris textos (Reini), azul diseño (Daniela), verde publicación (Luís).
+  const ap = pieza.aprobaciones || {};
+  const etapa = ap.publicacion ? "publicacion" : ap.diseno ? "diseno" : pieza.estado === "aprobada" ? "textos" : "";
+  const tarjeta = el("article", { clase: `pieza${pieza.estado === "aprobada" ? " pieza--aprobada" : ""}${etapa ? ` pieza--etapa-${etapa}` : ""}`, "aria-busy": enProceso ? "true" : null },
     renderCabecera(pieza, bloqueada));
   const cuerpo = el("div", { clase: "pieza__cuerpo" });
   if (!c || enProceso || pieza.estado === "error") {

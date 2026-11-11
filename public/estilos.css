@@ -313,3 +313,7 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .musica-opcion__acciones { display: flex; gap: 8px; }
 /* Daniela y Luís no ven los controles de textos (son de Reini). */
 body:not([data-rol="admin"]) :is(#btn-generar, #btn-ajustes, .pieza__controles > .aprobar, .gancho-acciones, .comentarios__form, .estado-proceso__detener) { display: none !important; }
+/* Fondo sutil según la etapa aprobada */
+.pieza--etapa-textos { background: #f3f4f5; border-color: #c9cacb; box-shadow: 0 0 0 1px #c9cacb; }
+.pieza--etapa-diseno { background: #eef4ff; border-color: #9fc0ff; box-shadow: 0 0 0 1px #9fc0ff; }
+.pieza--etapa-publicacion { background: #edf8f0; border-color: #8fd1a3; box-shadow: 0 0 0 1px #8fd1a3; }
