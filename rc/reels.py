@@ -86,7 +86,8 @@ class _Hoja:
 # Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
 # la 5 (cierre) no lleva imagen.
 AREA_ICONO, AREA_LINEA = 520, 300
-ALTO_FOTO = 1080  # escenas con foto: la foto ocupa el ancho completo desde arriba
+ALTO_FOTO = 1080
+DOLLY = 0.12  # la foto del reel es 12 % más ancha que su espacio y se desliza de lado a lado  # escenas con foto: la foto ocupa el ancho completo desde arriba
 
 
 def escenas_sin_cifra(contenido: dict) -> list[int]:
@@ -222,6 +223,12 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         if datos:
             try:
                 L.png(tarjetas.recortar(datos, W, alto_foto), 0, 0, W, alto_foto)
+                if L.registro is not None:  # reel animado: la foto se mueve (dolly lateral lento) bajo el velo
+                    import base64
+                    ancho_mov = round(W * (1 + DOLLY))
+                    L.foto = {"src": "data:image/jpeg;base64," + base64.b64encode(
+                                  tarjetas.recortar(datos, ancho_mov, alto_foto, escala=1)).decode(),
+                              "ancho": ancho_mov, "alto": alto_foto, "velo": L.col[fondo].hexval()[2:], "opacidad": 0.45}
                 L.c.saveState()
                 L.c.setFillColor(L.col[fondo])
                 L.c.setFillAlpha(0.45)
@@ -341,13 +348,16 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
     import pymupdf
     tarjetas._registrar_fuentes()
     registros = [[] for _ in CAMPOS]
+    fotos_mov = [None for _ in CAMPOS]
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(W, H))
     for i, campo in enumerate(CAMPOS, 1):
         L = _Hoja(c, tarjetas._colores(), False, imagenes, registro=registros[i - 1])
         L.fotos = fotos_validas(contenido, fotos)
         L.cifras = cifras or {}
+        L.foto = None
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
+        fotos_mov[i - 1] = L.foto
         c.showPage()
     c.save()
     escenas = []
@@ -355,7 +365,7 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
         for i, (pagina, segundos) in enumerate(zip(doc, duraciones(contenido))):
             jpg = pagina.get_pixmap(matrix=pymupdf.Matrix(ancho / W, ancho / W)).tobytes("jpg", jpg_quality=88)
             escenas.append({"fondo": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
-                            "duracion": segundos, "textos": registros[i]})
+                            "duracion": segundos, "textos": registros[i], "foto": fotos_mov[i]})
     return escenas
 
 

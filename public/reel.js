@@ -170,12 +170,30 @@ function dibujarVideo(ctx) {
   ctx.drawImage(aux, caja.x, caja.y);
 }
 
+function dibujarFoto(ctx, i, t) {
+  // Dolly lateral lento: la foto (más ancha que su espacio) se desliza de derecha a izquierda durante la escena.
+  const foto = REEL.datos.escenas[i].foto, img = REEL.fotos?.[i];
+  if (!foto || !img) return;
+  const p = ease.inOut(lim(t / REEL.datos.escenas[i].duracion));
+  const sobra = foto.ancho - REEL.datos.ancho;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, REEL.datos.ancho, foto.alto);
+  ctx.clip();
+  ctx.drawImage(img, -sobra * p, 0, foto.ancho, foto.alto);
+  ctx.globalAlpha = foto.opacidad;
+  ctx.fillStyle = `#${foto.velo}`;
+  ctx.fillRect(0, 0, REEL.datos.ancho, foto.alto);
+  ctx.restore();
+}
+
 function dibujarEscena(ctx, i, t) {
   const { ancho, alto } = REEL.datos;
   // Escena 1 con video y croma: fondo sin el ícono fijo (si no, se vería el ícono fijo detrás del animado).
   const fondo = i === 0 && REEL.conVideo && REEL.croma === true && REEL.fondoSinIcono ? REEL.fondoSinIcono : REEL.imagenes[i];
   ctx.drawImage(fondo, 0, 0, ancho, alto);
   if (i === 0) dibujarVideo(ctx);
+  dibujarFoto(ctx, i, t);
   dibujarTextos(ctx, REEL.datos.escenas[i].textos, t);
 }
 
@@ -416,6 +434,7 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, desca
     REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: datos.ancho, height: datos.alto }));
     REEL.aux = document.createElement("canvas");
     REEL.imagenes = await Promise.all(datos.escenas.map((e) => cargarImagen(e.fondo)));
+    REEL.fotos = await Promise.all(datos.escenas.map((e) => (e.foto ? cargarImagen(e.foto.src) : null)));
     REEL.video = null;
     REEL.videoGrabable = false;
     if (datos.video_escena_1) {

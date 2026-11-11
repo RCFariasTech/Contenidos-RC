@@ -96,8 +96,12 @@ def ajustar(texto, fuente, ancho, alto, tam_max, inter):
 def _abrir(datos: bytes, alfa: bool = False):
     from PIL import Image
     img = Image.open(io.BytesIO(datos))
-    if alfa and (img.mode in ("RGBA", "LA") or "transparency" in img.info):
-        return img.convert("RGBA")
+    if alfa and (img.mode in ("RGBA", "LA", "P") or "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        # Solo se trata como recorte transparente si de verdad tiene zonas transparentes; una foto PNG con canal alfa
+        # pero opaca debe recortarse para llenar su espacio (si no, quedaba encajada con franjas).
+        if rgba.getchannel("A").getextrema()[0] < 250:
+            return rgba
     return img.convert("RGB")
 
 
