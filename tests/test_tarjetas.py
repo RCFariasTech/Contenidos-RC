@@ -155,6 +155,17 @@ class TestTarjetas(unittest.TestCase):
         self.assertTrue(doc[2].get_images())          # tarjeta 3: el ícono generado
         self.assertFalse(doc[3].get_images())         # tarjeta 4 (sin cifra): ícono vectorial de la guía
 
+    def test_la_foto_pierde_su_marco_claro(self):
+        import io
+        from PIL import Image, ImageDraw
+        im = Image.new("RGB", (1024, 1024), (232, 232, 230))
+        ImageDraw.Draw(im).rectangle([40, 140, 984, 860], fill=(70, 90, 140))
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        salida = Image.open(io.BytesIO(tarjetas.recortar(buf.getvalue(), 1080, 620, escala=1, foto=True)))
+        for x, y in ((0, 0), (1079, 0), (0, 619), (1079, 619)):
+            self.assertEqual(salida.getpixel((x, y))[2] > 120, True, (x, y))   # esquinas = foto, no marco gris
+
     def test_imagen_se_recorta_al_espacio_de_la_tarjeta(self):
         import io
         from PIL import Image

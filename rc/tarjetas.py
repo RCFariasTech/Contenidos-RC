@@ -122,10 +122,36 @@ def _parecido(hex_a: str, hex_b: str, tolerancia: int = 40) -> bool:
     return sum(abs(x - y) for x, y in zip(a, b)) <= tolerancia * 3
 
 
-def recortar(datos: bytes, ancho: float, alto: float, escala: float = 1.5, borde_suave: bool = False) -> bytes:
-    """La imagen recortada (tipo «cover») a la proporción de la caja. borde_suave difumina apenas el contorno."""
+def quitar_marco(img):
+    """Recorta el marco de color uniforme que a veces trae la foto de Krea (márgenes claros alrededor de la imagen).
+    Solo si las 4 esquinas son del mismo color y lo que queda dentro es claramente la foto."""
+    from PIL import ImageChops
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    esquinas = [rgb.getpixel(p) for p in ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3))]
+    if max(sum(abs(a - b) for a, b in zip(esquinas[0], c)) for c in esquinas[1:]) > 30:
+        return img  # las esquinas son distintas: no hay marco
+    fondo = rgb.copy()
+    fondo.paste(tuple(round(sum(c[i] for c in esquinas) / 4) for i in range(3)), (0, 0, w, h))
+    diferencia = ImageChops.difference(rgb, fondo).convert("L").point(lambda v: 255 if v > 28 else 0)
+    caja = diferencia.getbbox()
+    if not caja:
+        return img
+    x0, y0, x1, y1 = caja
+    if (x1 - x0) * (y1 - y0) > 0.97 * w * h or (x1 - x0) < 0.4 * w or (y1 - y0) < 0.4 * h:
+        return img  # casi sin marco, o lo detectado no parece la foto
+    m = max(2, round(min(w, h) * 0.006))  # unos píxeles más adentro para no dejar línea del marco
+    return img.crop((x0 + m, y0 + m, x1 - m, y1 - m))
+
+
+def recortar(datos: bytes, ancho: float, alto: float, escala: float = 1.5, borde_suave: bool = False,
+             foto: bool = False) -> bytes:
+    """La imagen recortada (tipo «cover») a la proporción de la caja. borde_suave difumina apenas el contorno.
+    foto=True quita antes el marco uniforme que a veces trae la foto, para que llene su espacio sin franjas."""
     from PIL import Image, ImageDraw, ImageFilter
     img = _abrir(datos, alfa=True)
+    if foto and img.mode != "RGBA":
+        img = quitar_marco(img)
     w, h = max(1, round(ancho * escala)), max(1, round(alto * escala))
     if img.mode == "RGBA":  # PNG con transparencia: se encaja entero, sin recortar ni difuminar
         img.thumbnail((w, h), Image.LANCZOS)
@@ -304,7 +330,7 @@ def t2_foto(L, d):
     datos = L.imagenes.get(2)
     if datos:
         try:
-            L.png(recortar(datos, ancho, alto), 0, H - alto, ancho, alto)
+            L.png(recortar(datos, ancho, alto, foto=True), 0, H - alto, ancho, alto)
             L.c.saveState()
             L.c.setFillColor(L.col[L.fondo_clave])  # velo del color de la tarjeta
             L.c.setFillAlpha(0.45)

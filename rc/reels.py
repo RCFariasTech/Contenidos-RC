@@ -222,12 +222,12 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
         alto_foto = ALTO_FOTO
         if datos:
             try:
-                L.png(tarjetas.recortar(datos, W, alto_foto), 0, 0, W, alto_foto)
+                L.png(tarjetas.recortar(datos, W, alto_foto, foto=True), 0, 0, W, alto_foto)
                 if L.registro is not None:  # reel animado: la foto se mueve (dolly lateral lento) bajo el velo
                     import base64
                     ancho_mov = round(W * (1 + DOLLY))
                     L.foto = {"src": "data:image/jpeg;base64," + base64.b64encode(
-                                  tarjetas.recortar(datos, ancho_mov, alto_foto, escala=1)).decode(),
+                                  tarjetas.recortar(datos, ancho_mov, alto_foto, escala=1, foto=True)).decode(),
                               "ancho": ancho_mov, "alto": alto_foto, "velo": L.col[fondo].hexval()[2:], "opacidad": 0.45}
                 L.c.saveState()
                 L.c.setFillColor(L.col[fondo])
