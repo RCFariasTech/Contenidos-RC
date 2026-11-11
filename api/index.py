@@ -167,12 +167,9 @@ def ruta_versiones(req):
 
 def ruta_configuracion(req):
     _dueno(req)
-    from rc import correos, fuentes, teams
+    from rc import fuentes, teams
     return 200, {"fuentes": fuentes.listar(), "recomendadas": fuentes.recomendadas(),
-                 "favoritos": correos.listar_favoritos(), "correo_configurado": correos.configurado(),
                  "teams_configurado": teams.configurado()}
-
-
 def ruta_fuente_agregar(req):
     _dueno(req)
     from rc import fuentes
@@ -192,19 +189,6 @@ def ruta_fuentes_restaurar(req):
     return 200, {"agregadas": fuentes.restaurar()}
 
 
-def ruta_favorito_agregar(req):
-    _dueno(req)
-    from rc import correos
-    return 200, correos.agregar_favorito(req["cuerpo"].get("email", ""), req["cuerpo"].get("nombre"))
-
-
-def ruta_favorito_borrar(req):
-    _dueno(req)
-    from rc import correos
-    correos.borrar_favorito(_entero(req["query"], "id"))
-    return 200, {"ok": True}
-
-
 def ruta_borrar_piezas(req):
     _dueno(req)
     ids = req["cuerpo"].get("ids")
@@ -214,24 +198,6 @@ def ruta_borrar_piezas(req):
         return 200, {"borradas": _servicio().borrar_piezas([int(i) for i in ids])}
     except (TypeError, ValueError) as e:
         raise ErrorCliente(400, "ids inválidos") from e
-
-
-def ruta_enviar_pptx(req):
-    _dueno(req)
-    from rc import correos
-    cuerpo = req["cuerpo"]
-    destinatarios = [*(cuerpo.get("favoritos") or []), *correos.separar_correos(cuerpo.get("otros", ""))]
-    enviados = _servicio().enviar_pptx(_mes_param(cuerpo.get("mes")), destinatarios,
-                                       str(cuerpo.get("mensaje") or "")[:1000],
-                                       bool(cuerpo.get("guardar_favoritos")))
-    return 200, {"enviados": enviados}
-
-
-def ruta_exportar_pptx(req):
-    _dueno(req)
-    nombre, contenido = _servicio().exportar_pptx(_mes_param(req["query"].get("mes")))
-    return 200, Archivo(nombre, contenido,
-                        "application/vnd.openxmlformats-officedocument.presentationml.presentation")
 
 
 def _semilla(req) -> int:
@@ -430,11 +396,10 @@ def ruta_ilustracion_elegir(req):
 def ruta_verificar_conexiones(req):
     """Estado de las claves e integraciones, sin generar contenido."""
     _dueno(req)
-    from rc import correos, generador, krea, teams
+    from rc import generador, krea, teams
     return 200, {
         "anthropic": generador.verificar_clave(),
         "krea": {"ok": krea.configurado(), "detalle": "Clave configurada." if krea.configurado() else "Falta KREA_API_TOKEN."},
-        "correo": {"ok": correos.configurado(), "detalle": "SMTP configurado." if correos.configurado() else "Faltan SMTP_USER y SMTP_PASSWORD."},
         "teams": {"ok": teams.configurado(), "detalle": "Webhook configurado." if teams.configurado() else "Falta TEAMS_WEBHOOK_URL."},
     }
 
@@ -499,7 +464,6 @@ RUTAS = {
     ("DELETE", "comentarios"): ruta_borrar_comentario,
     ("POST", "aprobar"): ruta_aprobar,
     ("POST", "fecha"): ruta_fecha,
-    ("GET", "exportar-pptx"): ruta_exportar_pptx,
     ("GET", "tarjetas-pdf"): ruta_tarjetas_pdf,
     ("GET", "tarjetas-vista"): ruta_tarjetas_vista,
     ("GET", "configuracion"): ruta_configuracion,
@@ -530,10 +494,7 @@ RUTAS = {
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
     ("POST", "fuentes-restaurar"): ruta_fuentes_restaurar,
-    ("POST", "favoritos"): ruta_favorito_agregar,
-    ("DELETE", "favoritos"): ruta_favorito_borrar,
     ("POST", "borrar-piezas"): ruta_borrar_piezas,
-    ("POST", "enviar-pptx"): ruta_enviar_pptx,
     ("GET", "repositorio"): ruta_repositorio,
     ("GET", "versiones"): ruta_versiones,
     ("GET", "diario"): ruta_diario,

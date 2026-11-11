@@ -10,7 +10,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
-from rc import correos, fuentes, krea, teams
+from rc import fuentes, krea, teams
 from rc import db as db_real
 from rc import servicio
 from rc.config import ajustes
@@ -25,8 +25,8 @@ class BDFalsa:
 
     def __init__(self):
         self.tablas = {"meses": [], "piezas": [], "comentarios": [], "versiones_pieza": [],
-                       "fuentes_confiables": [], "correos_favoritos": [], "ilustraciones": []}
-        self.unicos = {"fuentes_confiables": "dominio", "correos_favoritos": "email", "meses": "mes_objetivo"}
+                       "fuentes_confiables": [], "ilustraciones": []}
+        self.unicos = {"fuentes_confiables": "dominio", "meses": "mes_objetivo"}
         self.ids = itertools.count(1)
 
     @staticmethod
@@ -150,7 +150,6 @@ class TestFlujo(unittest.TestCase):
             return {"pieza": nueva, "urls": [], "uso": {"input_tokens": 10, "output_tokens": 5}}
 
         parches = [mock.patch.object(servicio, "db", self.bd), mock.patch.object(fuentes, "db", self.bd),
-                   mock.patch.object(correos, "db", self.bd),
                    mock.patch.object(servicio.generador, "generar", side_effect=generar),
                    mock.patch.object(servicio.generador, "ajustar", side_effect=ajustar)]
         for p in parches:
@@ -206,22 +205,6 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(estado["mes"]["estado"], "en_revision")
         self.assertEqual(estado["piezas"][0]["estado"], "generada")
 
-    def test_exportar_marca_entregado(self):
-        mes = date(2026, 11, 1)
-        servicio.iniciar_mes(mes)
-        with self.assertRaises(servicio.ErrorNegocio):
-            servicio.exportar_pptx(mes)  # aún no aprobado
-        for p in servicio.estado_mes(mes)["piezas"]:
-            servicio.generar_pieza(p["id"])
-            servicio.aprobar(p["id"], True)
-        nombre, contenido = servicio.exportar_pptx(mes)
-        self.assertEqual(nombre, "RC_Farias_Instagram_2026-11.pptx")
-        self.assertTrue(contenido.startswith(b"PK"))
-        fila = servicio.estado_mes(mes)["mes"]
-        self.assertEqual(fila["estado"], "entregado")
-        self.assertIsNotNone(fila["entregado_en"])
-        servicio.exportar_pptx(mes)  # se puede volver a descargar
-
     def test_repositorio_y_versiones(self):
         historico = self.bd.insertar("meses", {"mes_objetivo": "2000-01-01", "estado": "historico"})[0]
         self.bd.insertar("piezas", {"mes_id": historico["id"], "semana": 1, "formato": "Carrusel", "tipo": "Histórico",
@@ -265,39 +248,6 @@ class TestFlujo(unittest.TestCase):
             fuentes.quitar("warc.com")  # no se puede quedar sin fuentes
         self.assertEqual(fuentes.restaurar(), len(fuentes.recomendadas()) - 1)
         self.assertIn("warc.com", fuentes.listar())
-
-    def test_favoritos(self):
-        f = correos.agregar_favorito(" Luis@RCFarias.com ", "Luis Alfonso")
-        self.assertEqual(f["email"], "luis@rcfarias.com")
-        with self.assertRaises(servicio.ErrorNegocio):
-            correos.agregar_favorito("luis@rcfarias.com")
-        with self.assertRaises(servicio.ErrorNegocio):
-            correos.agregar_favorito("sin-arroba")
-        self.assertEqual(correos.separar_correos("a@x.co, b@y.com;  c@z.org"), ["a@x.co", "b@y.com", "c@z.org"])
-        correos.borrar_favorito(f["id"])
-        self.assertEqual(correos.listar_favoritos(), [])
-
-    def test_enviar_pptx(self):
-        mes = self._mes_aprobado()
-        enviados = []
-        with mock.patch.object(correos, "enviar", side_effect=lambda *a: enviados.append(a)):
-            r = servicio.enviar_pptx(mes, ["Luis@rcfarias.com", "luis@rcfarias.com", "otro@x.co"], "Para publicar",
-                                     guardar_favoritos=True)
-        self.assertEqual(r, ["luis@rcfarias.com", "otro@x.co"])
-        destinatarios, asunto, cuerpo, adjunto, nombre = enviados[0]
-        self.assertIn("Noviembre 2026", asunto)
-        self.assertIn("Para publicar", cuerpo)
-        self.assertTrue(adjunto.startswith(b"PK"))
-        self.assertEqual(nombre, "RC_Farias_Instagram_2026-11.pptx")
-        self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "entregado")
-        self.assertEqual([f["email"] for f in correos.listar_favoritos()], ["luis@rcfarias.com", "otro@x.co"])
-
-    def test_enviar_fallido_no_marca_entregado(self):
-        mes = self._mes_aprobado()
-        with mock.patch.object(correos, "enviar", side_effect=servicio.ErrorNegocio("SMTP caído")):
-            with self.assertRaises(servicio.ErrorNegocio):
-                servicio.enviar_pptx(mes, ["a@x.co"])
-        self.assertEqual(servicio.estado_mes(mes)["mes"]["estado"], "aprobado")
 
     def test_rehacer_propuesta_busca_otro_tema(self):
         mes = date(2026, 11, 1)
@@ -767,12 +717,6 @@ class TestFlujo(unittest.TestCase):
             self.assertFalse(teams.avisar_revision("2026-11-01", 4))
             with self.assertRaises(servicio.ErrorNegocio):
                 teams.enviar_prueba()
-
-    def test_smtp_no_configurado(self):
-        with mock.patch.dict("os.environ", {"SMTP_USER": "", "SMTP_PASSWORD": ""}):
-            with self.assertRaises(servicio.ErrorNegocio) as ctx:
-                correos.enviar(["a@x.co"], "a", "b", b"x", "f.pptx")
-        self.assertIn("SMTP_USER", str(ctx.exception))
 
     def test_borrar_piezas_del_repositorio(self):
         mes = self._mes_aprobado()

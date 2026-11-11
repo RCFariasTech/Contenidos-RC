@@ -139,13 +139,6 @@ function renderBarra() {
   const botonAjustes = $("btn-ajustes");
   botonAjustes.textContent = conComentarios ? `Aplicar ajustes (${conComentarios})` : "Aplicar ajustes";
   botonAjustes.disabled = !conComentarios || estado.ocupadas.size > 0;
-  const listo = mes && ["aprobado", "entregado"].includes(mes.estado);
-  const botonPptx = $("btn-pptx");
-  botonPptx.disabled = !listo;
-  botonPptx.classList.toggle("btn--primario", Boolean(listo));
-  botonPptx.classList.toggle("btn--secundario", !listo);
-  $("btn-enviar").disabled = !listo;
-  botonPptx.title = listo ? "Descarga el PowerPoint para el equipo de publicación" : "Se habilita cuando las 4 piezas están aprobadas";
 }
 
 const investigacionAbierta = new Set();  // piezas cuya investigación el usuario dejó desplegada (sobrevive a los re-render)
@@ -825,22 +818,6 @@ async function descargarArchivo(url, nombrePorDefecto) {
   setTimeout(() => URL.revokeObjectURL(archivo.url), 10000);
 }
 
-async function descargarPptx(mesIso) {
-  const mes = (typeof mesIso === "string" ? mesIso : estado.mesObjetivo).slice(0, 7);
-  const boton = $("btn-pptx");
-  boton.disabled = true;
-  aviso("Generando el PowerPoint…");
-  try {
-    await descargarArchivo(`/api/exportar-pptx?mes=${mes}`, "contenido.pptx");
-    aviso("");
-    await cargarMes();
-  } catch (e) {
-    aviso(`No se pudo generar el PowerPoint: ${e.message}`);
-  } finally {
-    renderBarra();
-  }
-}
-
 let piezaTarjetas = null;
 
 function tarjetaActual() {
@@ -946,7 +923,6 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
   }
 });
 
-$("btn-pptx").addEventListener("click", () => descargarPptx());
 
 // ---------- imágenes de Krea: ícono isométrico (1), foto (2) e ícono de línea (3) ----------
 
@@ -1242,8 +1218,8 @@ function renderRepo() {
   opciones($("filtro-pilar"), [...new Set(repo.piezas.filter((p) => !p.historico).map((p) => p.pilar))]);
 
   const filas = filtrarRepo();
-  const entregados = new Set(repo.piezas.filter((p) => p.estado_mes === "entregado").map((p) => p.mes_objetivo)).size;
-  $("resumen-repo").textContent = `${repo.piezas.length} contenidos · ${entregados} ${entregados === 1 ? "mes entregado" : "meses entregados"}`
+  const listas = repo.piezas.filter((p) => p.publicada_en).length;
+  $("resumen-repo").textContent = `${repo.piezas.length} contenidos · ${listas} ${listas === 1 ? "lista" : "listas"} para publicar`
     + (filas.length !== repo.piezas.length ? ` · mostrando ${filas.length}` : "");
 
   const cuerpo = $("cuerpo-repo");
@@ -1274,7 +1250,7 @@ function renderRepo() {
     el("td", {}, p.historico ? "—" : `${p.tipo} · ${p.pilar}`),
     el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.creado_en)),
     el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.aprobada_en)),
-    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.mes_entregado_en)));
+    el("td", { clase: "tenue" }, p.historico ? "—" : fechaCorta(p.publicada_en)));
   }));
 }
 
@@ -1313,13 +1289,6 @@ function renderDetalle() {
       renderCaption(vista.contenido));
   }
   const acciones = el("div", { clase: "pieza__controles" },
-    !p.historico && p.estado_mes !== "historico" ? el("button", {
-      clase: "btn btn--primario", type: "button",
-      onclick: () => descargarPptx(p.mes_objetivo),
-    }, `Descargar PowerPoint de ${nombreMes(p.mes_objetivo)}`) : null,
-    !p.historico && ["aprobado", "entregado"].includes(p.estado_mes) ? el("button", {
-      clase: "btn btn--secundario", type: "button", onclick: () => abrirEnvio(p.mes_objetivo),
-    }, "Enviar por correo") : null,
     el("button", { clase: "btn btn--peligro", type: "button", onclick: () => borrarPiezas([p.id]) }, "Borrar"),
     el("button", { clase: "btn btn--secundario", type: "button", onclick: () => { repo.seleccion = null; renderDetalle(); renderRepo(); } }, "Cerrar"));
   nodo.replaceChildren(el("article", { clase: "pieza" },
@@ -1393,9 +1362,9 @@ $("tab-propuestas").addEventListener("click", () => mostrarSeccion("propuestas")
 $("tab-repositorio").addEventListener("click", () => mostrarSeccion("repositorio"));
 $("tab-configuracion").addEventListener("click", () => mostrarSeccion("configuracion"));
 
-// ---------- configuración: fuentes y correos favoritos ----------
+// ---------- configuración: fuentes, Teams y conexiones ----------
 
-const cfg = { fuentes: [], recomendadas: [], favoritos: [], correoConfigurado: false, teamsConfigurado: false, cargada: false };
+const cfg = { fuentes: [], recomendadas: [], teamsConfigurado: false, cargada: false };
 
 function msgConfig(texto, error = false) {
   const nodo = $("mensaje-config");
@@ -1412,14 +1381,6 @@ function renderConfig() {
   $("lista-fuentes").replaceChildren(...visibles.map((d) => el("li", { clase: "chip" }, d,
     el("button", { type: "button", "aria-label": `Quitar ${d}`, title: "Quitar", disabled: cfg.fuentes.length <= 1,
       onclick: () => cambiarConfig(() => api(`fuentes?dominio=${encodeURIComponent(d)}`, { metodo: "DELETE" }), `Se quitó ${d}.`) }, "×"))));
-  $("lista-favoritos").replaceChildren(...(cfg.favoritos.length ? cfg.favoritos.map((f) => el("li", { clase: "favorito" },
-    el("div", {}, f.nombre ? el("strong", {}, f.nombre) : null, el("small", {}, f.email)),
-    el("button", { clase: "btn btn--peligro", type: "button", "aria-label": `Quitar ${f.email}`,
-      onclick: () => cambiarConfig(() => api(`favoritos?id=${f.id}`, { metodo: "DELETE" }), `Se quitó ${f.email}.`) }, "Quitar")))
-    : [el("li", { clase: "ayuda" }, "Aún no tienes correos favoritos.")]));
-  const aviso = $("estado-correo");
-  aviso.hidden = cfg.correoConfigurado;
-  aviso.textContent = "El envío por correo aún no está activado: falta configurar SMTP_USER y SMTP_PASSWORD en Vercel (ver README).";
   $("estado-teams").hidden = cfg.teamsConfigurado;
   $("estado-teams").textContent = "El aviso a Teams aún no está activado: falta configurar TEAMS_WEBHOOK_URL en Vercel (ver README).";
 }
@@ -1430,7 +1391,7 @@ $("btn-verificar").addEventListener("click", async (ev) => {
   $("lista-conexiones").replaceChildren(el("li", { clase: "ayuda" }, "Verificando…"));
   try {
     const d = await api("verificar-conexiones");
-    const nombres = { anthropic: "Anthropic (generación de contenido)", krea: "Krea (íconos y fotos)", correo: "Correo (envío del PowerPoint)", teams: "Microsoft Teams (aviso del día 15)" };
+    const nombres = { anthropic: "Anthropic (generación de contenido)", krea: "Krea (íconos, fotos, animaciones y música)", teams: "Microsoft Teams (aviso del día 15)" };
     $("lista-conexiones").replaceChildren(...Object.entries(nombres).map(([clave, nombre]) => el("li", { clase: `conexion conexion--${d[clave]?.ok ? "ok" : "falla"}` },
       el("span", { "aria-hidden": "true" }, d[clave]?.ok ? "✓" : "✕"),
       el("strong", {}, nombre), " — ", d[clave]?.detalle || "Sin datos")));
@@ -1456,8 +1417,7 @@ $("btn-probar-teams").addEventListener("click", async (ev) => {
 async function cargarConfiguracion() {
   try {
     const d = await api("configuracion");
-    Object.assign(cfg, { fuentes: d.fuentes, recomendadas: d.recomendadas, favoritos: d.favoritos,
-      correoConfigurado: d.correo_configurado, teamsConfigurado: d.teams_configurado, cargada: true });
+    Object.assign(cfg, { fuentes: d.fuentes, recomendadas: d.recomendadas, teamsConfigurado: d.teams_configurado, cargada: true });
     renderConfig();
   } catch (e) {
     msgConfig(`No se pudo cargar la configuración: ${e.message}`, true);
@@ -1492,63 +1452,6 @@ $("btn-restaurar").addEventListener("click", async () => {
     msgConfig(r.agregadas ? `Se restauraron ${r.agregadas} fuentes recomendadas.` : "Ya tienes todas las recomendadas.");
   } catch (e) { msgConfig(e.message, true); }
 });
-$("form-favorito").addEventListener("submit", (ev) => {
-  ev.preventDefault();
-  const email = $("nuevo-correo").value, nombre = $("nuevo-nombre").value;
-  cambiarConfig(async () => {
-    await api("favoritos", { metodo: "POST", cuerpo: { email, nombre } });
-    $("nuevo-correo").value = "";
-    $("nuevo-nombre").value = "";
-  }, "Correo agregado a favoritos.");
-});
-
-// ---------- envío del PowerPoint por correo ----------
-
-let mesEnvio = null;
-
-async function abrirEnvio(mesIso) {
-  mesEnvio = (mesIso || estado.mesObjetivo).slice(0, 7);
-  if (!cfg.cargada) await cargarConfiguracion();
-  $("resumen-envio").textContent = `Se enviará el PowerPoint de ${nombreMes(`${mesEnvio}-01`)} como adjunto.`
-    + (cfg.correoConfigurado ? "" : " Atención: el envío aún no está activado en el servidor.");
-  $("envio-favoritos").replaceChildren(...(cfg.favoritos.length ? cfg.favoritos.map((f, i) => el("label", { clase: "opcion-favorito" },
-    el("input", { type: "checkbox", name: "favorito", value: f.email }),
-    f.nombre ? `${f.nombre} · ${f.email}` : f.email))
-    : [el("p", { clase: "ayuda" }, "Aún no tienes favoritos: agrégalos en Configuración o escribe los correos abajo.")]));
-  $("envio-otros").value = "";
-  $("envio-mensaje").value = "";
-  $("envio-guardar").checked = false;
-  $("error-envio").textContent = "";
-  $("envio-enviar").disabled = false;
-  $("dialogo-envio").showModal();
-}
-
-$("form-envio").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const favoritos = [...document.querySelectorAll('#envio-favoritos input[name="favorito"]:checked')].map((i) => i.value);
-  const otros = $("envio-otros").value.trim();
-  if (!favoritos.length && !otros) { $("error-envio").textContent = "Elige al menos un destinatario."; return; }
-  $("envio-enviar").disabled = true;
-  $("error-envio").textContent = "";
-  $("envio-enviar").textContent = "Enviando…";
-  try {
-    const r = await api("enviar-pptx", { metodo: "POST", cuerpo: {
-      mes: mesEnvio, favoritos, otros, mensaje: $("envio-mensaje").value, guardar_favoritos: $("envio-guardar").checked } });
-    $("dialogo-envio").close();
-    aviso(`PowerPoint enviado a ${r.enviados.join(", ")}.`);
-    cfg.cargada = false;
-    await cargarMes();
-    if (!$("seccion-repositorio").hidden) await cargarRepositorio();
-  } catch (e) {
-    $("error-envio").textContent = e.message;
-  } finally {
-    $("envio-enviar").disabled = false;
-    $("envio-enviar").textContent = "Enviar";
-  }
-});
-$("envio-cancelar").addEventListener("click", () => $("dialogo-envio").close());
-$("btn-enviar").addEventListener("click", () => abrirEnvio());
-
 // ---------- login ----------
 
 function mostrar(vista) {

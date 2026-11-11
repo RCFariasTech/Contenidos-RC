@@ -1,6 +1,6 @@
 # Contenido Instagram RC Farias
 
-Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de Instagram de RC Farias, y exportarlo a PowerPoint. El diseño completo está en [`PLAN.md`](PLAN.md).
+Web app privada para generar, revisar, ajustar, diseñar, aprobar y descargar para publicar el contenido mensual de Instagram de RC Farias. El diseño completo está en [`PLAN.md`](PLAN.md).
 
 ## Estado (01/10/2026)
 
@@ -10,7 +10,7 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | 2. Lógica determinista | ✅ Planificador y validador con tests |
 | 3. Generación y ajustes | ✅ Primer mes real generado (≈ USD 1,49 con 3 ajustes) |
 | 4. Interfaz | ✅ Propuestas (comentarios, ajustes, aprobación, fechas) y Repositorio |
-| 5. PowerPoint y cron | ✅ Exportación con marca; cron diario desde el día 15 |
+| 5. Cron | ✅ Cron diario desde el día 15 (el PowerPoint se retiró en nov. 2026: la entrega es «Descargar para publicar») |
 | 6. Migración del historial | ✅ 7 temas previos cargados como histórico |
 | 7. Tarjetas de carrusel | ✅ PDF 4:5 (1080 × 1350) por carrusel con el sistema gráfico 2026: texto editable, 5 plantillas fijas, ícono isométrico y foto de Krea (`rc/tarjetas.py`) |
 
@@ -32,21 +32,6 @@ Web app privada para generar, revisar, ajustar y aprobar el contenido mensual de
 | `CRON_SECRET` | secreto aleatorio (tipo Sensitive) | Ya configurada |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (o una clave `sb_secret_…`). Tipo **Sensitive** | Dueño del proyecto |
 | `ANTHROPIC_API_KEY2` (o `ANTHROPIC_API_KEY`) | console.anthropic.com → API Keys. Tipo **Sensitive**. Si existen las dos, se usa `ANTHROPIC_API_KEY2` | Dueño del proyecto |
-
-### Envío del PowerPoint por correo (opcional)
-
-El botón "Enviar por correo" usa SMTP con la librería estándar de Python (sin servicios de terceros). Para activarlo agrega en Vercel:
-
-| Variable | Valor |
-|---|---|
-| `SMTP_USER` | Cuenta que envía, p. ej. `contenido.rcfarias@gmail.com` |
-| `SMTP_PASSWORD` | **Contraseña de aplicación** de esa cuenta (no la contraseña normal). Tipo **Sensitive** |
-| `SMTP_HOST` | Opcional. Por defecto `smtp.gmail.com` |
-| `SMTP_PORT` | Opcional. Por defecto `587` (STARTTLS) |
-| `SMTP_FROM` | Opcional. Por defecto igual a `SMTP_USER` |
-
-En Gmail, la contraseña de aplicación se crea en la cuenta de Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones (los nombres de los menús de Google pueden cambiar).
-Mientras falten `SMTP_USER` y `SMTP_PASSWORD`, la app avisa que el envío no está activado y el resto funciona igual.
 
 ### Aviso a Microsoft Teams (opcional)
 
@@ -99,7 +84,7 @@ Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el pri
 
 **Cifra a resaltar.** Si la tarjeta de dato (carrusel: la 4) o una escena intermedia del reel tiene varias cifras, aparece «Cifra a resaltar» para elegir cuál va en grande (p. ej. en «Regla 95-5: solo 5% compra ahora»: 95-5, 95, 5 o 5%); «Automática» usa la primera. Se guarda en `piezas.diseno_reel.cifras`. El reproductor del reel tiene reproducir/pausar y una barra para adelantar o retroceder; al cambiar una transición salta a ese cambio de escena.
 
-**Limpieza.** Al aprobarse el diseño de una pieza se borran de la base de datos las imágenes y animaciones que no se eligieron. El botón «Descargar PowerPoint» quedó oculto (la entrega es con «Descargar para publicar»).
+**Limpieza.** Al aprobarse el diseño de una pieza se borran de la base de datos las imágenes y animaciones que no se eligieron. La exportación a PowerPoint y su envío por correo se eliminaron: la entrega es con «Descargar para publicar».
 
 **Aprobaciones en 3 tiempos.** 1) Reini (`OWNER_EMAIL`, administrador: puede todo) revisa investigación y textos y aprueba cada pieza. 2) Cuando las 4 piezas tienen ese aprobado, Daniela (`DISENO_EMAILS`) revisa diseños y animaciones y aprueba cada pieza (puede generar y elegir imágenes, animar, elegir cifras, fotos y música). 3) Cuando Daniela aprueba las 4, Luís (`PUBLICACION_EMAILS`) da la aprobación final y descarga. Cada etapa puede **devolver** una pieza con una nota: Luís → diseño; Daniela → textos (la nota queda como comentario para «Aplicar ajustes»). Al completarse una etapa o devolverse una pieza se avisa a Teams (`TEAMS_WEBHOOK_URL`). Daniela y Luís necesitan una cuenta en Supabase Auth con esos correos; no ven los controles de textos.
 
@@ -131,7 +116,7 @@ Vercel crea los proyectos con **Vercel Authentication** activa en todos los domi
 En `supabase/migrations/`, aplicadas en orden:
 - `001_esquema.sql`: tablas, tipos y RLS sin políticas (solo el servidor accede).
 - `002_semilla_historico.sql`: los 7 temas ya publicados, como mes histórico.
-- `003_configuracion.sql`: fuentes confiables (con la lista inicial de `config/fuentes.json`) y correos favoritos.
+- `003_configuracion.sql`: fuentes confiables (con la lista inicial de `config/fuentes.json`) y correos favoritos (tabla eliminada en `013`).
 - `004_motivo_rehacer.sql`: permite el motivo «rehacer» en las versiones (botón «Rehacer propuesta»).
 - `005_ilustraciones.sql`: variantes de ilustración generadas en Krea (solo enlaces y estado).
 - `006_ilustracion_elegida.sql`: variante elegida por tarjeta y escena usada.
@@ -141,6 +126,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `010_reels_iconos_video.sql`: imágenes en las escenas del reel y video del ícono animado.
 - `011_video_pedido_y_fotos_reel.sql`: hora del pedido de animación y escenas del reel con foto.
 - `012_aprobaciones_por_etapa.sql`: aprobaciones de diseño y publicación, y devoluciones.
+- `013_quitar_correos_favoritos.sql`: elimina la tabla de correos favoritos (el envío del PowerPoint se retiró).
 
 ## Desarrollo local
 

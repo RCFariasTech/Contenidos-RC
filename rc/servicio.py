@@ -3,7 +3,7 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from rc import correos, db, fuentes, generador, krea, planificador, teams, validador
+from rc import db, fuentes, generador, krea, planificador, teams, validador
 from rc.config import ajustes, env, pilares
 from rc.errores import ErrorNegocio  # noqa: F401 (se reexporta: servicio.ErrorNegocio)
 
@@ -644,31 +644,6 @@ def cambiar_fecha(pieza_id: int, fecha: str) -> dict:
 
 # ---------- exportación ----------
 
-def _construir_pptx(mes: date) -> tuple[dict, list[dict], str, bytes]:
-    from rc import pptx_export  # import diferido: python-pptx solo se carga al exportar
-    fila_mes = obtener_mes(mes)
-    if not fila_mes:
-        raise ErrorNegocio("Ese mes no tiene propuestas.")
-    if fila_mes["estado"] not in ("aprobado", "entregado"):
-        raise ErrorNegocio("El PowerPoint se habilita cuando las 4 piezas están aprobadas.")
-    piezas = db.seleccionar("piezas", select="*", mes_id=f"eq.{fila_mes['id']}", order="semana")
-    contenido = pptx_export.generar_pptx(fila_mes["mes_objetivo"], piezas, fila_mes.get("aprobado_en"))
-    return fila_mes, piezas, pptx_export.nombre_archivo(fila_mes["mes_objetivo"]), contenido
-
-
-def _marcar_entregado(fila_mes: dict) -> None:
-    if fila_mes["estado"] == "aprobado":
-        db.actualizar("meses", {"estado": "entregado", "entregado_en": _ahora()},
-                      id=f"eq.{fila_mes['id']}", estado="eq.aprobado")
-
-
-def exportar_pptx(mes: date) -> tuple[str, bytes]:
-    """PowerPoint del mes aprobado. La primera descarga marca el mes como entregado."""
-    fila_mes, _piezas, nombre, contenido = _construir_pptx(mes)
-    _marcar_entregado(fila_mes)
-    return nombre, contenido
-
-
 def _variante(pieza: dict) -> tuple[str, int]:
     """(mes_objetivo, variante): cambia de una pieza a otra y de un mes a otro, así los colores del feed rotan."""
     mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
@@ -1125,37 +1100,12 @@ def ilustraciones(pieza_id: int) -> dict:
     return {"configurado": krea.configurado(), "items": filas}
 
 
-def enviar_pptx(mes: date, destinatarios: list[str], mensaje: str = "", guardar_favoritos: bool = False) -> list[str]:
-    """Envía el PowerPoint por correo; marca el mes como entregado solo si el envío salió bien."""
-    from rc import pptx_export
-    emails = list(dict.fromkeys(correos.validar_email(e) for e in destinatarios))
-    fila_mes, piezas, nombre, contenido = _construir_pptx(mes)
-    mes_texto = pptx_export.nombre_mes(fila_mes["mes_objetivo"])
-    lineas = [f"- Semana {p['semana']} · {p['formato']} · {pptx_export.fecha_larga(p.get('fecha_publicacion'))}: "
-              f"{(p.get('contenido') or {}).get('tema_especifico', '')}" for p in piezas]
-    cuerpo = (f"Hola,\n\nAdjunto el PowerPoint con el contenido de Instagram de {mes_texto}.\n\n"
-              + (f"{mensaje.strip()}\n\n" if mensaje.strip() else "")
-              + "Piezas incluidas:\n" + "\n".join(lineas)
-              + "\n\nCada slide trae formato, medidas, textos por tarjeta o escena, caption, hashtags y fuente.\n\n"
-              "RC Farías · Experiencias de marca")
-    correos.enviar(emails, f"Contenido Instagram RC Farías · {mes_texto}", cuerpo, contenido, nombre)
-    _marcar_entregado(fila_mes)
-    if guardar_favoritos:
-        existentes = {f["email"] for f in correos.listar_favoritos()}
-        for e in emails:
-            if e not in existentes:
-                correos.agregar_favorito(e)
-    return emails
-
-
-# ---------- repositorio ----------
-
 def repositorio() -> list[dict]:
     """Piezas con contenido de meses aprobados, entregados o históricos (más recientes primero)."""
     filas = db.seleccionar(
         "piezas",
         select="id,semana,fecha_publicacion,formato,tipo,pilar,estado,version,contenido,aprobada_en,creado_en,"
-               "meses!inner(mes_objetivo,estado,aprobado_en,entregado_en)",
+               "aprobaciones,meses!inner(mes_objetivo,estado,aprobado_en)",
         contenido="not.is.null", **{"meses.estado": "in.(aprobado,entregado,historico)"})
     resultado = []
     for f in filas:
@@ -1167,7 +1117,8 @@ def repositorio() -> list[dict]:
             "mes_objetivo": None if historico else m.get("mes_objetivo"),
             "estado_mes": m.get("estado"),
             "mes_aprobado_en": m.get("aprobado_en"),
-            "mes_entregado_en": m.get("entregado_en"),
+            # Lista para publicar = aprobación final de Luís («entregado» queda solo en meses antiguos).
+            "publicada_en": ((f.get("aprobaciones") or {}).get("publicacion") or {}).get("en"),
             "historico": historico,
             "tema": contenido.get("tema_especifico", ""),
             "tendencia": (contenido.get("investigacion") or {}).get("tendencia", ""),

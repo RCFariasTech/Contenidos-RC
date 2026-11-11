@@ -218,10 +218,6 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .chip button { font: inherit; line-height: 1; border: 0; background: transparent; color: var(--azul-marino); cursor: pointer;
   width: 26px; height: 26px; border-radius: 50%; }
 .chip button:hover { background: var(--error-fondo); color: var(--error-texto); }
-.lista-favoritos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.favorito { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px;
-  background: var(--fondo); border-radius: 8px; }
-.favorito small { color: var(--texto-suave); display: block; }
 .dialogo { border: 0; border-radius: var(--radio); padding: 24px; width: min(520px, calc(100vw - 32px)); color: var(--texto); }
 .dialogo::backdrop { background: rgba(31, 56, 100, .55); }
 .dialogo form { display: grid; gap: 10px; }
@@ -242,11 +238,6 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .carrusel__flecha--sig { right: 8px; }
 .carrusel__contador { text-align: center; font-weight: bold; color: var(--azul-marino); margin: 0; }
 .dialogo__acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.envio-favoritos { border: 1px solid var(--borde); border-radius: 8px; padding: 8px 12px; margin: 0; }
-.envio-favoritos legend { font-weight: bold; padding: 0 6px; }
-.check-linea { display: flex; align-items: center; gap: 8px; font-weight: normal; }
-.check-linea input, .opcion-favorito input { width: 18px; height: 18px; accent-color: var(--azul-medio); margin: 0; }
-.opcion-favorito { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-weight: normal; }
 
 /* Ilustraciones generadas en Krea */
 .dialogo--ilus { width: min(860px, calc(100vw - 24px)); padding: 16px 20px; }
