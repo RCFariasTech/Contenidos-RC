@@ -84,13 +84,21 @@ class TestKrea(unittest.TestCase):
                 krea.crear_trabajo("p", "1:1")
 
     def test_prompt_de_icono_con_el_estilo_de_la_guia(self):
-        p = krea.construir_prompt("a shelf with a screen and a cart.", "icono")
-        self.assertIn("a shelf with a screen and a cart.", p)
-        for rasgo in ("isometric", "#005EFF", "#FF0006", "flat solid dark navy #12244A", "No text"):
+        p = krea.construir_prompt("Escena: una estrategia que gana. Protagonista: un rey de ajedrez. Apoyo: un tablero "
+                                  "y dos peones. Punto focal: la corona.", "icono")
+        for rasgo in ("New illustration: una estrategia que gana.", "Protagonist: un rey de ajedrez,",
+                      "Secondary: un tablero y dos peones,", "Focal point: la corona in a vivid red (#ED1D24)",
+                      "#162447", "#1A5CFF", "dark navy (#12244A)", "Edges in light colors", "no isometric technical",
+                      "faceless", "no readable text"):
             self.assertIn(rasgo, p)
+        sin_estructura = krea.construir_prompt("un reloj de arena sobre una alcancía", "icono", "gris")
+        self.assertIn("New illustration: un reloj de arena sobre una alcancía.", sin_estructura)
+        self.assertIn("Edges in dark colors", sin_estructura)
 
     def test_los_iconos_se_generan_sobre_el_color_de_su_tarjeta(self):
-        self.assertIn("flat solid bright red #FF1F35", krea.construir_prompt("una alcancía", "icono", "rojo2"))
+        sobre_rojo = krea.construir_prompt("una alcancía", "icono", "rojo2")
+        self.assertIn("uniform red (#FF1F35)", sobre_rojo)
+        self.assertIn("the only white element", sobre_rojo)  # el punto focal rojo no se vería sobre rojo
         p = krea.construir_prompt("una lupa", "linea", "marino")
         self.assertIn("Strokes in white #FFFFFF with ONE small accent stroke or detail in bright red #FF0006", p)
         self.assertIn("flat solid dark navy #12244A", p)
@@ -117,12 +125,14 @@ class TestKrea(unittest.TestCase):
 
     def test_referencias_de_iconos_publicas(self):
         from rc import estilo_iconos
-        refs = estilo_iconos.referencias_icono("https://contenidos-rc.vercel.app/")
-        self.assertTrue(refs and all(r.startswith("https://contenidos-rc.vercel.app/marca/iso/") for r in refs))
         from rc.config import RAIZ
-        for r in estilo_iconos.REFERENCIAS_ICONO:
+        refs = estilo_iconos.referencias_icono("https://contenidos-rc.vercel.app/")
+        self.assertEqual(refs, [estilo_iconos.REF_FONDO_CLARO, estilo_iconos.REF_FONDO_OSCURO])
+        self.assertEqual(len(estilo_iconos.referencias_icono("https://x", "icono", "Protagonista: una mano")), 4)
+        linea = estilo_iconos.referencias_icono("https://contenidos-rc.vercel.app/", "linea")
+        self.assertTrue(all(r.startswith("https://contenidos-rc.vercel.app/marca/linea/") for r in linea))
+        for r in estilo_iconos.REFERENCIAS_LINEA:
             self.assertTrue((RAIZ / "public" / r.lstrip("/")).exists(), r)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,10 +44,11 @@ FORMATO CARRUSEL:
   "icono" (solo tarjeta 3, y la 4 si no tiene cifra; vacío en las demás): el ícono de línea que mejor representa la idea, EXACTAMENTE una de estas claves:
   ${iconos_linea}.
   "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás), EN INGLÉS:
-  · Tarjeta 1 = ícono isométrico 3D de marca, imagen de APOYO que sintetiza la idea en una metáfora simple (no representa todo
-    el texto): UN objeto, o dos que interactúan, máximo 15 palabras, sin objetos extra «junto a», sin estilo, colores, fondo,
-    texto ni logos. Ej.: "an hourglass whose sand falls into a piggy bank", "a balance scale with a clock on one side and
-    stacked coins on the other".
+  · Tarjeta 1 = ilustración vectorial editorial de marca, imagen de APOYO que convierte la idea en UNA metáfora visual
+    conceptual (no representa todo el texto), con este formato: "Scene: <metaphor>. Protagonist: <main element>.
+    Secondary: <2-3 simple elements>. Focal point: <one key detail, will be red>." Máximo 45 palabras, sin estilo,
+    colores, fondo, texto ni logos. Ej.: "Scene: an event strategy that wins the game. Protagonist: a large chess
+    king. Secondary: a chessboard in perspective and two pawns. Focal point: the king's crown."
   · Tarjeta 2 = foto documental realista de un evento o activación de marca CON TECNOLOGÍA (pantallas LED grandes, gafas VR,
     simuladores, hologramas, pantallas táctiles, juegos multimedia, activaciones phygital): quién (personas latinas comunes de
     clase media, edad y género), dónde y qué tecnología usan (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto

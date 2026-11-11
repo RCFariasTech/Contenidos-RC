@@ -78,9 +78,9 @@ class TestTarjetas(unittest.TestCase):
     def test_la_descarga_no_trae_recuadros_de_imagen_solo_la_vista_previa(self):
         previa = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True), filetype="pdf")
         descarga = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=False), filetype="pdf")
-        self.assertIn("ÍCONO ISOMÉTRICO", previa[0].get_text())
+        self.assertIn("ILUSTRACIÓN · Krea", previa[0].get_text())
         self.assertIn("FOTO", previa[1].get_text())
-        self.assertNotIn("ÍCONO ISOMÉTRICO", descarga[0].get_text())
+        self.assertNotIn("ILUSTRACIÓN · Krea", descarga[0].get_text())
         self.assertNotIn("FOTO", descarga[1].get_text())
 
     def test_todo_el_texto_cabe_dentro_de_la_tarjeta_sin_solaparse(self):
@@ -177,7 +177,7 @@ class TestTarjetas(unittest.TestCase):
         doc = pymupdf.open(stream=tarjetas.generar_pdf(carrusel(), guias=True, imagenes={2: foto}), filetype="pdf")
         self.assertTrue(doc[1].get_images())
         self.assertNotIn("FOTO · Krea", doc[1].get_text())
-        self.assertIn("ÍCONO ISOMÉTRICO", doc[0].get_text())      # la tarjeta 1 sin imagen conserva su guía
+        self.assertIn("ILUSTRACIÓN · Krea", doc[0].get_text())      # la tarjeta 1 sin imagen conserva su guía
         r, g, b = doc[1].get_pixmap(matrix=pymupdf.Matrix(0.2, 0.2)).pixel(100, 250)[:3]
         self.assertTrue(b > 200 and r < 180, (r, g, b))             # blanco bajo el velo azul → azulado
 

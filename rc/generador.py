@@ -182,17 +182,16 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
 
 SISTEMAS_IMAGEN = {
     "icono": (
-        "Describes el tema de UN ícono isométrico 3D de marca que acompaña el texto de una tarjeta de carrusel de "
-        "Instagram sobre marketing BTL y experiencial (RC Farías, Colombia). El ícono es una imagen de APOYO: sintetiza "
-        "la idea central en una sola metáfora visual simple; NO intenta representar todo el texto ni recrear una "
-        "situación. Responde con UNA descripción breve EN ESPAÑOL (máximo 15 palabras) de UN objeto, o de dos objetos "
-        "que interactúan entre sí, nunca más. No agregues objetos sueltos «junto a» la idea principal.\n"
-        "Ejemplos correctos:\n"
-        "- Un reloj de arena cuya arena cae dentro de una alcancía.\n"
-        "- Una balanza de platillos con un reloj en un lado y monedas apiladas en el otro.\n"
-        "- Un vaso de arena vertiéndose sobre una tarjeta de pago.\n"
-        "Ejemplo INCORRECTO (demasiado ambicioso): «Un reloj de arena cuya arena cae dentro de una alcancía, junto a "
-        "una silla de espectador frente a un panel luminoso y un billete enrollado».\n"
+        "Propones la ilustración vectorial editorial que acompaña una tarjeta de carrusel (o la escena 1 de un reel) "
+        "de Instagram sobre marketing BTL y experiencial (RC Farías, Colombia). Es una imagen de APOYO: convierte la "
+        "idea central en UNA metáfora visual conceptual (ajedrez = estrategia, bombillo = concepto, mano = acción), "
+        "en composición tipo bodegón con pocos objetos grandes. No intenta representar todo el texto. Si hay "
+        "personas, son abstractas y sin rostro.\n"
+        "Responde EN ESPAÑOL con exactamente este formato, en una sola línea (máximo 45 palabras en total):\n"
+        "Escena: <la metáfora en una frase>. Protagonista: <el elemento principal>. Apoyo: <2 o 3 elementos simples>. "
+        "Punto focal: <UN detalle clave del protagonista, que irá en rojo>.\n"
+        "Ejemplo: «Escena: una estrategia de evento que gana la partida. Protagonista: un rey de ajedrez grande. "
+        "Apoyo: un tablero en perspectiva y dos peones. Punto focal: la corona del rey.»\n"
         "Sin palabras de estilo, colores, fondo, textos, letras, números, logos ni marcas."
     ),
     "linea": (
@@ -216,7 +215,7 @@ SISTEMAS_IMAGEN = {
 
 def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", tipo: str = "icono",
                           evitar: list[str] | None = None) -> str:
-    """Descripción EN ESPAÑOL de qué mostrar (ícono isométrico, ícono de línea o foto), a partir del texto de la
+    """Descripción EN ESPAÑOL de qué mostrar (ilustración vectorial, ícono de línea o foto), a partir del texto de la
     tarjeta. `evitar`: sugerencias anteriores, para proponer una opción distinta."""
     usuario = (f"Tema del carrusel: {tema}\nTitular de la tarjeta: {titular}\nTexto de la tarjeta: {texto}\n"
                + (f"Nota del diseñador: {nota}\n" if nota else ""))

@@ -568,7 +568,7 @@ class TestFlujo(unittest.TestCase):
             self.assertEqual({f["estado"] for f in filas}, {"en_cola"})
             prompt, proporcion, referencias = enviados[0]
             self.assertIn("A 3D character pushing a shopping cart", prompt)      # el prompt_krea de la tarjeta
-            self.assertIn("isometric", prompt)                                  # tarjeta 1: ícono isométrico
+            self.assertIn("flat 2D vector", prompt)                             # tarjeta 1: ilustración vectorial
             self.assertEqual(proporcion, "1:1")
             self.assertTrue(referencias and all(r.endswith(".png") for r in referencias))
             self.assertEqual(len(servicio.generar_ilustraciones(carrusel["id"], 2)["items"]), 2)
@@ -654,7 +654,7 @@ class TestFlujo(unittest.TestCase):
             _, pdf = servicio.tarjetas_pdf(carrusel["id"])
         doc = pymupdf.open(stream=pdf, filetype="pdf")
         self.assertTrue(doc[0].get_images())                      # tarjeta 1 con la ilustración montada
-        self.assertNotIn("ÍCONO ISOMÉTRICO", doc[0].get_text())
+        self.assertNotIn("ILUSTRACIÓN · Krea", doc[0].get_text())
         servicio.elegir_ilustracion(filas[1]["id"], False)        # quitarla
         self.assertFalse(any(f["elegida"] for f in self.bd.tablas["ilustraciones"]))
 

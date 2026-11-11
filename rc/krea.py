@@ -1,4 +1,4 @@
-"""Cliente mínimo de la API pública de Krea (solo librería estándar): íconos isométricos y fotos con Nano Banana Pro.
+"""Cliente mínimo de la API pública de Krea (solo librería estándar): ilustraciones vectoriales, íconos de línea y fotos con Nano Banana Pro.
 Las imágenes viven en Krea: aquí solo se envían trabajos y se consulta su estado.
 """
 
@@ -96,8 +96,8 @@ def crear_trabajo(prompt: str, proporcion: str, referencias: list[str] | None = 
 
 
 PROMPT_ANIMACION = (
-    "Simple, subtle seamless loop animation of this exact isometric 3D icon: it floats gently up and down and its "
-    "parts move slightly (a small rotation of one element). Static locked camera. The background is a perfectly flat, "
+    "Simple, subtle seamless loop animation of this exact flat 2D vector illustration: its elements float gently "
+    "and move slightly (a small rotation or sway of one element), keeping the flat vector style, gradients and grain. Static locked camera. The background is a perfectly flat, "
     "uniform solid {fondo} that stays EXACTLY the same color in every frame: no lighting changes, no glow, no flicker, "
     "no gradients, no vignette, no shadows or reflections on the background, no exposure or color shifts. No new "
     "objects, no text, no scene changes. Clean motion graphics style."

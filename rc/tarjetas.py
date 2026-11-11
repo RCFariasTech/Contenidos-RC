@@ -317,7 +317,7 @@ def t1_gancho(L, d):
             return
         except Exception:
             pass
-    L.recuadro_guia(x + 60, y_sup + 60, ancho - 120, alto - 120, "ÍCONO ISOMÉTRICO · Krea", d.get("nota", ""),
+    L.recuadro_guia(x + 60, y_sup + 60, ancho - 120, alto - 120, "ILUSTRACIÓN · Krea", d.get("nota", ""),
                     tinta=tema["texto"])
 
 

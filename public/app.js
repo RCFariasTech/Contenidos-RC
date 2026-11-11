@@ -947,11 +947,11 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 });
 
 
-// ---------- imágenes de Krea: ícono isométrico (1), foto (2) e ícono de línea (3) ----------
+// ---------- imágenes de Krea: ilustración vectorial (1), foto (2) e ícono de línea (3) ----------
 
 const IMAGEN_TARJETA = {
-  1: { boton: "Ícono de la tarjeta 1", titulo: "Ícono isométrico · Tarjeta 1", generar: "Generar íconos", alt: "Ícono generado en Krea",
-       ayuda: "Genera en Krea variantes del ícono isométrico de la portada, con el estilo de la guía visual" },
+  1: { boton: "Ilustración de la tarjeta 1", titulo: "Ilustración vectorial · Tarjeta 1", generar: "Generar ilustraciones", alt: "Ilustración generada en Krea",
+       ayuda: "Genera en Krea variantes de la ilustración de la portada en el estilo vectorial RC. Descríbela como «Escena: … Protagonista: … Apoyo: … Punto focal: …» (el punto focal va en rojo)" },
   2: { boton: "Foto de la tarjeta 2", titulo: "Foto · Tarjeta 2", generar: "Generar fotos", alt: "Foto generada en Krea",
        ayuda: "Genera en Krea variantes de la foto realista de la tarjeta 2" },
   3: { boton: "Ícono de la tarjeta 3", titulo: "Ícono de línea · Tarjeta 3", generar: "Generar íconos", alt: "Ícono de línea generado en Krea",
@@ -1017,9 +1017,9 @@ function opcionFoto(pieza, n) {
 /** Qué imagen lleva la tarjeta o escena `n` de la pieza (null si no lleva). */
 function infoImagen(pieza, n) {
   if (pieza.formato !== "Reel") return IMAGEN_TARJETA[n] || null;
-  if (n === 1) return { reel: true, boton: "Ícono animado de la escena 1", titulo: "Ícono isométrico animado · Escena 1",
+  if (n === 1) return { reel: true, boton: "Ilustración animada de la escena 1", titulo: "Ilustración vectorial animada · Escena 1",
     generar: "Generar íconos", alt: "Ícono generado en Krea",
-    ayuda: "Genera en Krea el ícono isométrico de la escena 1 y su animación corta en video" };
+    ayuda: "Genera en Krea la ilustración vectorial de la escena 1 y su animación corta en video" };
   const texto = pieza.contenido?.[CAMPOS.Reel[n - 1]?.campo] || "";
   if (n > 4 || tieneCifra(texto)) return null; // el cierre no lleva imagen; con cifra, la cifra va en grande
   if ((pieza.diseno_reel?.fotos || []).includes(n)) return { reel: true, boton: `Foto de la escena ${n}`,

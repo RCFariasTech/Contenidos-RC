@@ -841,7 +841,7 @@ def foto_en_escena(pieza_id: int, escena: int, activa: bool) -> dict:
 
 def _tipos_imagen(pieza: dict) -> dict[int, str]:
     """{tarjeta o escena: tipo de imagen} que lleva la pieza (carrusel: 1 ícono, 2 foto, 3 línea; reel: 1 ícono
-    isométrico animado y 2-4 ícono de línea si la escena no tiene cifra; el cierre nunca lleva imagen)."""
+    ilustración vectorial animada y 2-4 ícono de línea si la escena no tiene cifra; el cierre nunca lleva imagen)."""
     from rc import reels, tarjetas
     if not pieza.get("contenido"):
         return {}
@@ -860,7 +860,7 @@ def _texto_imagen(pieza: dict, numero: int) -> dict:
 
 def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descripcion: str | None = None,
                           cantidad: int | None = None, automatica: bool = False) -> dict:
-    """Pide a Krea (Nano Banana Pro) varias variantes de la imagen de la tarjeta 1 (ícono isométrico en el estilo de
+    """Pide a Krea (Nano Banana Pro) varias variantes de la imagen de la tarjeta 1 (ilustración vectorial en el estilo de
     la guía, con los íconos de la guía como referencia) o de la tarjeta 2 (foto realista).
 
     El tema sale, en este orden, de: la descripción que escribió el usuario, el `prompt_krea` de esa tarjeta o, si no
@@ -895,7 +895,8 @@ def generar_ilustraciones(pieza_id: int, tarjeta: int, semilla: int = 0, descrip
             raise ErrorNegocio(str(e)) from e
     fondo = tarjetas.color_de_tarjeta(tarjeta, tarjetas.inicio_de_semana(pieza.get("semana")))
     prompt = krea.construir_prompt(descripcion, tipo, fondo)
-    referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""), tipo)
+    referencias = (estilo_iconos.referencias_icono(env("APP_URL", False) or k.get("url_publica", ""), tipo,
+                                                   descripcion)
                    if tipo in ("icono", "linea") else [])
     filas, fallo = [], None
     for _ in range(cantidad or k["variantes_por_clic"]):
@@ -1046,14 +1047,14 @@ MINUTOS_MAX_VIDEO = 20
 
 
 def animar_ilustracion(ilustracion_id: int) -> dict:
-    """Pide a Krea el video corto (ícono isométrico animado, en bucle) de una imagen lista de la escena 1 de un reel."""
+    """Pide a Krea el video corto (ícono ilustración vectorial animada, en bucle) de una imagen lista de la escena 1 de un reel."""
     filas = db.seleccionar("ilustraciones", select="*", id=f"eq.{int(ilustracion_id)}")
     if not filas:
         raise ErrorNegocio("La imagen no existe.")
     fila = filas[0]
     pieza = _pieza(fila["pieza_id"])
     if pieza["formato"] != "Reel" or int(fila["tarjeta"]) != 1:
-        raise ErrorNegocio("Solo se anima el ícono isométrico de la escena 1 de los reels.")
+        raise ErrorNegocio("Solo se anima la ilustración de la escena 1 de los reels.")
     if fila["estado"] != "lista" or not str(fila.get("url") or "").startswith("https://"):
         raise ErrorNegocio("Solo se puede animar una imagen que ya terminó de generarse.")
     if fila.get("video_estado") == "en_cola":

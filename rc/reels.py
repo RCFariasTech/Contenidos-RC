@@ -1,6 +1,6 @@
 """Guion visual de un reel en PDF vertical 9:16 (1080 x 1920) · sistema gráfico 2026: una página por escena.
 
-Cada página trae el texto en pantalla (editable) y los tiempos. Escena 1: ícono isométrico de Krea (su versión
+Cada página trae el texto en pantalla (editable) y los tiempos. Escena 1: ilustración vectorial de Krea (su versión
 animada en video se descarga desde la app). Escenas 2-4: la primera cifra del texto en grande o, si no hay cifra, un
 ícono de línea de Krea. Escena 5: cierre con logos, sin imagen.
 Todo queda dentro de la zona segura de Instagram (sin texto en los ~220 px de arriba ni los ~450 px de abajo).
@@ -83,7 +83,7 @@ class _Hoja:
         c.drawCentredString(x + ancho / 2, y + alto / 2 - 10, rotulo)
 
 
-# Imagen de Krea por escena: 1 ícono isométrico (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
+# Imagen de Krea por escena: 1 ilustración vectorial (animado en video), 2-4 ícono de línea si la escena no tiene cifra;
 # la 5 (cierre) no lleva imagen.
 AREA_ICONO, AREA_LINEA = 520, 300
 ALTO_FOTO = 1080
@@ -170,7 +170,7 @@ def _alto_gancho(texto: str, alto_max: float) -> float:
 
 
 def caja_icono(contenido: dict) -> tuple[float, float, float]:
-    """(x, y desde arriba, lado) del ícono isométrico de la portada (escena 1): alineado a la izquierda con el texto,
+    """(x, y desde arriba, lado) del ilustración vectorial de la portada (escena 1): alineado a la izquierda con el texto,
     encima de él. También sirve para superponer su video en la vista previa."""
     tarjetas._registrar_fuentes()
     lado = AREA_ICONO
@@ -259,7 +259,7 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
             pass
     if not puesto:
         if numero == 1:
-            L.guia(x, y_img, lado, lado, "ÍCONO ISOMÉTRICO ANIMADO · Krea", tema["texto"])
+            L.guia(x, y_img, lado, lado, "ILUSTRACIÓN ANIMADA · Krea", tema["texto"])
         else:
             from reportlab.graphics import renderPDF
             dib = tarjetas._svg_recoloreado(

@@ -95,7 +95,7 @@ class TestReels(unittest.TestCase):
             texto = " ".join(pagina.get_text().split())
             self.assertIn(REEL[campo].upper() if campo == reels.CAMPOS[0] else REEL[campo], texto)
             self.assertNotIn("FOTO O VIDEO", texto)                     # ya no hay recuadro de foto/video
-        self.assertIn("ÍCONO ISOMÉTRICO ANIMADO", doc[0].get_text())
+        self.assertIn("ILUSTRACIÓN ANIMADA", doc[0].get_text())
         self.assertNotIn("ESCENA", doc[0].get_text())          # sin rótulos de escena ni notas en la vista previa
         self.assertNotIn("Animado:", doc[0].get_text())
 

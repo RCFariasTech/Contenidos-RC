@@ -1,32 +1,74 @@
 """Prompts de Krea para el sistema gráfico RC Farías 2026.
 
-- Ícono isométrico (tarjeta 1): estilo del set de la guía visual, con los PNG
-  publicados en /marca/iso/ como referencias de estilo.
+- Ilustración vectorial (tarjeta 1 y escena 1 del reel): estilo vectorial RC de la guía de Daniela
+  (metáfora con protagonista, apoyos y un punto focal rojo), con sus referencias publicadas en Krea.
 - Ícono de línea (tarjeta 3): estilo de los íconos de línea de la guía, con /marca/linea/ como referencias.
 - Foto (tarjeta 2 y reels): fotografía documental realista, gente común.
 """
 
 MODELO = "google/nano-banana-pro"
 
-REFERENCIAS_ICONO = ["/marca/iso/iso_2.png", "/marca/iso/iso_4.png",
-                     "/marca/iso/iso_8.png", "/marca/iso/iso_9.png"]
+# Estilo vectorial RC (guía de Daniela, 10-nov-2026): referencias de estilo publicadas en Krea.
+REF_FONDO_CLARO = "https://app-uploads.krea.ai/public/c011bd19-9c25-4ad2-b4b9-637a4152970b-image.png"
+REF_FONDO_OSCURO = "https://app-uploads.krea.ai/public/f010ce21-afdf-4aeb-96aa-6e98dac256ac-image.png"
+REF_MANOS = ["https://app-uploads.krea.ai/public/bd4d3ebe-4bd1-457b-a682-746e7187cb88-image.png",   # mano abierta
+             "https://app-uploads.krea.ai/public/505cdc93-42b9-45f7-9b66-567803907fe2-image.png"]   # índice
+REFERENCIAS_ICONO = [REF_FONDO_CLARO, REF_FONDO_OSCURO]
+
+# Fondo de la tarjeta (paleta 2026, para que la ilustración se funda con ella) → bordes que separan del fondo.
+FONDOS_VECTOR = {"marino": ("dark navy", "#12244A", "light"), "azul": ("royal blue", "#005EFF", "light"),
+                 "gris": ("light grey", "#C9CACB", "dark"), "gris_claro": ("light grey", "#E8E8E8", "dark"),
+                 "blanco": ("white", "#FFFFFF", "dark"), "rojo": ("red", "#FF0006", "light"),
+                 "rojo2": ("red", "#FF1F35", "light")}
 
 ESTILO_ICONO = (
-    "Create ONE new isometric 3D icon in exactly the same visual style as the "
-    "reference images (RC Farías brand icon set). Subject (it may be described in Spanish): {tema}. "
-    "STYLE: clean isometric 3/4 view from above, semi-flat 3D render, soft "
-    "vector-like shading with smooth gradients, no textures, no realism. Strict "
-    "palette: royal blue #005EFF and lighter blue gradients, bright red #FF0006 "
-    "accents (arrows, chart lines, highlights, targets), white and light gray "
-    "#E8E8E8 / #C9CACB surfaces, with subtle glossy translucent glass panels and "
-    "gentle soft glow. Keep it simple: show ONLY the object(s) described in the "
-    "subject (one object, or two interacting), with no extra props, scenery or "
-    "decorative elements, like a clean floating editorial icon. No people unless "
-    "the subject asks for them. No text, no "
-    "letters, no numbers, no logos. Background: completely flat solid {fondo}, "
-    "no floor, no shadows on the background, no frame, object centered with "
-    "generous margin. The object must contrast clearly with the background."
+    "Use the reference images ONLY as a style guide (flat 2D vector editorial illustration, simple geometric shapes, "
+    "two-tone gradients, subtle risograph grain inside the illustrated elements, elegant composition). Do not copy "
+    "their content. The brief may be written in Spanish.\n"
+    "New illustration: {escena}.\n"
+    "Protagonist: {protagonista}, with the richest color and volume through two-tone gradients and grain shading.\n"
+    "Secondary: {apoyo}, simpler than the protagonist.\n"
+    "Focal point: {focal} in {color_focal}, the only {nombre_focal} element.\n"
+    "Colors: deep navy (#162447), electric blue (#1A5CFF), light grey (#E9E9E9, #CACBCC), charcoal (#353841, "
+    "#171719), white. Depth from gradients, planes in slight perspective and translucent glass-like layers. "
+    "Each gradient is one single continuous smooth seamless gradient, no visible bands or edges. "
+    "Still-life composition: few large objects on a diagonal, generous negative space.\n"
+    "People: abstract and faceless, no eyes, no mouth, no eyebrows, no eyelashes, no blush.\n"
+    "Background: solid flat uniform {fondo_nombre} ({fondo_hex}), completely plain, no circle, no container, no "
+    "gradient, no glow, no grain, no cast shadows. Edges in {bordes} colors to separate from the background.\n"
+    "No decorative particles, no confetti, no scattered lines, dots, squares or arrows, no readable text, no logos, "
+    "no outlines, no 3D render, no isometric technical diagram style, avoid small detailed parts."
 )
+
+_ETIQUETAS = {"escena": ("escena", "scene", "concepto"), "protagonista": ("protagonista", "protagonist"),
+              "apoyo": ("apoyo", "secundarios", "secondary"), "focal": ("punto focal", "focal", "focal point")}
+
+
+def partes_metafora(descripcion: str) -> dict:
+    """Separa «Escena: … Protagonista: … Apoyo: … Punto focal: …». Si no viene estructurada, todo es la escena y el
+    modelo decide protagonista, apoyos y punto focal."""
+    import re
+    texto = " ".join((descripcion or "").split()).strip(" .")
+    etiquetas = sorted(((e, k) for k, es in _ETIQUETAS.items() for e in es), key=lambda x: -len(x[0]))
+    patron = re.compile(r"(?i)\b(" + "|".join(re.escape(e) for e, _ in etiquetas) + r")\s*:")
+    trozos = patron.split(texto)
+    partes = {}
+    if len(trozos) > 1:
+        if trozos[0].strip(" .;"):
+            partes["escena"] = trozos[0].strip(" .;")
+        for i in range(1, len(trozos) - 1, 2):
+            clave = next(k for e, k in etiquetas if e == trozos[i].lower())
+            valor = trozos[i + 1].strip(" .;")
+            if valor and clave not in partes:
+                partes[clave] = valor
+    else:
+        partes["escena"] = texto
+    partes.setdefault("escena", partes.get("protagonista", texto))
+    partes.setdefault("protagonista", "the main element of the scene")
+    partes.setdefault("apoyo", "two or three simple supporting elements that complete the metaphor")
+    partes.setdefault("focal", "one key detail of the protagonist")
+    return partes
+
 
 REFERENCIAS_LINEA = ["/marca/linea/crecimiento.png", "/marca/linea/conexiones.png",
                      "/marca/linea/tiempo.png", "/marca/linea/procesos.png"]
@@ -62,7 +104,15 @@ NOMBRES_COLOR = {"marino": "dark navy #12244A", "azul": "royal blue #005EFF", "g
 
 
 def prompt_icono(tema: str, fondo: str = "marino") -> str:
-    return ESTILO_ICONO.format(tema=tema.strip().rstrip("."), fondo=NOMBRES_COLOR.get(fondo, fondo))
+    """Ilustración vectorial RC (tarjeta 1 y escena 1 del reel) sobre el color de la tarjeta."""
+    nombre, hexa, bordes = FONDOS_VECTOR.get(fondo, FONDOS_VECTOR["marino"])
+    p = partes_metafora(tema)
+    sobre_rojo = fondo.startswith("rojo")  # sobre fondo rojo el punto focal no se vería en rojo
+    return ESTILO_ICONO.format(
+        escena=p["escena"], protagonista=p["protagonista"], apoyo=p["apoyo"], focal=p["focal"],
+        color_focal="white with a soft light grey gradient" if sobre_rojo else "a vivid red (#ED1D24) to coral (#EF3E40) gradient",
+        nombre_focal="white" if sobre_rojo else "red",
+        fondo_nombre=nombre, fondo_hex=hexa, bordes=bordes)
 
 
 def prompt_linea(tema: str, fondo: str = "gris", trazo: str = "marino", acento: str = "rojo") -> str:
@@ -74,6 +124,9 @@ def prompt_foto(escena: str) -> str:
     return ESTILO_FOTO.format(escena=escena.strip().rstrip("."))
 
 
-def referencias_icono(base_url: str, tipo: str = "icono") -> list[str]:
+def referencias_icono(base_url: str, tipo: str = "icono", descripcion: str = "") -> list[str]:
+    if tipo != "linea":
+        manos = REF_MANOS if any(w in (descripcion or "").lower() for w in ("mano", "hand", "dedo", "índice")) else []
+        return REFERENCIAS_ICONO + manos
     base = base_url.rstrip("/")
-    return [base + r for r in (REFERENCIAS_LINEA if tipo == "linea" else REFERENCIAS_ICONO)]
+    return [base + r for r in REFERENCIAS_LINEA]
