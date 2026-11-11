@@ -48,11 +48,19 @@
 
     <section id="vista-app" hidden>
       <nav class="pestanas" aria-label="Secciones">
+        <button id="tab-estado" class="pestana" type="button">Estado</button>
         <button id="tab-propuestas" class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
         <button id="tab-repositorio" class="pestana" type="button">Repositorio</button>
         <button id="tab-configuracion" class="pestana" type="button">Configuración</button>
       </nav>
       <p id="aviso-global" class="aviso" role="status" hidden></p>
+
+      <div id="seccion-estado" hidden>
+        <div class="barra-mes"><div><h1>Estado del proceso</h1>
+          <p class="barra-mes__resumen">En qué etapa va cada pieza: investigación, textos (Reini), diseño (Daniela), aprobación final (Luís) y lista para publicar.</p></div>
+          <div><button id="btn-actualizar-estado" class="btn btn--secundario" type="button">Actualizar</button></div></div>
+        <div id="panel-estado" class="panel-estado"></div>
+      </div>
 
       <div id="seccion-propuestas">
 

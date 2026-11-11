@@ -103,7 +103,8 @@ def ruta_yo(req):
     usuario = _dueno(req)
     from rc.config import ajustes
     return 200, {"email": usuario.get("email"), "rol": usuario["rol"],
-                 "max_palabras_caption": ajustes()["max_palabras_caption"]}
+                 "max_palabras_caption": ajustes()["max_palabras_caption"],
+                 "dia_inicio_generacion": ajustes()["dia_inicio_generacion"]}
 
 
 def ruta_mes_actual(req):

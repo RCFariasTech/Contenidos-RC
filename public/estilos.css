@@ -324,3 +324,20 @@ body[data-rol="admin"] .editable:hover { background: rgba(0, 94, 255, .07); outl
 /* Configuración solo para Reini (el servidor también la restringe). */
 body:not([data-rol="admin"]) #tab-configuracion, body:not([data-rol="admin"]) #seccion-configuracion { display: none !important; }
 .aviso-etapa { margin: 8px 0 0; }
+/* Pestaña Estado: solo Reini y Luís */
+body[data-rol="diseno"] #tab-estado, body[data-rol="diseno"] #seccion-estado { display: none !important; }
+.panel-estado { display: grid; gap: 16px; }
+.proceso-mes h2 { font-family: "Arial Black", Arial, sans-serif; font-size: 1.15rem; margin: 0 0 4px; }
+.proceso-lista { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.proceso-pieza { border: 1px solid var(--borde, #c9cacb); border-radius: 10px; padding: 12px 14px; background: var(--blanco, #fff); }
+.proceso-pieza--1 { background: #f3f4f5; }
+.proceso-pieza--2 { background: #eef4ff; }
+.proceso-pieza--3 { background: #eef4ff; }
+.proceso-pieza--4 { background: #edf8f0; }
+.proceso-pieza__cabeza { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.proceso-pieza__estado { margin: 6px 0 8px; font-weight: bold; }
+.proceso-pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.proceso-pasos li { font-size: .75rem; text-align: center; padding: 6px 4px 0; border-top: 4px solid #d8d8d8; color: #6b6f78; }
+.proceso-pasos li.hecho { border-top-color: #2e9b55; color: #2e7a46; }
+.proceso-pasos li.actual { border-top-color: #005eff; color: #12244a; font-weight: bold; }
+@media (max-width: 640px) { .proceso-pasos { grid-template-columns: 1fr; } .proceso-pasos li { text-align: left; } }

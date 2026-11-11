@@ -685,15 +685,17 @@ function renderPieza(pieza) {
       el("button", { clase: "btn btn--texto btn--chico", type: "button", "aria-expanded": "false",
         onclick: () => { estado.expandidas.add(pieza.id); render(); } }, "Ver pieza completa ▾")));
   } else {
-    cuerpo.append(
+    // Daniela solo afina y aprueba diseño: sin tema, alertas de reglas ni investigación.
+    const vistaDiseno = estado.rol === "diseno";
+    cuerpo.append(...[
       contraible(pieza) ? el("div", { clase: "pieza__plegar" }, el("button", { clase: "btn btn--texto btn--chico", type: "button",
         "aria-expanded": "true", onclick: () => { estado.expandidas.delete(pieza.id); render(); } }, "Contraer ▴")) : null,
-      el("div", { clase: "pieza__titulo" }, el("h2", {}, c.tema_especifico), el("p", {}, pieza.pilar)),
-      ...renderAlertas(pieza),
-      renderInvestigacion(c.investigacion, pieza.id),
+      vistaDiseno ? null : el("div", { clase: "pieza__titulo" }, el("h2", {}, c.tema_especifico), el("p", {}, pieza.pilar)),
+      ...(vistaDiseno ? [] : renderAlertas(pieza)),
+      vistaDiseno ? null : renderInvestigacion(c.investigacion, pieza.id),
       renderTextos(pieza),
       renderCaption(c, pieza),
-      renderComentarios(pieza, bloqueada));
+      renderComentarios(pieza, bloqueada)].filter(Boolean));  // (append escribiría «null» como texto)
   }
   if (estado.mensajes[pieza.id]) {
     cuerpo.append(el("div", { clase: "alerta alerta--error", role: "alert" }, estado.mensajes[pieza.id]));
@@ -1356,11 +1358,14 @@ $("filtros-repo").addEventListener("submit", (ev) => ev.preventDefault());
 
 function mostrarSeccion(nombre) {
   if (nombre === "configuracion" && estado.rol !== "admin") nombre = "propuestas";  // Configuración: solo Reini
-  const esRepo = nombre === "repositorio", esConfig = nombre === "configuracion";
-  $("seccion-propuestas").hidden = esRepo || esConfig;
+  if (nombre === "estado" && estado.rol === "diseno") nombre = "propuestas";        // Estado: Reini y Luís
+  const esRepo = nombre === "repositorio", esConfig = nombre === "configuracion", esEstado = nombre === "estado";
+  $("seccion-propuestas").hidden = esRepo || esConfig || esEstado;
   $("seccion-repositorio").hidden = !esRepo;
   $("seccion-configuracion").hidden = !esConfig;
-  for (const [id, activa] of [["tab-propuestas", nombre === "propuestas"], ["tab-repositorio", esRepo], ["tab-configuracion", esConfig]]) {
+  $("seccion-estado").hidden = !esEstado;
+  if (esEstado) cargarEstadoProceso();
+  for (const [id, activa] of [["tab-estado", esEstado], ["tab-propuestas", nombre === "propuestas"], ["tab-repositorio", esRepo], ["tab-configuracion", esConfig]]) {
     $(id).classList.toggle("pestana--activa", activa);
     if (activa) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
   }
@@ -1369,8 +1374,77 @@ function mostrarSeccion(nombre) {
 }
 
 $("tab-propuestas").addEventListener("click", () => mostrarSeccion("propuestas"));
+$("tab-estado").addEventListener("click", () => mostrarSeccion("estado"));
+$("btn-actualizar-estado").addEventListener("click", () => cargarEstadoProceso());
 $("tab-repositorio").addEventListener("click", () => mostrarSeccion("repositorio"));
 $("tab-configuracion").addEventListener("click", () => mostrarSeccion("configuracion"));
+
+// ---------- estado del proceso (Luís y Reini): en qué etapa va cada pieza ----------
+
+const PASOS = ["Investigación", "Textos · Reini", "Diseño · Daniela", "Aprobación final · Luís", "Lista para publicar"];
+
+function etapaDePieza(p) {
+  // Devuelve [paso 0-4, texto]. Paso = la etapa en la que está ahora.
+  const ap = p.aprobaciones || {};
+  if (["pendiente", "generando", "error"].includes(p.estado) || !p.contenido) {
+    return [0, p.estado === "error" ? "La generación falló: Reini debe reintentarla" : "Investigando y redactando la propuesta"];
+  }
+  if (p.estado !== "aprobada") {
+    const devuelta = ap.devolucion?.a === "textos" ? " (devuelta por diseño)" : "";
+    return [1, `En revisión y ajustes de texto (Reini)${devuelta}`];
+  }
+  if (!ap.diseno) {
+    const devuelta = ap.devolucion?.a === "diseno" ? " (devuelta por Luís)" : "";
+    return [2, `En revisión y ajustes de diseño (Daniela)${devuelta}`];
+  }
+  if (!ap.publicacion) return [3, "Esperando la aprobación final (Luís)"];
+  return [4, "Aprobada: lista para publicar"];
+}
+
+function mesIso(fecha) { return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`; }
+
+function renderMesProceso(datos, mes, esProximo) {
+  const piezas = datos.piezas || [];
+  const titulo = el("h2", {}, `${nombreMes(`${mes}-01`)}${esProximo ? " · próximo mes" : " · mes en curso"}`);
+  if (!datos.mes || !piezas.length) {
+    const [a, m] = mes.split("-").map(Number);
+    const anterior = new Date(a, m - 2, 1);
+    const dia = estado.diaInicio || 15;
+    return el("section", { clase: "tarjeta proceso-mes" }, titulo,
+      el("p", { clase: "ayuda" }, esProximo
+        ? `Esperando a efectuar la investigación el ${dia} de ${nombreMes(`${mesIso(anterior)}-01`).split(" ")[0].toLowerCase()}: ese día se generan las 4 propuestas.`
+        : "Este mes no tiene piezas en la app."));
+  }
+  const listas = piezas.filter((p) => etapaDePieza(p)[0] === 4).length;
+  return el("section", { clase: "tarjeta proceso-mes" }, titulo,
+    el("p", { clase: "ayuda" }, `${listas} de ${piezas.length} piezas listas para publicar`),
+    el("ol", { clase: "proceso-lista" }, ...piezas.map((p) => {
+      const [paso, texto] = etapaDePieza(p);
+      return el("li", { clase: `proceso-pieza proceso-pieza--${paso}` },
+        el("div", { clase: "proceso-pieza__cabeza" },
+          el("span", { clase: `etiqueta etiqueta--${p.formato.toLowerCase()}` }, p.formato),
+          el("strong", {}, `Semana ${p.semana}`),
+          el("span", { clase: "tenue" }, `Publicación ${fechaCorta(p.fecha_publicacion)}`)),
+        el("p", { clase: "proceso-pieza__estado" }, texto),
+        el("ol", { clase: "proceso-pasos", "aria-label": `Etapa ${paso + 1} de ${PASOS.length}` },
+          ...PASOS.map((nombre, i) => el("li", { clase: i < paso ? "hecho" : i === paso ? "actual" : "" }, nombre))),
+        p.aprobaciones?.devolucion && paso < 4
+          ? el("p", { clase: "aprobaciones__nota" }, `Nota de devolución: ${p.aprobaciones.devolucion.nota}`) : null);
+    })));
+}
+
+async function cargarEstadoProceso() {
+  const panel = $("panel-estado");
+  panel.replaceChildren(el("p", { clase: "ayuda" }, "Cargando…"));
+  const hoy = new Date();
+  const actual = mesIso(hoy), proximo = mesIso(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1));
+  try {
+    const [a, b] = await Promise.all([api(`mes-actual?mes=${actual}`), api(`mes-actual?mes=${proximo}`)]);
+    panel.replaceChildren(renderMesProceso(b, proximo, true), renderMesProceso(a, actual, false));
+  } catch (e) {
+    panel.replaceChildren(el("p", { clase: "alerta alerta--error" }, `No se pudo cargar el estado: ${e.message}`));
+  }
+}
 
 // ---------- configuración: fuentes, Teams y conexiones ----------
 
@@ -1475,6 +1549,7 @@ async function entrarApp() {
     const yo = await api("yo");
     estado.rol = yo.rol || "admin";
     estado.maxCaption = yo.max_palabras_caption || 150;
+    estado.diaInicio = yo.dia_inicio_generacion || 15;
     document.body.dataset.rol = estado.rol;
   } catch (e) {
     if (e.estado === 401) { Sesion.borrar(); mostrar("login"); return; }
@@ -1483,6 +1558,7 @@ async function entrarApp() {
     return;
   }
   mostrar("app");
+  if (estado.rol === "publicacion") mostrarSeccion("estado");  // Luís entra al resumen del proceso
   try {
     await cargarMes();
     if (estado.rol === "admin" && estado.piezas.some((p) => p.estado === "pendiente")) generarPendientes();
