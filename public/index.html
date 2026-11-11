@@ -49,7 +49,7 @@
     <section id="vista-app" hidden>
       <nav class="pestanas" aria-label="Secciones">
         <button id="tab-estado" class="pestana" type="button">Estado</button>
-        <button id="tab-propuestas" class="pestana pestana--activa" aria-current="page" type="button">Propuestas del próximo mes</button>
+        <button id="tab-propuestas" class="pestana pestana--activa" aria-current="page" type="button">Propuestas</button>
         <button id="tab-repositorio" class="pestana" type="button">Repositorio</button>
         <button id="tab-configuracion" class="pestana" type="button">Configuración</button>
       </nav>
@@ -66,6 +66,7 @@
 
       <div class="barra-mes">
         <div>
+          <label class="selector-mes">Mes <select id="selector-mes" aria-label="Mes a ver o editar"></select></label>
           <h1 id="titulo-mes">Propuestas</h1>
           <p id="resumen-mes" class="barra-mes__resumen"></p>
           <p id="aviso-etapa" class="alerta alerta--aviso aviso-etapa" role="status" hidden></p>

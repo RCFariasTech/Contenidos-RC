@@ -54,7 +54,7 @@ TODOS = {"admin", "diseno", "publicacion"}
 DISENO = {"admin", "diseno"}
 # Rutas que no son solo del administrador (el resto, incluidas generar y editar textos, son de Reini).
 PERMISOS = {
-    ("GET", "yo"): TODOS, ("GET", "mes-actual"): TODOS, ("GET", "tarjetas-pdf"): TODOS,
+    ("GET", "yo"): TODOS, ("GET", "mes-actual"): TODOS, ("GET", "meses"): TODOS, ("GET", "tarjetas-pdf"): TODOS,
     ("GET", "tarjetas-vista"): TODOS, ("GET", "reel-animable"): TODOS, ("GET", "video-icono"): TODOS,
     ("GET", "ilustraciones"): TODOS, ("GET", "repositorio"): TODOS, ("GET", "versiones"): TODOS,
     ("GET", "musica-audio"): TODOS, ("GET", "tarjeta-jpg"): TODOS,
@@ -110,6 +110,13 @@ def ruta_yo(req):
 def ruta_mes_actual(req):
     _dueno(req)
     return 200, _servicio().estado_mes(_mes_param(req["query"].get("mes")))
+
+
+def ruta_meses(req):
+    from rc import planificador
+    _dueno(req)
+    proximo = planificador.mes_siguiente(planificador.hoy_bogota()).isoformat()[:7]
+    return 200, {"proximo": proximo, "meses": _servicio().listar_meses()}
 
 
 def ruta_iniciar_mes(req):
@@ -457,6 +464,7 @@ RUTAS = {
     ("GET", "salud"): ruta_salud,
     ("GET", "yo"): ruta_yo,
     ("GET", "mes-actual"): ruta_mes_actual,
+    ("GET", "meses"): ruta_meses,
     ("POST", "iniciar-mes"): ruta_iniciar_mes,
     ("POST", "generar-pieza"): ruta_generar_pieza,
     ("POST", "ajustar-pieza"): ruta_ajustar_pieza,

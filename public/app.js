@@ -711,8 +711,19 @@ function render() {
 
 // ---------- acciones ----------
 
+async function cargarSelectorMes() {
+  // Reini, Daniela y Luís eligen qué mes ver/editar; por defecto, el próximo mes.
+  const { proximo, meses } = await api("meses");
+  const lista = meses.some((m) => m.mes === proximo) ? meses : [{ mes: proximo, estado: null }, ...meses];
+  lista.sort((a, b) => b.mes.localeCompare(a.mes));
+  if (!estado.mesElegido) estado.mesElegido = proximo;
+  $("selector-mes").replaceChildren(...lista.map((m) => el("option", { value: m.mes },
+    `${nombreMes(`${m.mes}-01`)}${m.mes === proximo ? " (próximo)" : ""}${m.estado ? ` · ${ESTADOS_MES[m.estado] || m.estado}` : " · sin propuestas"}`)));
+  $("selector-mes").value = estado.mesElegido;
+}
+
 async function cargarMes() {
-  const datos = await api("mes-actual");
+  const datos = await api(`mes-actual${estado.mesElegido ? `?mes=${estado.mesElegido}` : ""}`);
   estado.mesObjetivo = datos.mes_objetivo;
   estado.mes = datos.mes;
   estado.piezas = datos.piezas;
@@ -782,6 +793,7 @@ $("btn-generar").addEventListener("click", async () => {
   try {
     await api("iniciar-mes", { metodo: "POST", cuerpo: { mes: estado.mesObjetivo } });
     await cargarMes();
+    cargarSelectorMes().catch(() => {});
     await generarPendientes();
   } catch (e) {
     aviso(`No se pudo iniciar el mes: ${e.message}`);
@@ -1375,6 +1387,11 @@ function mostrarSeccion(nombre) {
 
 $("tab-propuestas").addEventListener("click", () => mostrarSeccion("propuestas"));
 $("tab-estado").addEventListener("click", () => mostrarSeccion("estado"));
+$("selector-mes").addEventListener("change", async (ev) => {
+  estado.mesElegido = ev.target.value;
+  estado.expandidas?.clear?.();
+  try { await cargarMes(); } catch (e) { aviso(`No se pudo cargar el mes: ${e.message}`); }
+});
 $("btn-actualizar-estado").addEventListener("click", () => cargarEstadoProceso());
 $("tab-repositorio").addEventListener("click", () => mostrarSeccion("repositorio"));
 $("tab-configuracion").addEventListener("click", () => mostrarSeccion("configuracion"));
@@ -1560,6 +1577,7 @@ async function entrarApp() {
   mostrar("app");
   if (estado.rol === "publicacion") mostrarSeccion("estado");  // Luís entra al resumen del proceso
   try {
+    await cargarSelectorMes().catch(() => {});
     await cargarMes();
     if (estado.rol === "admin" && estado.piezas.some((p) => p.estado === "pendiente")) generarPendientes();
   } catch (e) {

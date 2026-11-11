@@ -341,3 +341,5 @@ body[data-rol="diseno"] #tab-estado, body[data-rol="diseno"] #seccion-estado { d
 .proceso-pasos li.hecho { border-top-color: #2e9b55; color: #2e7a46; }
 .proceso-pasos li.actual { border-top-color: #005eff; color: #12244a; font-weight: bold; }
 @media (max-width: 640px) { .proceso-pasos { grid-template-columns: 1fr; } .proceso-pasos li { text-align: left; } }
+.selector-mes { display: inline-flex; gap: 8px; align-items: center; font-size: .85rem; color: #6b6f78; margin-bottom: 6px; }
+.selector-mes select { font: inherit; color: #12244a; padding: 6px 10px; border: 1px solid #c9cacb; border-radius: 8px; background: #fff; }

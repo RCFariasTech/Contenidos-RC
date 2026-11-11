@@ -41,6 +41,12 @@ def estado_mes(mes: date) -> dict:
     return {"mes_objetivo": _mes_iso(mes), "mes": fila_mes, "piezas": piezas}
 
 
+def listar_meses() -> list[dict]:
+    """Meses de la app (sin los históricos), del más reciente al más antiguo, para el selector de Propuestas."""
+    filas = db.seleccionar("meses", select="mes_objetivo,estado", estado="neq.historico", order="mes_objetivo.desc")
+    return [{"mes": f["mes_objetivo"][:7], "estado": f["estado"]} for f in filas]
+
+
 def _pieza(pieza_id: int) -> dict:
     filas = db.seleccionar("piezas", select="*", id=f"eq.{int(pieza_id)}")
     if not filas:
