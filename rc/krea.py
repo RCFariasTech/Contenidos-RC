@@ -121,6 +121,17 @@ def crear_video(imagen_url: str, fondo: str = "") -> str:
     return job_id
 
 
+def crear_audio(prompt: str, duracion_ms: int) -> str:
+    """Música instrumental (ElevenLabs Music en Krea); devuelve el id del trabajo."""
+    modelo = ajustes()["krea"].get("modelo_musica", "elevenlabs/music-v2.5")
+    cuerpo = {"prompt": prompt, "music_length_ms": max(3000, min(int(duracion_ms), 600000)), "force_instrumental": True}
+    resp = _peticion("POST", f"/generate/audio/{modelo}", cuerpo)
+    job_id = resp.get("job_id")
+    if not job_id:
+        raise ErrorNegocio("Krea no devolvió el id del trabajo de música.")
+    return job_id
+
+
 def cancelar(job_id: str) -> None:
     """Cancela un trabajo en cola o en proceso (DELETE /jobs/{id}); Krea no cobra los cancelados."""
     _peticion("DELETE", f"/jobs/{job_id}")

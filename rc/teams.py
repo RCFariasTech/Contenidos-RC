@@ -75,6 +75,19 @@ def avisar_revision(mes_iso: str, piezas: int) -> bool:
         return False
 
 
+def avisar_etapa(mes_iso: str, titulo: str, texto: str) -> bool:
+    """Aviso de cambio de etapa de aprobación. Nunca lanza."""
+    if not configurado():
+        return False
+    mes = f"{MESES[int(mes_iso[5:7]) - 1].capitalize()} {mes_iso[:4]}"
+    try:
+        _publicar(_tarjeta(f"{titulo} · {mes}", texto, env("APP_URL", False) or APP_URL_POR_DEFECTO))
+        return True
+    except Exception:
+        log.exception("No se pudo avisar a Teams")
+        return False
+
+
 def enviar_prueba() -> None:
     _publicar(_tarjeta("Prueba de aviso", "Si ves este mensaje, el aviso a Teams está bien configurado.",
                        env("APP_URL", False) or APP_URL_POR_DEFECTO))

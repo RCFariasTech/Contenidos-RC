@@ -97,6 +97,12 @@ Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el pri
 
 **Cifra a resaltar.** Si la tarjeta de dato (carrusel: la 4) o una escena intermedia del reel tiene varias cifras, aparece «Cifra a resaltar» para elegir cuál va en grande (p. ej. en «Regla 95-5: solo 5% compra ahora»: 95-5, 95, 5 o 5%); «Automática» usa la primera. Se guarda en `piezas.diseno_reel.cifras`. El reproductor del reel tiene reproducir/pausar y una barra para adelantar o retroceder; al cambiar una transición salta a ese cambio de escena.
 
+**Aprobaciones en 3 tiempos.** 1) Reini (`OWNER_EMAIL`, administrador: puede todo) revisa investigación y textos y aprueba cada pieza. 2) Cuando las 4 piezas tienen ese aprobado, Daniela (`DISENO_EMAILS`) revisa diseños y animaciones y aprueba cada pieza (puede generar y elegir imágenes, animar, elegir cifras, fotos y música). 3) Cuando Daniela aprueba las 4, Luís (`PUBLICACION_EMAILS`) da la aprobación final y descarga. Cada etapa puede **devolver** una pieza con una nota: Luís → diseño; Daniela → textos (la nota queda como comentario para «Aplicar ajustes»). Al completarse una etapa o devolverse una pieza se avisa a Teams (`TEAMS_WEBHOOK_URL`). Daniela y Luís necesitan una cuenta en Supabase Auth con esos correos; no ven los controles de textos.
+
+**Descarga para publicar (Luís).** Carrusel: un ZIP `Semana_N_carrusel.zip` con `Semana_N_tarjeta_01.jpg` … `05.jpg` (1080 × 1350) y `Semana_N_carrusel_LinkedIn.pdf` con todas las tarjetas (se arma en el navegador con JSZip y jsPDF). Reel: solo `Semana_N_reel.mp4`, grabado con la música elegida.
+
+**Música del reel.** Al aprobar el diseño de un reel, la app crea 2 propuestas instrumentales (ElevenLabs Music en Krea, `krea.modelo_musica`, con la duración del reel) y pregunta si se quiere usar alguna; se escuchan antes de elegir. La elegida suena en «Ver reel» y se mezcla en el MP4 con un desvanecido al final.
+
 **Gancho.** En la tarjeta 1 de cada carrusel y la escena 1 de cada reel (pieza sin aprobar) están **Otro gancho**, que propone con IA un gancho nuevo distinto de todos los anteriores de esa pieza, y **Editar gancho**, para escribirlo a mano (Enter guarda, Esc cancela). Cada cambio se guarda como versión nueva (motivos `gancho` y `edicion`) y respeta el límite de palabras (8 en carrusel, 6 en reel); el resto del contenido no cambia.
 
 **Detener.** Mientras una pieza se genera, rehace o ajusta, aparece **Detener**: la pieza vuelve a su versión anterior (o queda con «Reintentar» si aún no tenía contenido) y, si era un lote, no sigue con las demás. La llamada a Claude que ya estaba en curso termina en el servidor (se paga), pero su resultado se descarta y no se hacen más reparaciones. En el panel de imágenes, **Detener generación** cancela en Krea las variantes en cola (Krea no cobra las canceladas) y **Detener sugerencia** corta la sugerencia de descripción.
@@ -126,6 +132,7 @@ En `supabase/migrations/`, aplicadas en orden:
 - `009_motivo_gancho.sql`: versiones por gancho regenerado o editado a mano.
 - `010_reels_iconos_video.sql`: imágenes en las escenas del reel y video del ícono animado.
 - `011_video_pedido_y_fotos_reel.sql`: hora del pedido de animación y escenas del reel con foto.
+- `012_aprobaciones_por_etapa.sql`: aprobaciones de diseño y publicación, y devoluciones.
 
 ## Desarrollo local
 

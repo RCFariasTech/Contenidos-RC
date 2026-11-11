@@ -233,6 +233,16 @@ function reloj(seg) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function sincronizarAudio() {
+  // La música sigue al reproductor (la vista previa suena; al pausar o mover la barra, salta con él).
+  const a = REEL.audio;
+  if (!a) return;
+  if (REEL.reproduciendo) {
+    if (a.paused) a.play().catch(() => {});
+    if (Math.abs(a.currentTime - REEL.t) > 0.3) a.currentTime = REEL.t;
+  } else if (!a.paused) a.pause();
+}
+
 function sincronizarVideo() {
   // El ícono animado sigue al reproductor: corre cuando el reel corre y salta cuando se mueve la barra.
   const v = REEL.video;
@@ -263,6 +273,7 @@ function bucleVista(ahora) {
   }
   REEL.ultimo = ahora;
   sincronizarVideo();
+  sincronizarAudio();
   pintarVista();
   REEL.bucle = requestAnimationFrame(bucleVista);
 }
@@ -310,22 +321,40 @@ async function descargarReel() {
   const ctx = rec.getContext("2d"), vista = $("reel-lienzo").getContext("2d");
   REEL.aux = document.createElement("canvas");
   REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: rec.width, height: rec.height }));
+  REEL.audio?.pause();
   const conVideoAntes = REEL.conVideo;
   REEL.conVideo = Boolean(REEL.video && REEL.videoGrabable);
   const avisoVideo = REEL.video && !REEL.videoGrabable
     ? " El ícono animado no se pudo incluir en la grabación (pesa demasiado o Krea no lo permite); se usa el ícono fijo." : "";
   const partes = [];
-  REEL.grabador = new MediaRecorder(rec.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  const total = duracionTotal();
+  // Música elegida: se mezcla en la grabación con un desvanecido al final.
+  let flujo = rec.captureStream(30), audioCtx = null;
+  if (REEL.audioBuffer) {
+    audioCtx = new AudioContext();
+    const fuente = audioCtx.createBufferSource(), ganancia = audioCtx.createGain(), destino = audioCtx.createMediaStreamDestination();
+    fuente.buffer = REEL.audioBuffer;
+    fuente.connect(ganancia).connect(destino);
+    ganancia.gain.setValueAtTime(1, audioCtx.currentTime + Math.max(0, total - 1.2));
+    ganancia.gain.linearRampToValueAtTime(0, audioCtx.currentTime + total);
+    flujo = new MediaStream([...flujo.getVideoTracks(), ...destino.stream.getAudioTracks()]);
+    REEL.fuenteAudio = fuente;
+  }
+  REEL.grabador = new MediaRecorder(flujo, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
   REEL.grabador.ondataavailable = (ev) => { if (ev.data.size) partes.push(ev.data); };
   REEL.grabador.onstop = () => {
     REEL.grabando = false;
+    try { REEL.fuenteAudio?.stop(); } catch { /* ya terminó */ }
+    audioCtx?.close();
+    REEL.fuenteAudio = null;
     REEL.conVideo = conVideoAntes;
     controlesReel(true);
     arrancarBucle();
     if (REEL.cancelado) { estadoReel("Grabación cancelada."); return; }
     const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
     const archivo = new Blob(partes, { type: mime.split(";")[0] });
-    const nombre = `reel-${(REEL.datos.tema || "rc-farias").toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)}.${ext}`;
+    const nombre = REEL.datos.semana ? `Semana_${REEL.datos.semana}_reel.${ext}`
+      : `reel-${(REEL.datos.tema || "rc-farias").toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)}.${ext}`;
     const a = el("a", { href: URL.createObjectURL(archivo), download: nombre });
     document.body.append(a);
     a.click();
@@ -336,10 +365,10 @@ async function descargarReel() {
   REEL.cancelado = false;
   REEL.grabando = true;
   controlesReel(true, true);
-  const total = duracionTotal();
   estadoReel(`Grabando el reel en tiempo real (${Math.round(total)} s). Mantén esta pestaña visible…${avisoVideo}`);
   if (REEL.video) { REEL.video.currentTime = 0; REEL.video.play().catch(() => {}); }
   REEL.grabador.start(500);
+  REEL.fuenteAudio?.start();
   const t0 = performance.now();
   const paso = () => {
     if (!REEL.grabando) return;
@@ -360,7 +389,7 @@ function cancelarGrabacion() {
   if (REEL.grabador?.state === "recording") REEL.grabador.stop();
 }
 
-async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}) {
+async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, descargarPublicacion = false } = {}) {
   REEL.pieza = pieza;
   REEL.datos = null;
   REEL.t = 0;
@@ -397,11 +426,28 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0 } = {}
     REEL.conVideo = Boolean(REEL.video);
     REEL.croma = REEL.videoGrabable ? null : false;
     REEL.fondoSinIcono = datos.fondo_escena_1_sin_icono ? await cargarImagen(datos.fondo_escena_1_sin_icono) : null;
+    REEL.audio?.pause();
+    REEL.audio = null;
+    REEL.audioBuffer = null;
+    if (datos.musica) {
+      try {
+        const r = await fetch(`/api/musica-audio?pieza=${pieza.id}`,
+          { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
+        if (r.ok) {
+          const datosAudio = await r.arrayBuffer();
+          REEL.audio = new Audio(URL.createObjectURL(new Blob([datosAudio], { type: "audio/mpeg" })));
+          const ctx = new AudioContext();
+          REEL.audioBuffer = await ctx.decodeAudioData(datosAudio.slice(0));
+          ctx.close();
+        }
+      } catch { /* sin música */ }
+    }
     REEL.datos = datos;  // listo: recién ahora el reproductor puede dibujar
     controlesReel(true);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
     REEL.t = autoplay ? inicioEscena(Math.min(desde, datos.escenas.length - 1)) : 1.5;
-    if (autoplay) reproducir(); else arrancarBucle();
+    if (descargarPublicacion) { arrancarBucle(); descargarReel(); }
+    else if (autoplay) reproducir(); else arrancarBucle();
   } catch (e) {
     estadoReel(`No se pudo preparar el reel: ${e.message}`);
   }
@@ -431,6 +477,7 @@ $("dialogo-reel").addEventListener("close", () => {
   pausar();
   REEL.grabando = false;
   REEL.video?.pause();
+  REEL.audio?.pause();
   cancelAnimationFrame(REEL.bucle);
   REEL.bucle = 0;
 });

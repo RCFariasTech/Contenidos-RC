@@ -396,8 +396,165 @@ function renderCabecera(pieza, bloqueada) {
         type: "checkbox", checked: aprobada, disabled: desactivada,
         onchange: (ev) => accion(pieza.id, () => api("aprobar", { metodo: "POST", cuerpo: { pieza_id: pieza.id, aprobada: ev.target.checked } })),
       }),
-      aprobada ? "Aprobado" : "Aprobar")));
+      aprobada ? "Aprobado" : "Aprobar")),
+    renderAprobaciones(pieza, bloqueada));
 }
+
+// ---------- aprobaciones en 3 tiempos: textos (Reini) → diseño (Daniela) → publicación (Luís) ----------
+
+const NOMBRE_ROL = { admin: "Reini", diseno: "Daniela", publicacion: "Luís" };
+
+function etapaCompleta(etapa) {
+  const ok = (p) => (etapa === "textos" ? p.estado === "aprobada" : Boolean(p.aprobaciones?.[etapa]));
+  return estado.piezas.length > 0 && estado.piezas.every(ok);
+}
+
+function renderAprobaciones(pieza, bloqueada) {
+  const ap = pieza.aprobaciones || {}, rol = estado.rol;
+  const chip = (texto, hecho, titulo) => el("span", { clase: `etapa${hecho ? " etapa--hecha" : ""}`, title: titulo },
+    `${hecho ? "✓" : "○"} ${texto}`);
+  const textosOk = pieza.estado === "aprobada";
+  const puedeDiseno = (rol === "diseno" || rol === "admin") && textosOk && etapaCompleta("textos");
+  const puedePublicar = (rol === "publicacion" || rol === "admin") && etapaCompleta("diseno");
+  const marcar = (etapa, ruta, hecho, texto) => el("label", { clase: `aprobar${hecho ? " aprobar--activo" : ""}` },
+    el("input", { type: "checkbox", checked: hecho, disabled: bloqueada,
+      onchange: async (ev) => {
+        const ok = ev.target.checked;
+        await accion(pieza.id, () => api(ruta, { metodo: "POST", cuerpo: { pieza_id: pieza.id, aprobada: ok } }));
+        if (ok && etapa === "diseno" && pieza.formato === "Reel") abrirMusica(pieza);
+      } }), texto);
+  const devolver = (destino) => el("button", { clase: "btn btn--texto btn--chico", type: "button", disabled: bloqueada,
+    title: `Devuelve la pieza a ${destino} con un comentario`,
+    onclick: () => {
+      const nota = window.prompt(`¿Qué hay que corregir? La pieza vuelve a ${destino}.`);
+      if (nota && nota.trim()) accion(pieza.id, () => api("devolver", { metodo: "POST", cuerpo: { pieza_id: pieza.id, nota } }));
+    } }, "Devolver");
+  return el("div", { clase: "aprobaciones" },
+    chip("Textos · Reini", textosOk, "Investigación y textos"),
+    chip("Diseño · Daniela", Boolean(ap.diseno), ap.diseno ? `Aprobado por ${ap.diseno.por}` : "Diseños y animaciones"),
+    chip("Publicación · Luís", Boolean(ap.publicacion), ap.publicacion ? `Aprobado por ${ap.publicacion.por}` : "Aprobación final"),
+    puedeDiseno && !ap.publicacion ? marcar("diseno", "aprobar-diseno", Boolean(ap.diseno), ap.diseno ? "Diseño aprobado" : "Aprobar diseño") : null,
+    puedeDiseno && !ap.diseno && rol === "diseno" ? devolver("Reini (textos)") : null,
+    puedePublicar && ap.diseno ? marcar("publicacion", "aprobar-publicacion", Boolean(ap.publicacion), ap.publicacion ? "Publicación aprobada" : "Aprobar publicación") : null,
+    puedePublicar && ap.diseno && !ap.publicacion ? devolver("Daniela (diseño)") : null,
+    ap.publicacion && (rol === "publicacion" || rol === "admin") ? el("button", { clase: "btn btn--primario btn--chico", type: "button",
+      onclick: (ev) => descargarParaPublicar(pieza, ev.currentTarget) }, "Descargar para publicar") : null,
+    ap.devolucion ? el("p", { clase: "aprobaciones__nota" },
+      `Devuelta a ${ap.devolucion.a === "diseno" ? "diseño" : "textos"} por ${ap.devolucion.por}: ${ap.devolucion.nota}`) : null);
+}
+
+// ---------- descarga para publicar ----------
+
+async function pedirBinario(url) {
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Error ${r.status}`);
+  return r.blob();
+}
+
+function cargarScript(src) {
+  return new Promise((ok, mal) => {
+    if (document.querySelector(`script[src="${src}"]`)) { ok(); return; }
+    document.head.append(el("script", { src, onload: ok, onerror: () => mal(new Error(`No se pudo cargar ${src}`)) }));
+  });
+}
+
+async function descargarParaPublicar(pieza, boton) {
+  if (pieza.formato === "Reel") { window.abrirReel(pieza, { descargarPublicacion: true }); return; }
+  const texto = boton.textContent;
+  boton.disabled = true;
+  try {
+    boton.textContent = "Preparando tarjetas…";
+    await Promise.all([cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"),
+      cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")]);
+    const base = `Semana_${pieza.semana}`;
+    const zip = new window.JSZip(), carpeta = zip.folder(`${base}_carrusel`);
+    const pdf = new window.jspdf.jsPDF({ orientation: "portrait", unit: "px", format: [1080, 1350], hotfixes: ["px_scaling"] });
+    for (let n = 1; n <= 5; n += 1) {
+      boton.textContent = `Tarjeta ${n} de 5…`;
+      const jpg = await pedirBinario(`/api/tarjeta-jpg?pieza=${pieza.id}&n=${n}`);
+      const nombre = `${base}_tarjeta_${String(n).padStart(2, "0")}.jpg`;
+      carpeta.file(nombre, jpg);
+      const datos = new Uint8Array(await jpg.arrayBuffer());
+      if (n > 1) pdf.addPage([1080, 1350], "portrait");
+      pdf.addImage(datos, "JPEG", 0, 0, 1080, 1350);
+    }
+    carpeta.file(`${base}_carrusel_LinkedIn.pdf`, pdf.output("blob"));
+    boton.textContent = "Comprimiendo…";
+    const archivo = await zip.generateAsync({ type: "blob" });
+    const a = el("a", { href: URL.createObjectURL(archivo), download: `${base}_carrusel.zip` });
+    document.body.append(a); a.click(); a.remove();
+  } catch (e) {
+    aviso(`No se pudo descargar el carrusel: ${e.message}`);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = texto;
+  }
+}
+
+// ---------- música del reel (al aprobar el diseño) ----------
+
+const MUSICA = { pieza: null, timer: 0, reproductor: null };
+
+async function abrirMusica(pieza) {
+  MUSICA.pieza = pieza;
+  $("musica-opciones").replaceChildren(el("p", { clase: "ayuda" }, "Creando 2 propuestas de música instrumental en Krea (1-2 minutos)…"));
+  $("dialogo-musica").showModal();
+  try {
+    await api("musica", { metodo: "POST", cuerpo: { pieza_id: pieza.id } });
+    consultarMusica();
+  } catch (e) {
+    $("musica-opciones").replaceChildren(el("p", { clase: "alerta alerta--error" }, `No se pudo crear la música: ${e.message}`));
+  }
+}
+
+async function consultarMusica() {
+  clearTimeout(MUSICA.timer);
+  if (!$("dialogo-musica").open) return;
+  try {
+    const m = await api("musica", { metodo: "POST", cuerpo: { pieza_id: MUSICA.pieza.id, consultar: true } });
+    const opciones = m.opciones || [];
+    $("musica-opciones").replaceChildren(...opciones.map((o, i) => el("div", { clase: "musica-opcion" },
+      el("strong", {}, `Propuesta ${i + 1}`),
+      o.estado === "lista" ? el("div", { clase: "musica-opcion__acciones" },
+        el("button", { clase: "btn btn--secundario btn--chico", type: "button", onclick: (ev) => escucharMusica(i, ev.currentTarget) }, "▶ Escuchar"),
+        el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: () => elegirMusica(i) }, "Usar en el video"))
+        : el("span", { clase: "ayuda" }, o.estado === "en_cola" ? "Generando…" : (o.error || "No se pudo generar")))));
+    if (opciones.some((o) => o.estado === "en_cola")) MUSICA.timer = setTimeout(consultarMusica, 5000);
+  } catch (e) {
+    $("musica-opciones").replaceChildren(el("p", { clase: "alerta alerta--error" }, e.message));
+  }
+}
+
+async function escucharMusica(i, boton) {
+  MUSICA.reproductor?.pause();
+  if (boton.dataset.sonando) { delete boton.dataset.sonando; boton.textContent = "▶ Escuchar"; return; }
+  document.querySelectorAll(".musica-opcion button[data-sonando]").forEach((b) => { delete b.dataset.sonando; b.textContent = "▶ Escuchar"; });
+  boton.textContent = "Cargando…";
+  try {
+    const audio = await pedirBinario(`/api/musica-audio?pieza=${MUSICA.pieza.id}&indice=${i}`);
+    MUSICA.reproductor = new Audio(URL.createObjectURL(audio));
+    MUSICA.reproductor.play();
+    boton.dataset.sonando = "1";
+    boton.textContent = "❚❚ Pausar";
+  } catch (e) {
+    boton.textContent = "▶ Escuchar";
+    aviso(`No se pudo reproducir: ${e.message}`);
+  }
+}
+
+async function elegirMusica(i) {
+  try {
+    await api("musica-elegir", { metodo: "POST", cuerpo: { pieza_id: MUSICA.pieza.id, indice: i } });
+    $("dialogo-musica").close();
+    aviso(i === null ? "El reel queda sin música." : `Listo: el reel usará la propuesta ${i + 1}. Se oye en «Ver reel» y en la descarga.`);
+  } catch (e) {
+    aviso(`No se pudo elegir la música: ${e.message}`);
+  }
+}
+
+$("musica-ninguna").addEventListener("click", () => elegirMusica(null));
+$("musica-otra").addEventListener("click", () => abrirMusica(MUSICA.pieza));
+$("dialogo-musica").addEventListener("close", () => { clearTimeout(MUSICA.timer); MUSICA.reproductor?.pause(); });
 
 function editorGancho(pieza, campo, max) {
   const entrada = el("input", { id: `gancho-${pieza.id}`, clase: "gancho-editor__entrada", type: "text",
@@ -1335,7 +1492,9 @@ function mostrar(vista) {
 
 async function entrarApp() {
   try {
-    await api("yo");
+    const yo = await api("yo");
+    estado.rol = yo.rol || "admin";
+    document.body.dataset.rol = estado.rol;
   } catch (e) {
     if (e.estado === 401) { Sesion.borrar(); mostrar("login"); return; }
     mostrar("app");
@@ -1345,7 +1504,7 @@ async function entrarApp() {
   mostrar("app");
   try {
     await cargarMes();
-    if (estado.piezas.some((p) => p.estado === "pendiente")) generarPendientes();
+    if (estado.rol === "admin" && estado.piezas.some((p) => p.estado === "pendiente")) generarPendientes();
   } catch (e) {
     aviso(`No se pudieron cargar las propuestas: ${e.message}`);
   }

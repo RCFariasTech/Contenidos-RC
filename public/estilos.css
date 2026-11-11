@@ -304,3 +304,12 @@ input:focus-visible, textarea:focus-visible, .btn:focus-visible, .pestana:focus-
 .reel-play { min-width: 44px; }
 #reel-barra { flex: 1; accent-color: #005eff; }
 .reel-tiempo { font-variant-numeric: tabular-nums; font-size: .9rem; white-space: nowrap; }
+.aprobaciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; margin-top: 8px; }
+.etapa { font-size: .85rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--borde, #c9cacb); opacity: .75; }
+.etapa--hecha { background: #12244a; color: #fff; border-color: #12244a; opacity: 1; }
+.aprobaciones__nota { width: 100%; margin: 4px 0 0; font-size: .9rem; color: #b3001b; }
+.musica-opciones { display: grid; gap: 10px; margin: 12px 0; }
+.musica-opcion { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--borde, #c9cacb); border-radius: 8px; }
+.musica-opcion__acciones { display: flex; gap: 8px; }
+/* Daniela y Luís no ven los controles de textos (son de Reini). */
+body:not([data-rol="admin"]) :is(#btn-generar, #btn-ajustes, .pieza__controles > .aprobar, .gancho-acciones, .comentarios__form, .estado-proceso__detener) { display: none !important; }

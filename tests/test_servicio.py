@@ -496,6 +496,41 @@ class TestFlujo(unittest.TestCase):
             with self.assertRaises(servicio.ErrorNegocio):
                 servicio.elegir_cifra(carrusel["id"], numero, cifra)
 
+    def test_aprobaciones_en_tres_tiempos(self):
+        mes = date(2026, 11, 1)
+        servicio.iniciar_mes(mes)
+        for p in servicio.estado_mes(mes)["piezas"]:
+            servicio.generar_pieza(p["id"])
+        piezas = servicio.estado_mes(mes)["piezas"]
+        daniela, luis = {"email": "daniela@x.co", "rol": "diseno"}, {"email": "luis@x.co", "rol": "publicacion"}
+        avisos = []
+        with mock.patch.object(servicio.teams, "avisar_etapa", side_effect=lambda *a: avisos.append(a[1])):
+            servicio.aprobar(piezas[0]["id"], True)
+            with self.assertRaises(servicio.ErrorNegocio):              # diseño se abre con las 4 piezas aprobadas
+                servicio.aprobar_etapa(piezas[0]["id"], "diseno", True, daniela)
+            for p in piezas[1:]:
+                servicio.aprobar(p["id"], True)
+            self.assertEqual(avisos, ["Textos aprobados"])              # aviso a Teams para Daniela
+            for p in piezas:
+                servicio.aprobar_etapa(p["id"], "diseno", True, daniela)
+            self.assertEqual(avisos[-1], "Diseños aprobados")
+            servicio.aprobar_etapa(piezas[0]["id"], "publicacion", True, luis)
+            # Luís devuelve otra pieza a diseño: pierde la aprobación de diseño
+            fila = servicio.devolver(piezas[1]["id"], "Cambia el ícono", luis)
+            self.assertNotIn("diseno", fila["aprobaciones"])
+            self.assertEqual(fila["aprobaciones"]["devolucion"]["a"], "diseno")
+            with self.assertRaises(servicio.ErrorNegocio):              # publicación ya no está abierta para todas
+                servicio.aprobar_etapa(piezas[2]["id"], "publicacion", True, luis)
+            # Daniela devuelve a textos: la pieza vuelve a «generada» con un comentario para Reini
+            servicio.aprobar_etapa(piezas[1]["id"], "diseno", False, daniela)
+            fila = servicio.devolver(piezas[1]["id"], "El gancho no se entiende", daniela)
+            despues = servicio._pieza(piezas[1]["id"])
+            self.assertEqual(despues["estado"], "generada")
+            self.assertTrue(any("El gancho no se entiende" in c["texto"] for c in self.bd.tablas["comentarios"]))
+        # Reini reabre los textos de una pieza: sus aprobaciones de diseño y publicación ya no valen
+        servicio.aprobar(piezas[0]["id"], False)
+        self.assertEqual(servicio._pieza(piezas[0]["id"])["aprobaciones"], {})
+
     def test_krea_caido_no_rompe_la_generacion_de_textos(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

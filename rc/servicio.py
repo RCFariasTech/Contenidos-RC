@@ -372,8 +372,212 @@ def aprobar(pieza_id: int, aprobada: bool) -> dict:
             db.actualizar("meses", {"estado": "en_revision"}, id=f"eq.{pieza['mes_id']}")
     if not fila:
         raise ErrorNegocio("La pieza cambió de estado; recarga la página.")
+    if aprobada:
+        _avisar_si_etapa_completa(pieza["mes_id"], "textos")
+    else:  # al reabrir los textos, las aprobaciones de diseño y publicación ya no valen
+        fila = db.actualizar("piezas", {"aprobaciones": {}}, id=f"eq.{pieza['id']}") or fila
     _actualizar_estado_mes(pieza["mes_id"])
     return fila[0]
+
+
+# ---------- música del reel (Krea · ElevenLabs Music, solo instrumental) ----------
+
+PROMPTS_MUSICA = (
+    "Modern, upbeat tech-startup instrumental for a short brand video: driving electronic beat, bright synth plucks, "
+    "punchy drums, optimistic and dynamic, around 120 BPM, clean modern mix, clear intro and a clean ending. "
+    "Instrumental only, no vocals.",
+    "Energetic future-house instrumental for a technology product reel: groovy bassline, crisp claps, airy pads and a "
+    "catchy synth hook, motivational and modern, around 115 BPM, polished mix with a clean ending. "
+    "Instrumental only, no vocals.",
+)
+
+
+def _musica(pieza: dict) -> dict:
+    return dict((pieza.get("diseno_reel") or {}).get("musica") or {})
+
+
+def _guardar_musica(pieza: dict, musica: dict) -> None:
+    db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "musica": musica}},
+                  id=f"eq.{pieza['id']}")
+
+
+def generar_musica(pieza_id: int) -> dict:
+    """Pide a Krea dos propuestas de música instrumental con la duración del reel."""
+    from rc import reels
+    pieza = _pieza(int(pieza_id))
+    if pieza["formato"] != "Reel" or not pieza.get("contenido"):
+        raise ErrorNegocio("La música es para reels con contenido.")
+    if not krea.configurado():
+        raise ErrorNegocio("Krea no está activado: falta KREA_API_TOKEN en Vercel.")
+    ms = int(sum(reels.duraciones(pieza["contenido"])) * 1000) + 1000
+    opciones = []
+    for prompt in PROMPTS_MUSICA:
+        opciones.append({"job_id": krea.crear_audio(prompt, ms), "estado": "en_cola", "url": None, "error": None})
+    musica = {"opciones": opciones, "elegida": None, "pedida_en": _ahora()}
+    _guardar_musica(pieza, musica)
+    return musica
+
+
+def estado_musica(pieza_id: int) -> dict:
+    """Propuestas de música con su estado (consulta a Krea las que siguen en cola)."""
+    pieza = _pieza(int(pieza_id))
+    musica = _musica(pieza)
+    cambio = False
+    for o in musica.get("opciones", []):
+        if o["estado"] == "en_cola":
+            try:
+                nuevo = krea.consultar(o["job_id"])
+            except ErrorNegocio:
+                continue
+            if nuevo["estado"] != "en_cola":
+                o.update(nuevo)
+                cambio = True
+    if cambio:
+        _guardar_musica(pieza, musica)
+    return musica
+
+
+def elegir_musica(pieza_id: int, indice) -> dict:
+    pieza = _pieza(int(pieza_id))
+    musica = _musica(pieza)
+    if indice is not None:
+        indice = int(indice)
+        opciones = musica.get("opciones") or []
+        if not (0 <= indice < len(opciones)) or opciones[indice]["estado"] != "lista":
+            raise ErrorNegocio("Esa propuesta de música no está lista.")
+    musica["elegida"] = indice
+    _guardar_musica(pieza, musica)
+    return musica
+
+
+def musica_audio(pieza_id: int, indice=None) -> bytes:
+    """El audio (de la propuesta `indice` o de la elegida), servido desde la app para mezclarlo en el reel."""
+    import urllib.parse
+    import urllib.request
+    musica = _musica(_pieza(int(pieza_id)))
+    indice = musica.get("elegida") if indice is None else int(indice)
+    opciones = musica.get("opciones") or []
+    if indice is None or not (0 <= indice < len(opciones)) or not str(opciones[indice].get("url") or "").startswith("https://"):
+        raise ErrorNegocio("No hay música elegida.")
+    url = opciones[indice]["url"]
+    host = urllib.parse.urlparse(url).hostname or ""
+    if not (host == "krea.ai" or host.endswith(".krea.ai")):
+        raise ErrorNegocio("El audio no viene de Krea.")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "contenidos-rc"}), timeout=25) as r:
+            datos = r.read(MAX_BYTES_VIDEO + 1)
+    except Exception as e:  # noqa: BLE001
+        raise ErrorNegocio("No se pudo descargar la música de Krea.") from e
+    if len(datos) > MAX_BYTES_VIDEO:
+        raise ErrorNegocio("La música pesa demasiado para servirla desde la app.")
+    return datos
+
+
+def tarjeta_jpg(pieza_id: int, numero: int) -> tuple[str, bytes]:
+    """Una tarjeta del carrusel en JPG 1080 x 1350, para la descarga por lotes («Semana_1_tarjeta_01.jpg»)."""
+    import pymupdf
+    pieza = _pieza(int(pieza_id))
+    if pieza["formato"] != "Carrusel":
+        raise ErrorNegocio("La descarga por tarjetas es para carruseles.")
+    _nombre, pdf = tarjetas_pdf(pieza["id"], 0, guias=False)
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+        numero = int(numero)
+        if not 1 <= numero <= len(doc):
+            raise ErrorNegocio("Esa tarjeta no existe.")
+        pagina = doc[numero - 1]
+        jpg = pagina.get_pixmap(matrix=pymupdf.Matrix(1080 / pagina.rect.width, 1080 / pagina.rect.width)).tobytes(
+            "jpg", jpg_quality=92)
+    return f"Semana_{pieza['semana']}_tarjeta_{numero:02d}.jpg", jpg
+
+
+# ---------- aprobaciones en 3 tiempos: textos (Reini) → diseño (Daniela) → publicación (Luís) ----------
+
+ETAPAS = ("textos", "diseno", "publicacion")
+SIGUIENTE = {"textos": ("Daniela", "revisión de diseños y animaciones"),
+             "diseno": ("Luís", "aprobación final y descarga para publicar"),
+             "publicacion": (None, "")}
+
+
+def _aprobada_en(pieza: dict, etapa: str) -> bool:
+    if etapa == "textos":
+        return pieza["estado"] == "aprobada"
+    return bool((pieza.get("aprobaciones") or {}).get(etapa))
+
+
+def _piezas_mes(mes_id: int) -> list[dict]:
+    return db.seleccionar("piezas", select="*", mes_id=f"eq.{mes_id}", order="semana")
+
+
+def etapa_completa(mes_id: int, etapa: str) -> bool:
+    piezas = _piezas_mes(mes_id)
+    return bool(piezas) and all(_aprobada_en(p, etapa) for p in piezas)
+
+
+def _avisar_si_etapa_completa(mes_id: int, etapa: str) -> None:
+    if not etapa_completa(mes_id, etapa):
+        return
+    mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{mes_id}")[0]["mes_objetivo"]
+    persona, que = SIGUIENTE[etapa]
+    nombres = {"textos": "Textos aprobados", "diseno": "Diseños aprobados", "publicacion": "Listo para publicar"}
+    texto = (f"Todas las piezas pasaron esta etapa. Ahora sigue {persona}: {que}." if persona
+             else "Luís aprobó todas las piezas: ya se pueden descargar y publicar.")
+    teams.avisar_etapa(mes, nombres[etapa], texto)
+
+
+def aprobar_etapa(pieza_id: int, etapa: str, aprobada: bool, usuario: dict) -> dict:
+    """Aprueba (o quita la aprobación de) la etapa de diseño o de publicación de una pieza. Cada etapa se abre
+    cuando TODAS las piezas del mes pasaron la anterior."""
+    if etapa not in ("diseno", "publicacion"):
+        raise ErrorNegocio("Etapa desconocida.")
+    pieza = _pieza(int(pieza_id))
+    previa = ETAPAS[ETAPAS.index(etapa) - 1]
+    aprob = dict(pieza.get("aprobaciones") or {})
+    if aprobada:
+        if not etapa_completa(pieza["mes_id"], previa):
+            quien = "Reini (textos)" if previa == "textos" else "Daniela (diseño)"
+            raise ErrorNegocio(f"Esta etapa se abre cuando {quien} haya aprobado las 4 piezas.")
+        aprob[etapa] = {"por": usuario.get("email"), "en": _ahora()}
+        aprob.pop("devolucion", None)
+    else:
+        aprob.pop(etapa, None)
+        if etapa == "diseno":
+            aprob.pop("publicacion", None)
+    fila = db.actualizar("piezas", {"aprobaciones": aprob}, id=f"eq.{pieza['id']}")[0]
+    if aprobada:
+        _avisar_si_etapa_completa(pieza["mes_id"], etapa)
+    return fila
+
+
+def devolver(pieza_id: int, nota: str, usuario: dict) -> dict:
+    """Devuelve la pieza a la etapa anterior con una nota: desde publicación vuelve a diseño (Daniela); desde diseño
+    vuelve a textos (Reini), y la nota queda como comentario para aplicar con «Aplicar ajustes»."""
+    pieza = _pieza(int(pieza_id))
+    nota = " ".join((nota or "").split())[:1000]
+    if not nota:
+        raise ErrorNegocio("Escribe qué hay que corregir.")
+    aprob = dict(pieza.get("aprobaciones") or {})
+    rol = usuario.get("rol")
+    a_diseno = rol == "publicacion" or (rol == "admin" and aprob.get("diseno"))
+    quien = usuario.get("email") or ""
+    if a_diseno:
+        aprob.pop("diseno", None)
+        aprob.pop("publicacion", None)
+        aprob["devolucion"] = {"a": "diseno", "por": quien, "en": _ahora(), "nota": nota}
+        fila = db.actualizar("piezas", {"aprobaciones": aprob}, id=f"eq.{pieza['id']}")[0]
+        destino = "Daniela (diseño)"
+    else:
+        aprob = {"devolucion": {"a": "textos", "por": quien, "en": _ahora(), "nota": nota}}
+        db.actualizar("piezas", {"estado": "generada", "aprobada_en": None}, id=f"eq.{pieza['id']}",
+                      estado="eq.aprobada")
+        fila = db.actualizar("piezas", {"aprobaciones": aprob}, id=f"eq.{pieza['id']}")[0]
+        db.insertar("comentarios", {"pieza_id": pieza["id"], "texto": f"[Devuelta por {quien}] {nota}",
+                                    "version_comentada": pieza["version"]})
+        destino = "Reini (textos)"
+        _actualizar_estado_mes(pieza["mes_id"])
+    mes = db.seleccionar("meses", select="mes_objetivo", id=f"eq.{pieza['mes_id']}")[0]["mes_objetivo"]
+    teams.avisar_etapa(mes, f"Pieza devuelta a {destino}",
+                       f"Semana {pieza['semana']} · {pieza['formato']}: {nota}")
+    return fila
 
 
 def cambiar_fecha(pieza_id: int, fecha: str) -> dict:
@@ -513,8 +717,10 @@ def reel_animable(pieza_id: int) -> dict:
                            tarjeta="eq.1", elegida="is.true")
     video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"
                   and str(f.get("video_url") or "").startswith("https://")), None)
+    musica = _musica(pieza)
     respuesta = {"ancho": reels.W, "alto": reels.H, "escenas": escenas, "video_escena_1": None,
-                 "tema": pieza["contenido"].get("tema_especifico", "")}
+                 "tema": pieza["contenido"].get("tema_especifico", ""), "semana": pieza.get("semana"),
+                 "musica": musica.get("elegida") is not None}
     if video:
         x, y, lado = reels.caja_icono(pieza["contenido"])
         respuesta["video_escena_1"] = {"url": video, "x": x, "y": y, "lado": lado}

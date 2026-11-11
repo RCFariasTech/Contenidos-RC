@@ -50,8 +50,30 @@ def ruta_salud(_req):
     return 200, {"ok": True}
 
 
+TODOS = {"admin", "diseno", "publicacion"}
+DISENO = {"admin", "diseno"}
+# Rutas que no son solo del administrador (el resto, incluidas generar y editar textos, son de Reini).
+PERMISOS = {
+    ("GET", "yo"): TODOS, ("GET", "mes-actual"): TODOS, ("GET", "tarjetas-pdf"): TODOS,
+    ("GET", "tarjetas-vista"): TODOS, ("GET", "reel-animable"): TODOS, ("GET", "video-icono"): TODOS,
+    ("GET", "ilustraciones"): TODOS, ("GET", "repositorio"): TODOS, ("GET", "versiones"): TODOS,
+    ("GET", "musica-audio"): TODOS, ("GET", "tarjeta-jpg"): TODOS,
+    ("POST", "ilustraciones"): DISENO, ("POST", "ilustracion-elegir"): DISENO, ("POST", "ilustracion-sugerir"): DISENO,
+    ("POST", "ilustraciones-detener"): DISENO, ("POST", "ilustracion-animar"): DISENO,
+    ("POST", "ilustraciones-borrar"): DISENO, ("POST", "reel-foto"): DISENO, ("POST", "cifra"): DISENO,
+    ("POST", "aprobar-diseno"): DISENO, ("POST", "musica"): DISENO, ("POST", "musica-elegir"): DISENO,
+    ("POST", "aprobar-publicacion"): {"admin", "publicacion"},
+    ("POST", "devolver"): {"admin", "diseno", "publicacion"},
+}
+
+
 def _dueno(req) -> dict:
-    return auth.usuario_desde_token(req["authorization"])
+    """Usuario autenticado con permiso para esta ruta (por defecto, solo el administrador)."""
+    usuario = auth.usuario_desde_token(req["authorization"])
+    permitidos = PERMISOS.get((req.get("metodo"), req.get("ruta")), {"admin"})
+    if usuario["rol"] not in permitidos:
+        raise ErrorCliente(403, "Tu rol no puede hacer esto.")
+    return usuario
 
 
 def _servicio():
@@ -79,7 +101,7 @@ def _entero(cuerpo: dict, campo: str) -> int:
 
 def ruta_yo(req):
     usuario = _dueno(req)
-    return 200, {"email": usuario.get("email")}
+    return 200, {"email": usuario.get("email"), "rol": usuario["rol"]}
 
 
 def ruta_mes_actual(req):
@@ -295,6 +317,61 @@ def ruta_cifra(req):
                                          str(cuerpo.get("cifra") or "")[:40])
 
 
+def ruta_aprobar_diseno(req):
+    usuario = _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().aprobar_etapa(_entero(c, "pieza_id"), "diseno", bool(c.get("aprobada", True)), usuario)
+
+
+def ruta_aprobar_publicacion(req):
+    usuario = _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().aprobar_etapa(_entero(c, "pieza_id"), "publicacion", bool(c.get("aprobada", True)), usuario)
+
+
+def ruta_devolver(req):
+    usuario = _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().devolver(_entero(c, "pieza_id"), str(c.get("nota") or ""), usuario)
+
+
+def ruta_musica(req):
+    _dueno(req)
+    c = req["cuerpo"]
+    if c.get("consultar"):
+        return 200, _servicio().estado_musica(_entero(c, "pieza_id"))
+    return 200, _servicio().generar_musica(_entero(c, "pieza_id"))
+
+
+def ruta_musica_elegir(req):
+    _dueno(req)
+    c = req["cuerpo"]
+    indice = c.get("indice")
+    return 200, _servicio().elegir_musica(_entero(c, "pieza_id"), None if indice in (None, "") else int(indice))
+
+
+def ruta_musica_audio(req):
+    _dueno(req)
+    q = req["query"]
+    try:
+        pieza_id = int(q.get("pieza", ""))
+        indice = int(q["indice"]) if q.get("indice") not in (None, "") else None
+    except ValueError:
+        raise ErrorCliente(400, "Parámetros inválidos.")
+    return 200, Archivo(f"musica-{pieza_id}.mp3", _servicio().musica_audio(pieza_id, indice), "audio/mpeg")
+
+
+def ruta_tarjeta_jpg(req):
+    _dueno(req)
+    q = req["query"]
+    try:
+        pieza_id, numero = int(q.get("pieza", "")), int(q.get("n", ""))
+    except ValueError:
+        raise ErrorCliente(400, "Parámetros inválidos.")
+    nombre, datos = _servicio().tarjeta_jpg(pieza_id, numero)
+    return 200, Archivo(nombre, datos, "image/jpeg")
+
+
 def ruta_reel_foto(req):
     _dueno(req)
     cuerpo = req["cuerpo"]
@@ -431,6 +508,13 @@ RUTAS = {
     ("POST", "ilustraciones-borrar"): ruta_ilustraciones_borrar,
     ("POST", "reel-foto"): ruta_reel_foto,
     ("POST", "cifra"): ruta_cifra,
+    ("POST", "aprobar-diseno"): ruta_aprobar_diseno,
+    ("POST", "aprobar-publicacion"): ruta_aprobar_publicacion,
+    ("POST", "devolver"): ruta_devolver,
+    ("POST", "musica"): ruta_musica,
+    ("POST", "musica-elegir"): ruta_musica_elegir,
+    ("GET", "musica-audio"): ruta_musica_audio,
+    ("GET", "tarjeta-jpg"): ruta_tarjeta_jpg,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,
@@ -476,7 +560,7 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 (nombre exigido por Vercel)
             if longitud > MAX_CUERPO:
                 raise ErrorCliente(413, "Cuerpo demasiado grande")
             cuerpo = json.loads(self.rfile.read(longitud) or b"{}") if longitud else {}
-            req = {"query": query, "cuerpo": cuerpo,
+            req = {"query": query, "cuerpo": cuerpo, "metodo": metodo, "ruta": ruta,
                    "authorization": self.headers.get("Authorization")}
             estado, datos = funcion(req)
         except ErrorCliente as e:

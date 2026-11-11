@@ -99,6 +99,26 @@ class TestRouter(unittest.TestCase):
             with mock.patch("rc.auth.usuario_desde_token", side_effect=__import__("rc.auth").auth.NoAutorizado("x")):
                 self.assertEqual(self._llamar("diagnostico", cabeceras={"Authorization": "Bearer otro"})[0], 401)
 
+    def test_roles_y_permisos(self):
+        from rc import auth
+        entorno = {"OWNER_EMAIL": "reini@x.co", "DISENO_EMAILS": "daniela@x.co", "PUBLICACION_EMAILS": "luis@x.co, otro@x.co"}
+        with mock.patch.dict(os.environ, entorno):
+            self.assertEqual([auth.rol_de(c) for c in ("reini@x.co", "daniela@x.co", "otro@x.co", "nadie@x.co")],
+                             ["admin", "diseno", "publicacion", None])
+        for rol, ruta, metodo, permitido in (("diseno", "generar-pieza", "POST", False), ("diseno", "aprobar-diseno", "POST", True),
+                                             ("publicacion", "aprobar-diseno", "POST", False), ("publicacion", "yo", "GET", True)):
+            with mock.patch("rc.auth.usuario_desde_token", return_value={"email": "x", "rol": rol}):
+                estado = self._llamar(ruta, metodo=metodo, cabeceras={"Authorization": "Bearer t"})[0] if metodo == "GET" \
+                    else None
+                if metodo == "POST":
+                    from api import index
+                    try:
+                        index._dueno({"authorization": "Bearer t", "metodo": metodo, "ruta": ruta})
+                        estado = 200
+                    except index.ErrorCliente as e:
+                        estado = e.estado
+                self.assertEqual(estado == 403, not permitido, (rol, ruta))
+
     def test_yo_sin_token(self):
         with mock.patch.dict(os.environ, {"SUPABASE_URL": "https://x", "SUPABASE_ANON_KEY": "a", "OWNER_EMAIL": "o@x"}):
             self.assertEqual(self._llamar("yo")[0], 401)
