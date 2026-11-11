@@ -317,3 +317,6 @@ body:not([data-rol="admin"]) :is(#btn-generar, #btn-ajustes, .pieza__controles >
 .pieza--etapa-textos { background: #f3f4f5; border-color: #c9cacb; box-shadow: 0 0 0 1px #c9cacb; }
 .pieza--etapa-diseno { background: #eef4ff; border-color: #9fc0ff; box-shadow: 0 0 0 1px #9fc0ff; }
 .pieza--etapa-publicacion { background: #edf8f0; border-color: #8fd1a3; box-shadow: 0 0 0 1px #8fd1a3; }
+.pieza__resumen { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pieza__gancho { margin: 0; font-family: "Arial Black", Arial, sans-serif; font-size: 1.1rem; }
+.pieza__plegar { display: flex; justify-content: flex-end; margin-bottom: -8px; }

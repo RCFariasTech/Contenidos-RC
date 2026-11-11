@@ -111,7 +111,8 @@ const ESTADOS_MES = {
 
 // ---------- estado de la vista ----------
 
-const estado = { mes: null, piezas: [], ocupadas: new Set(), mensajes: {}, borradores: {}, generandoTodo: false };
+const estado = { mes: null, piezas: [], ocupadas: new Set(), mensajes: {}, borradores: {}, generandoTodo: false,
+  expandidas: new Set() };  // piezas aprobadas que el usuario abrió (por defecto se ven contraídas)
 
 function pendientes(pieza) {
   return (pieza.comentarios || []).filter((c) => !c.aplicado_en);
@@ -620,8 +621,18 @@ function renderPieza(pieza) {
     cuerpo.append(el("p", { clase: "ayuda" }, pieza.pilar));
     cuerpo.append(renderProceso(estado.ocupadas.has(pieza.id) && !["generando", "ajustando"].includes(pieza.estado)
       ? { ...pieza, estado: pieza.contenido ? "ajustando" : "generando" } : pieza));
+  } else if (etapa && !estado.expandidas.has(pieza.id)) {
+    // Pieza aprobada: se muestra contraída (tipo, fecha y aprobaciones en la cabecera, más el gancho).
+    const gancho = c[pieza.formato === "Reel" ? "escena_1_gancho" : "slide_1_gancho"] || c.tema_especifico;
+    tarjeta.classList.add("pieza--contraida");
+    cuerpo.append(el("div", { clase: "pieza__resumen" },
+      el("p", { clase: "pieza__gancho" }, gancho),
+      el("button", { clase: "btn btn--texto btn--chico", type: "button", "aria-expanded": "false",
+        onclick: () => { estado.expandidas.add(pieza.id); render(); } }, "Ver pieza completa ▾")));
   } else {
     cuerpo.append(
+      etapa ? el("div", { clase: "pieza__plegar" }, el("button", { clase: "btn btn--texto btn--chico", type: "button",
+        "aria-expanded": "true", onclick: () => { estado.expandidas.delete(pieza.id); render(); } }, "Contraer ▴")) : null,
       el("div", { clase: "pieza__titulo" }, el("h2", {}, c.tema_especifico), el("p", {}, pieza.pilar)),
       ...renderAlertas(pieza),
       renderInvestigacion(c.investigacion, pieza.id),
