@@ -425,11 +425,14 @@ def t5_cierre(L, d):
     L.c.setFont(TITULO, 520)
     L.c.drawString(W - M - 300, H - 520, "\u201d")
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
-    L.bloque(texto, TEXTO, tema["texto"], M, 330, 680, 640, 50, inter=1.3)
+    L.bloque(texto, TEXTO, tema["texto"], M, 330, 680, 560, 50, inter=1.3)
     oscuro = tema["logos"] == "marino"
-    L.png(PLANTILLA / ("logo_rc_marino_2026.png" if oscuro else "logo_rc_blanco_2026.png"), M, H - 175, 300, 80)
-    L.svg(PLANTILLA / ("logo_constellation_negro.svg" if oscuro else "logo_constellation_blanco.svg"),
-          W - M - 330, H - 160, 330)
+    # Logo de Constellation en su propio renglón, ancho (2/3 del espacio útil) para que su trazo delgado se lea.
+    ancho_c = (W - 2 * M) * 2 / 3
+    alto_c = ancho_c * 52.35 / 369.25  # proporción del SVG
+    y_c = H - M - alto_c
+    L.svg(PLANTILLA / ("logo_constellation_negro.svg" if oscuro else "logo_constellation_blanco.svg"), M, y_c, ancho_c)
+    L.png(PLANTILLA / ("logo_rc_marino_2026.png" if oscuro else "logo_rc_blanco_2026.png"), M, y_c - 50 - 80, 300, 80)
 
 
 PLANTILLAS = {1: t1_gancho, 2: t2_foto, 3: t3_icono, 4: t4_dato, 5: t5_cierre}

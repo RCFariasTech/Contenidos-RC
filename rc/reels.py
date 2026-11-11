@@ -188,7 +188,7 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
     datos = None if cierre else tarjetas._fondo_con_imagen(L, L.imagenes.get(numero))
     if cierre:
         L.fondo(fondo)
-        L.bloque(texto, TITULO, "blanco", M, 700, W - 2 * M, 1180 - 700 - 20, 96, inter=1.05)
+        L.bloque(texto, TITULO, "blanco", M, 640, W - 2 * M, 1080 - 640, 96, inter=1.05)
         _logos(L)
         return
     ancho = W - 2 * M
@@ -284,23 +284,24 @@ LINEA_BASE_CONSTELLATION = 0.509
 
 
 def _logos(L) -> None:
-    """Cierre: logo RC / FARÍAS blanco y, de pie de página, «Miembros de» + logo de Constellation blanco."""
+    """Cierre: logo RC / FARÍAS, «Miembros de» y, en su propio renglón, el logo de Constellation ancho (2/3 del espacio
+    útil, desde el margen izquierdo) para que su trazo delgado se lea bien."""
     from reportlab.graphics import renderPDF
     from svglib.svglib import svg2rlg
-    L.c.drawImage(str(tarjetas.PLANTILLA / "logo_rc_blanco_2026.png"), M - 2, H - 1330, width=420, height=128,
-                  mask="auto", preserveAspectRatio=True, anchor="sw")
     dib = svg2rlg(str(tarjetas.PLANTILLA / "logo_constellation_blanco.svg"))
-    ancho_logo = 360
+    ancho_logo = (W - 2 * M) * 2 / 3
     k = ancho_logo / dib.width
     dib.scale(k, k)
     alto_logo = dib.height * k
-    abajo = ZONA_ABAJO + 4
+    abajo = ZONA_ABAJO + 4                         # borde inferior del logo de Constellation (desde abajo)
+    renderPDF.draw(dib, L.c, M + 3, abajo)  # +3: la «C» del logo trae aire a la izquierda
     texto, tam = "Miembros de", 34
-    x0 = M  # sin compensar: la «M» de Sora ya cae en el margen; antes compensaba el espacio lateral de la «M» para que su borde visible caiga en el margen
+    base_texto = abajo + alto_logo + 30
     L.c.setFillColor(L.col["blanco"])
     L.c.setFont(TEXTO, tam)
-    L.c.drawString(x0, abajo + alto_logo * (1 - LINEA_BASE_CONSTELLATION), texto)
-    renderPDF.draw(dib, L.c, x0 + stringWidth(texto, TEXTO, tam) + 22, abajo)
+    L.c.drawString(M, base_texto, texto)
+    L.c.drawImage(str(tarjetas.PLANTILLA / "logo_rc_blanco_2026.png"), M - 2, base_texto + tam + 40, width=420,
+                  height=128, mask="auto", preserveAspectRatio=True, anchor="sw")
 
 
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,

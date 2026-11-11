@@ -109,19 +109,19 @@ class TestReels(unittest.TestCase):
             texto = " ".join(doc[4].get_text().split())
             self.assertIn(REEL["escena_5_cta"], texto)
             self.assertIn("Miembros de", texto)
-            # «Miembros de» comparte línea de base con CONSTELLATION y el logo llega al borde de la zona segura
+            # Constellation va en su propio renglón, debajo de «Miembros de», ancho (2/3 del espacio útil) y pegado al
+            # límite inferior de la zona segura
             frase = doc[4].search_for("Miembros de")[0]
-            logo = [d["rect"] for d in doc[4].get_drawings() if d["rect"].y0 > 1300 and d["rect"].x0 > frase.x1]
+            logo = [d["rect"] for d in doc[4].get_drawings() if d["rect"].y0 > frase.y1]
             self.assertTrue(logo)
-            y0, y1 = min(r.y0 for r in logo), max(r.y1 for r in logo)
-            linea_base = next(sp["origin"][1] for b in doc[4].get_text("dict")["blocks"] if b["type"] == 0
-                              for ln in b["lines"] for sp in ln["spans"] if "Miembros" in sp["text"])
-            self.assertAlmostEqual(linea_base, y0 + reels.LINEA_BASE_CONSTELLATION * (y1 - y0), delta=2.5)
-            self.assertAlmostEqual(y1, reels.H - reels.ZONA_ABAJO, delta=6)       # pegado al límite inferior
-            self.assertLessEqual(y1, reels.H - reels.ZONA_ABAJO)                    # sin pasarlo
+            x0, x1 = min(r.x0 for r in logo), max(r.x1 for r in logo)
+            y1 = max(r.y1 for r in logo)
+            self.assertGreater(x1 - x0, (reels.W - 2 * reels.M) * 2 / 3 * 0.9)
+            self.assertAlmostEqual(y1, reels.H - reels.ZONA_ABAJO, delta=6)
+            self.assertLessEqual(y1, reels.H - reels.ZONA_ABAJO)
 
     def test_cierre_alineado_a_la_izquierda_con_el_texto(self):
-        """El borde visible izquierdo del CTA, del logo RC / FARÍAS y de «Miembros de» coincide (±2 px)."""
+        """El borde visible izquierdo del CTA, del logo RC / FARÍAS, de «Miembros de» y de Constellation coincide (±2 px)."""
         for variante in range(5):
             pix = pymupdf.open(stream=reels.generar_pdf(REEL, variante=variante), filetype="pdf")[4] \
                 .get_pixmap(matrix=pymupdf.Matrix(2, 2))
@@ -133,7 +133,8 @@ class TestReels(unittest.TestCase):
                         if sum(abs(a - b) for a, b in zip(pix.pixel(x, y)[:3], fondo[:3])) > 60:
                             return x / 2
 
-            bordes = [borde_izquierdo(700, 900), borde_izquierdo(1215, 1335), borde_izquierdo(1400, 1470)]
+            bordes = [borde_izquierdo(660, 900), borde_izquierdo(1160, 1270), borde_izquierdo(1328, 1350),
+                      borde_izquierdo(1390, 1462)]
             self.assertLessEqual(max(bordes) - min(bordes), 2, bordes)
 
     def test_la_descarga_no_trae_la_etiqueta_de_escena(self):
