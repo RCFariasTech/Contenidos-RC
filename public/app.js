@@ -607,6 +607,14 @@ function renderProceso(pieza) {
     }, "Detener") : null);
 }
 
+/** La pieza ya pasó la etapa de quien mira: Reini (textos), Daniela (diseño) o Luís (publicación). */
+function contraible(pieza) {
+  const ap = pieza.aprobaciones || {};
+  if (estado.rol === "diseno") return Boolean(ap.diseno);
+  if (estado.rol === "publicacion") return Boolean(ap.publicacion);
+  return pieza.estado === "aprobada";
+}
+
 function renderPieza(pieza) {
   const enProceso = estado.ocupadas.has(pieza.id) || ["generando", "ajustando"].includes(pieza.estado);
   const bloqueada = enProceso;
@@ -621,7 +629,7 @@ function renderPieza(pieza) {
     cuerpo.append(el("p", { clase: "ayuda" }, pieza.pilar));
     cuerpo.append(renderProceso(estado.ocupadas.has(pieza.id) && !["generando", "ajustando"].includes(pieza.estado)
       ? { ...pieza, estado: pieza.contenido ? "ajustando" : "generando" } : pieza));
-  } else if (etapa && !estado.expandidas.has(pieza.id)) {
+  } else if (contraible(pieza) && !estado.expandidas.has(pieza.id)) {
     // Pieza aprobada: se muestra contraída (tipo, fecha y aprobaciones en la cabecera, más el gancho).
     const gancho = c[pieza.formato === "Reel" ? "escena_1_gancho" : "slide_1_gancho"] || c.tema_especifico;
     tarjeta.classList.add("pieza--contraida");
@@ -631,7 +639,7 @@ function renderPieza(pieza) {
         onclick: () => { estado.expandidas.add(pieza.id); render(); } }, "Ver pieza completa ▾")));
   } else {
     cuerpo.append(
-      etapa ? el("div", { clase: "pieza__plegar" }, el("button", { clase: "btn btn--texto btn--chico", type: "button",
+      contraible(pieza) ? el("div", { clase: "pieza__plegar" }, el("button", { clase: "btn btn--texto btn--chico", type: "button",
         "aria-expanded": "true", onclick: () => { estado.expandidas.delete(pieza.id); render(); } }, "Contraer ▴")) : null,
       el("div", { clase: "pieza__titulo" }, el("h2", {}, c.tema_especifico), el("p", {}, pieza.pilar)),
       ...renderAlertas(pieza),
