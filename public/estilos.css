@@ -321,3 +321,6 @@ body[data-rol="admin"] .editable:hover { background: rgba(0, 94, 255, .07); outl
 .reel-preparando p { margin: 0; font-size: .95rem; }
 .reel-preparando progress { width: 200px; height: 8px; accent-color: #005eff; }
 .login .btn--texto { margin-top: 10px; }
+/* Configuración solo para Reini (el servidor también la restringe). */
+body:not([data-rol="admin"]) #tab-configuracion, body:not([data-rol="admin"]) #seccion-configuracion { display: none !important; }
+.aviso-etapa { margin: 8px 0 0; }

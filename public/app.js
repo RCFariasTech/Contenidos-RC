@@ -135,6 +135,18 @@ function renderBarra() {
     ? `${ESTADOS_MES[mes.estado] || mes.estado} · ${aprobadas} de ${piezas.length} piezas aprobadas`
     : "Aún no hay propuestas para este mes.";
   $("btn-generar").hidden = Boolean(mes);
+  // Aviso para Daniela y Luís: qué falta para que se abra su etapa.
+  const etapaRol = { diseno: ["textos", "Reini", "los textos"], publicacion: ["diseno", "Daniela", "el diseño"] }[estado.rol];
+  let avisoEtapa = "";
+  if (etapaRol && piezas.length) {
+    const [previa, quien, que] = etapaRol;
+    const faltan = piezas.filter((p) => (previa === "textos" ? p.estado !== "aprobada" : !p.aprobaciones?.[previa]));
+    avisoEtapa = faltan.length
+      ? `Tu revisión se habilita cuando ${quien} apruebe ${que} de las ${piezas.length} piezas. Falta: ${faltan.map((p) => `semana ${p.semana} (${p.formato.toLowerCase()})`).join(", ")}.`
+      : "Tu etapa está abierta: revisa y aprueba cada pieza.";
+  }
+  $("aviso-etapa").hidden = !avisoEtapa;
+  $("aviso-etapa").textContent = avisoEtapa;
   const conComentarios = piezas.filter((p) => pendientes(p).length && p.estado === "generada").length;
   const botonAjustes = $("btn-ajustes");
   botonAjustes.textContent = conComentarios ? `Aplicar ajustes (${conComentarios})` : "Aplicar ajustes";
@@ -1346,6 +1358,7 @@ $("repo-todos").addEventListener("change", (ev) => {
 $("filtros-repo").addEventListener("submit", (ev) => ev.preventDefault());
 
 function mostrarSeccion(nombre) {
+  if (nombre === "configuracion" && estado.rol !== "admin") nombre = "propuestas";  // Configuración: solo Reini
   const esRepo = nombre === "repositorio", esConfig = nombre === "configuracion";
   $("seccion-propuestas").hidden = esRepo || esConfig;
   $("seccion-repositorio").hidden = !esRepo;
