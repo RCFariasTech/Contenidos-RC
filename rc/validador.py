@@ -9,8 +9,8 @@ from rc.esquema import CAMPOS_TEXTO
 
 LIMITES = {
     "Carrusel": {"slide_1_gancho": 8, "slide_2": 30, "slide_3": 30, "slide_4": 30, "slide_5_cierre": 30},
-    "Reel": {"escena_1_gancho": 6, "escena_2_desarrollo_a": 8, "escena_3_desarrollo_b": 8,
-             "escena_4_desarrollo_c": 8, "escena_5_cta": 6},
+    "Reel": {"escena_1_gancho": 8, "escena_2_desarrollo_a": 15, "escena_3_desarrollo_b": 15,
+             "escena_4_desarrollo_c": 15, "escena_5_cta": 10},
 }
 ETIQUETAS = {
     "slide_1_gancho": "Tarjeta 1", "slide_2": "Tarjeta 2", "slide_3": "Tarjeta 3",

@@ -59,5 +59,10 @@ FORMATO CARRUSEL:
   COMPLETA con sentido propio (nunca termina en una preposición o artículo como "de", "que", "al"), y el texto empieza una idea nueva
   con mayúscula, sin continuar la oración del titular. Si no hay un corte natural, pon todo en el titular y deja el texto vacío.
 
-FORMATO REEL:
+FORMATO REEL (cada escena dura lo que toma leerla, ~3 palabras por segundo; el reel completo queda entre 20 y 30 s):
+- escena_1_gancho: máximo 8 palabras. Afirmación provocadora o pregunta disruptiva.
+- escena_2_desarrollo_a, escena_3_desarrollo_b, escena_4_desarrollo_c: entre 9 y 15 palabras cada una. Frases completas y
+  elocuentes, con una idea concreta cada una (un dato, un ejemplo o una consecuencia), no titulares telegráficos.
+  Si una escena trae una cifra de mercado, se muestra en grande: ponla con su contexto ("el 78% de los asistentes…").
+- escena_5_cta: máximo 10 palabras.
 - escena_5_cta: en el cierre del video aparecen los LOGOS de RC Farías y de Constellation, así que NO escribas esos nombres en escena_5_cta (ni en ninguna otra escena si no hace falta); redacta solo la llamada a la acción.

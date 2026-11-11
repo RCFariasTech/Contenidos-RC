@@ -96,11 +96,11 @@ const CAMPOS = {
     { campo: "slide_5_cierre", rol: "Cierre", max: 30 },
   ],
   Reel: [
-    { campo: "escena_1_gancho", rol: "Gancho · 0-5 s", max: 6 },
-    { campo: "escena_2_desarrollo_a", rol: "Desarrollo · 5-12 s", max: 8 },
-    { campo: "escena_3_desarrollo_b", rol: "Desarrollo · 12-20 s", max: 8 },
-    { campo: "escena_4_desarrollo_c", rol: "Desarrollo · 20-25 s", max: 8 },
-    { campo: "escena_5_cta", rol: "CTA · 25-30 s", max: 6 },
+    { campo: "escena_1_gancho", rol: "Gancho", max: 8 },
+    { campo: "escena_2_desarrollo_a", rol: "Desarrollo", max: 15 },
+    { campo: "escena_3_desarrollo_b", rol: "Desarrollo", max: 15 },
+    { campo: "escena_4_desarrollo_c", rol: "Desarrollo", max: 15 },
+    { campo: "escena_5_cta", rol: "CTA", max: 10 },
   ],
 };
 
@@ -260,7 +260,7 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("span", { clase: `contador${n > max ? " contador--excede" : ""}`, title: "Palabras usadas / máximo" }, `${n}/${max} palabras`),
       conMiniaturas ? miniatura(pieza, i) : null);
   });
-  const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla (30 s)" : "Tarjetas del carrusel";
+  const titulo = pieza.formato === "Reel" ? "Guion · texto en pantalla" : "Tarjetas del carrusel";
   const boton = pieza.id ? el("button", {
     clase: "btn btn--secundario", type: "button",
     title: pieza.formato === "Reel" ? "Reproduce el reel completo (transiciones y textos animados); desde ahí descargas el video o el PDF del guion" : "Vista previa de las 5 tarjetas como carrusel; desde ahí descargas el PDF editable",

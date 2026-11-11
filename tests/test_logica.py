@@ -225,7 +225,7 @@ class TestValidador(unittest.TestCase):
         reel = {k: v for k, v in carrusel().items() if not k.startswith("slide_")}
         reel.update(formato="Reel", escena_1_gancho="Tu góndola ya es medio",
                     escena_2_desarrollo_a="uno", escena_3_desarrollo_b="dos", escena_4_desarrollo_c="tres",
-                    escena_5_cta="Escríbenos hoy mismo y te contamos cómo", hashtags=["#A", "#B", "#C", "#D"])
+                    escena_5_cta="Escríbenos hoy mismo y te contamos cómo medimos cada activación en tienda", hashtags=["#A", "#B", "#C", "#D"])
         r = self._validar(reel, formato="Reel")
         textos = " ".join(r["errores"])
         self.assertIn("Escena 5", textos)

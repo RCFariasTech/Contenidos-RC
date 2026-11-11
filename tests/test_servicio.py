@@ -561,7 +561,7 @@ class TestFlujo(unittest.TestCase):
         fila = servicio.editar_gancho(reel["id"], "  ¿Y tu marca   qué siente? ")
         self.assertEqual(fila["contenido"]["escena_1_gancho"], "¿Y tu marca qué siente?")
         self.assertEqual({v["motivo"] for v in servicio.versiones(reel["id"])}, {"generacion", "edicion"})
-        for malo in ("", "una dos tres cuatro cinco seis siete"):                        # vacío o > 6 palabras
+        for malo in ("", "una dos tres cuatro cinco seis siete ocho nueve"):           # vacío o > 8 palabras
             with self.assertRaises(servicio.ErrorNegocio):
                 servicio.editar_gancho(reel["id"], malo)
         servicio.aprobar(reel["id"], True)
