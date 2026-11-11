@@ -28,7 +28,9 @@ INVESTIGACIÓN (obligatoria):
 - Resúmela en 2-3 líneas con datos verificables (cifra, estudio o caso concreto).
 - Reporta la fuente exacta: título, URL y fecha de publicación.
   fuente_fecha va SOLO en formato AAAA-MM-DD (o AAAA-MM si no hay día), o exactamente "sin fecha visible". Sin notas adicionales.
-- Usa SOLO fuentes confiables: la búsqueda está limitada a una lista de dominios aprobados y la fuente que reportes debe ser uno de ellos.
+- Usa fuentes confiables: prefiere medios de industria, estudios, consultoras, gremios y fuentes primarias reconocidas
+  (como los de la lista de dominios aprobados), pero puedes usar otras fuentes serias si el tema lo requiere. Reporta
+  la URL exacta que encontraste en la búsqueda.
 - Prefiere fuentes primarias o de industria reconocidas y publicadas en los últimos 18 meses.
 - Si no hay evidencia sólida, elige otra tendencia. Nunca inventes datos ni URLs.
 

@@ -107,9 +107,10 @@ def llamar(usuario: str, formato: str, max_busquedas: int, effort: str | None = 
     a = ajustes()
     esquema = ESQUEMA_PIEZA[formato]
     sistema = prompts.sistema()
-    herramientas = ([{"type": "web_search_20260209", "name": "web_search",
-                      "max_uses": max_busquedas,
-                      "allowed_domains": fuentes.dominios()}] if max_busquedas else [])
+    busqueda = {"type": "web_search_20260209", "name": "web_search", "max_uses": max_busquedas}
+    if a.get("fuentes_estrictas"):  # solo si se vuelve al modo estricto: búsqueda limitada a la lista aprobada
+        busqueda["allowed_domains"] = fuentes.dominios()
+    herramientas = [busqueda] if max_busquedas else []
     usar_formato = a.get("formato_estructurado", True)
     max_tokens = a["max_tokens"]
     mensajes = [{"role": "user", "content": usuario}]

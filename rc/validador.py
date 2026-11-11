@@ -192,12 +192,17 @@ def validar(formato: str, pieza: dict, urls_busqueda: list[str], previas: list[d
     # V9: fuente verificada (no reparable sin búsqueda)
     inv = pieza.get("investigacion") or {}
     url = inv.get("fuente_url") or ""
+    # Fuentes flexibles: los problemas de la fuente son alertas (no bloquean la aprobación, que queda bajo
+    # responsabilidad de quien aprueba), salvo que ajustes["fuentes_estrictas"] esté activo.
+    problemas_fuente = []
     if not url.startswith("https://"):
-        no_reparables.append("La fuente debe ser una URL https.")
+        problemas_fuente.append("La fuente no es una URL https: verifícala antes de aprobar.")
     elif dominios is not None and not dominio_permitido(url, dominios):
-        no_reparables.append("La fuente no es de un dominio confiable de la lista aprobada.")
-    elif _url_normalizada(url) not in {_url_normalizada(u) for u in urls_busqueda}:
-        no_reparables.append("La fuente no aparece entre los resultados de la búsqueda web (posible URL inventada).")
+        problemas_fuente.append("La fuente no es de un dominio de la lista aprobada: verifica que sea confiable.")
+    if url.startswith("https://") and _url_normalizada(url) not in {_url_normalizada(u) for u in urls_busqueda}:
+        problemas_fuente.append("La fuente no aparece entre los resultados de la búsqueda web: ábrela y confirma "
+                                "que existe y dice lo que cita la pieza.")
+    (no_reparables if ajustes.get("fuentes_estrictas") else advertencias).extend(problemas_fuente)
 
     # V10: repetición (no reparable sin nueva búsqueda)
     propio = palabras_clave(texto_similitud(pieza))

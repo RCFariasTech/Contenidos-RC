@@ -174,7 +174,7 @@ class TestValidador(unittest.TestCase):
         for esperado in ("fastcompany.mx", "marketingdirecto.com", "merca20.com", "revistapym.com.co"):
             self.assertIn(esperado, lista)
 
-    def test_fuente_solo_de_dominios_confiables(self):
+    def test_fuente_fuera_de_la_lista_es_alerta(self):
         dominios = ["warc.com", "business.google.com/think"]
         def validar_con(url):
             inv = dict(carrusel()["investigacion"], fuente_url=url)
@@ -183,17 +183,22 @@ class TestValidador(unittest.TestCase):
         self.assertEqual(validar_con("https://blog.warc.com/x")["errores"], [])
         self.assertEqual(validar_con("https://business.google.com/en-all/think/a")["errores"], [])
         r = validar_con("https://twelveandtwentyeight.com/blog")
-        self.assertTrue(any("dominio confiable" in e for e in r["errores"]))
-        self.assertEqual(r["reparables"], [])
-        self.assertTrue(validar_con("https://notwarc.com/x")["errores"])  # no basta con terminar igual
+        self.assertEqual(r["errores"], [])                                   # fuentes flexibles: no bloquea…
+        self.assertTrue(any("lista aprobada" in a for a in r["advertencias"]))   # …pero queda la alerta
+        self.assertTrue(any("lista aprobada" in a for a in validar_con("https://notwarc.com/x")["advertencias"]))
+        estricto = dict(ajustes(), fuentes_estrictas=True)                   # modo estricto: vuelve a bloquear
+        inv = dict(carrusel()["investigacion"], fuente_url="https://notwarc.com/x")
+        r = validar("Carrusel", carrusel(investigacion=inv), ["https://notwarc.com/x"], [], [], estricto, HOY, dominios)
+        self.assertTrue(any("lista aprobada" in e for e in r["errores"]))
 
     def test_cierre_sin_constellation(self):
         r = self._validar(carrusel(slide_5_cierre="Lo hacemos en RC Farias."))
         self.assertTrue(any("Constellation" in e for e in r["errores"]))
 
-    def test_url_inventada_no_reparable(self):
+    def test_url_fuera_de_la_busqueda_es_alerta(self):
         r = self._validar(carrusel(), urls=["https://otra.com"])
-        self.assertTrue(any("búsqueda web" in e for e in r["errores"]))
+        self.assertEqual(r["errores"], [])                                   # alerta, no bloqueo
+        self.assertTrue(any("búsqueda web" in a for a in r["advertencias"]))
         self.assertEqual(r["reparables"], [])
 
     def test_url_compara_sin_query_ni_barra(self):
