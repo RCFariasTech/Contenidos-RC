@@ -180,7 +180,9 @@ function dibujarFoto(ctx, i, t) {
   ctx.beginPath();
   ctx.rect(0, 0, REEL.datos.ancho, foto.alto);
   ctx.clip();
-  ctx.drawImage(img, -sobra * p, 0, foto.ancho, foto.alto);
+  // +4 %: recorta las orillas de la foto (algunas traen un borde claro que se veía como franja al deslizarse).
+  const m = 0.02;
+  ctx.drawImage(img, -sobra * p - foto.ancho * m, -foto.alto * m, foto.ancho * (1 + 2 * m), foto.alto * (1 + 2 * m));
   ctx.globalAlpha = foto.opacidad;
   ctx.fillStyle = `#${foto.velo}`;
   ctx.fillRect(0, 0, REEL.datos.ancho, foto.alto);
@@ -218,11 +220,14 @@ function dibujarCuadro(ctx, t) {
     ctx.globalAlpha = p;
     ctx.drawImage(nueva, 0, 0);
   } else if (tipo === "deslizar") {
-    ctx.drawImage(prev, -p * ancho, 0);
-    ctx.drawImage(nueva, (1 - p) * ancho, 0);
+    // Posiciones enteras y 1 px de solape: sin rendija entre la escena que sale y la que entra.
+    const x = Math.round((1 - p) * ancho);
+    ctx.drawImage(prev, x - ancho, 0);
+    ctx.drawImage(nueva, x - 1, 0);
   } else if (tipo === "subir") {
-    ctx.drawImage(prev, 0, -p * alto);
-    ctx.drawImage(nueva, 0, (1 - p) * alto);
+    const y = Math.round((1 - p) * alto);
+    ctx.drawImage(prev, 0, y - alto);
+    ctx.drawImage(nueva, 0, y - 1);
   } else if (tipo === "zoom") {
     ctx.globalAlpha = 1 - p;
     const k1 = 1 + 0.25 * p;
