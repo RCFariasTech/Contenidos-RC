@@ -438,6 +438,9 @@ function renderAprobaciones(pieza, bloqueada) {
     chip("Publicación · Luís", Boolean(ap.publicacion), ap.publicacion ? `Aprobado por ${ap.publicacion.por}` : "Aprobación final"),
     puedeDiseno && !ap.publicacion ? marcar("diseno", "aprobar-diseno", Boolean(ap.diseno), ap.diseno ? "Diseño aprobado" : "Aprobar diseño") : null,
     puedeDiseno && !ap.diseno && rol === "diseno" ? devolver("Reini (textos)") : null,
+    puedeDiseno && pieza.formato === "Reel" ? el("button", { clase: "btn btn--secundario btn--chico", type: "button",
+      title: "Escucha y elige la música del reel (o crea propuestas nuevas)", onclick: () => verMusica(pieza) },
+      pieza.diseno_reel?.musica?.elegida != null ? "♪ Música elegida" : "♪ Música") : null,
     puedePublicar && ap.diseno ? marcar("publicacion", "aprobar-publicacion", Boolean(ap.publicacion), ap.publicacion ? "Publicación aprobada" : "Aprobar publicación") : null,
     puedePublicar && ap.diseno && !ap.publicacion ? devolver("Daniela (diseño)") : null,
     ap.publicacion && (rol === "publicacion" || rol === "admin") ? el("button", { clase: "btn btn--primario btn--chico", type: "button",
@@ -510,6 +513,17 @@ async function abrirMusica(pieza) {
   }
 }
 
+async function verMusica(pieza) {
+  // Abre las propuestas que ya existen; si aún no hay, ofrece crearlas.
+  MUSICA.pieza = pieza;
+  $("musica-opciones").replaceChildren(el("p", { clase: "ayuda" }, "Cargando propuestas…"));
+  $("dialogo-musica").showModal();
+  const m = pieza.diseno_reel?.musica;
+  if (m?.opciones?.length) { consultarMusica(); return; }
+  $("musica-opciones").replaceChildren(el("p", { clase: "ayuda" }, "Este reel aún no tiene propuestas de música."),
+    el("button", { clase: "btn btn--primario", type: "button", onclick: () => abrirMusica(pieza) }, "Crear 2 propuestas"));
+}
+
 async function consultarMusica() {
   clearTimeout(MUSICA.timer);
   if (!$("dialogo-musica").open) return;
@@ -517,7 +531,7 @@ async function consultarMusica() {
     const m = await api("musica", { metodo: "POST", cuerpo: { pieza_id: MUSICA.pieza.id, consultar: true } });
     const opciones = m.opciones || [];
     $("musica-opciones").replaceChildren(...opciones.map((o, i) => el("div", { clase: "musica-opcion" },
-      el("strong", {}, `Propuesta ${i + 1}`),
+      el("strong", {}, `Propuesta ${i + 1}${m.elegida === i ? " · ✓ en el video" : ""}`),
       o.estado === "lista" ? el("div", { clase: "musica-opcion__acciones" },
         el("button", { clase: "btn btn--secundario btn--chico", type: "button", onclick: (ev) => escucharMusica(i, ev.currentTarget) }, "▶ Escuchar"),
         el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: () => elegirMusica(i) }, "Usar en el video"))
@@ -549,6 +563,7 @@ async function elegirMusica(i) {
   try {
     await api("musica-elegir", { metodo: "POST", cuerpo: { pieza_id: MUSICA.pieza.id, indice: i } });
     $("dialogo-musica").close();
+    await cargarMes().catch(() => {});
     aviso(i === null ? "El reel queda sin música." : `Listo: el reel usará la propuesta ${i + 1}. Se oye en «Ver reel» y en la descarga.`);
   } catch (e) {
     aviso(`No se pudo elegir la música: ${e.message}`);
