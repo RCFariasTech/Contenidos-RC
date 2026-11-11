@@ -141,9 +141,10 @@ function renderBarra() {
   if (etapaRol && piezas.length) {
     const [previa, quien, que] = etapaRol;
     const faltan = piezas.filter((p) => (previa === "textos" ? p.estado !== "aprobada" : !p.aprobaciones?.[previa]));
+    const listas = piezas.length - faltan.length;
     avisoEtapa = faltan.length
-      ? `Tu revisión se habilita cuando ${quien} apruebe ${que} de las ${piezas.length} piezas. Falta: ${faltan.map((p) => `semana ${p.semana} (${p.formato.toLowerCase()})`).join(", ")}.`
-      : "Tu etapa está abierta: revisa y aprueba cada pieza.";
+      ? `${listas} de ${piezas.length} piezas listas para tu revisión. Esperando a que ${quien} apruebe ${que}: ${faltan.map((p) => `semana ${p.semana} (${p.formato.toLowerCase()})`).join(", ")}.`
+      : "Todas las piezas están listas para tu revisión.";
   }
   $("aviso-etapa").hidden = !avisoEtapa;
   $("aviso-etapa").textContent = avisoEtapa;
@@ -413,18 +414,14 @@ function renderCabecera(pieza, bloqueada) {
 
 const NOMBRE_ROL = { admin: "Reini", diseno: "Daniela", publicacion: "Luís" };
 
-function etapaCompleta(etapa) {
-  const ok = (p) => (etapa === "textos" ? p.estado === "aprobada" : Boolean(p.aprobaciones?.[etapa]));
-  return estado.piezas.length > 0 && estado.piezas.every(ok);
-}
-
 function renderAprobaciones(pieza, bloqueada) {
   const ap = pieza.aprobaciones || {}, rol = estado.rol;
   const chip = (texto, hecho, titulo) => el("span", { clase: `etapa${hecho ? " etapa--hecha" : ""}`, title: titulo },
     `${hecho ? "✓" : "○"} ${texto}`);
   const textosOk = pieza.estado === "aprobada";
-  const puedeDiseno = (rol === "diseno" || rol === "admin") && textosOk && etapaCompleta("textos");
-  const puedePublicar = (rol === "publicacion" || rol === "admin") && etapaCompleta("diseno");
+  // Cada pieza avanza por su cuenta: diseño se abre al aprobarse sus textos; publicación, al aprobarse su diseño.
+  const puedeDiseno = (rol === "diseno" || rol === "admin") && textosOk;
+  const puedePublicar = (rol === "publicacion" || rol === "admin") && Boolean(ap.diseno);
   const marcar = (etapa, ruta, hecho, texto) => el("label", { clase: `aprobar${hecho ? " aprobar--activo" : ""}` },
     el("input", { type: "checkbox", checked: hecho, disabled: bloqueada,
       onchange: async (ev) => {

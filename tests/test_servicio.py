@@ -455,9 +455,11 @@ class TestFlujo(unittest.TestCase):
         daniela, luis = {"email": "daniela@x.co", "rol": "diseno"}, {"email": "luis@x.co", "rol": "publicacion"}
         avisos = []
         with mock.patch.object(servicio.teams, "avisar_etapa", side_effect=lambda *a: avisos.append(a[1])):
-            servicio.aprobar(piezas[0]["id"], True)
-            with self.assertRaises(servicio.ErrorNegocio):              # diseño se abre con las 4 piezas aprobadas
+            with self.assertRaises(servicio.ErrorNegocio):              # sin textos aprobados, no hay diseño
                 servicio.aprobar_etapa(piezas[0]["id"], "diseno", True, daniela)
+            servicio.aprobar(piezas[0]["id"], True)
+            servicio.aprobar_etapa(piezas[0]["id"], "diseno", True, daniela)  # cada pieza avanza por su cuenta
+            servicio.aprobar_etapa(piezas[0]["id"], "diseno", False, daniela)
             for p in piezas[1:]:
                 servicio.aprobar(p["id"], True)
             self.assertEqual(avisos, ["Textos aprobados"])              # aviso a Teams para Daniela
@@ -477,8 +479,9 @@ class TestFlujo(unittest.TestCase):
             fila = servicio.devolver(piezas[1]["id"], "Cambia el ícono", luis)
             self.assertNotIn("diseno", fila["aprobaciones"])
             self.assertEqual(fila["aprobaciones"]["devolucion"]["a"], "diseno")
-            with self.assertRaises(servicio.ErrorNegocio):              # publicación ya no está abierta para todas
-                servicio.aprobar_etapa(piezas[2]["id"], "publicacion", True, luis)
+            with self.assertRaises(servicio.ErrorNegocio):              # la devuelta ya no tiene diseño aprobado
+                servicio.aprobar_etapa(piezas[1]["id"], "publicacion", True, luis)
+            servicio.aprobar_etapa(piezas[2]["id"], "publicacion", True, luis)   # las demás siguen su curso
             # Daniela devuelve a textos: la pieza vuelve a «generada» con un comentario para Reini
             servicio.aprobar_etapa(piezas[1]["id"], "diseno", False, daniela)
             fila = servicio.devolver(piezas[1]["id"], "El gancho no se entiende", daniela)

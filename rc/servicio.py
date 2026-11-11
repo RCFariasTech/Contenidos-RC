@@ -573,17 +573,18 @@ def _limpiar_no_elegidas(pieza_id: int) -> int:
 
 
 def aprobar_etapa(pieza_id: int, etapa: str, aprobada: bool, usuario: dict) -> dict:
-    """Aprueba (o quita la aprobación de) la etapa de diseño o de publicación de una pieza. Cada etapa se abre
-    cuando TODAS las piezas del mes pasaron la anterior."""
+    """Aprueba (o quita la aprobación de) la etapa de diseño o de publicación de una pieza. Cada pieza avanza por su
+    cuenta: se puede aprobar en cuanto ella misma pasó la etapa anterior."""
     if etapa not in ("diseno", "publicacion"):
         raise ErrorNegocio("Etapa desconocida.")
     pieza = _pieza(int(pieza_id))
     previa = ETAPAS[ETAPAS.index(etapa) - 1]
     aprob = dict(pieza.get("aprobaciones") or {})
     if aprobada:
-        if not etapa_completa(pieza["mes_id"], previa):
-            quien = "Reini (textos)" if previa == "textos" else "Daniela (diseño)"
-            raise ErrorNegocio(f"Esta etapa se abre cuando {quien} haya aprobado las 4 piezas.")
+        # Cada pieza avanza por su cuenta: basta con que ESTA pieza haya pasado la etapa anterior.
+        if not _aprobada_en(pieza, previa):
+            quien = "Reini apruebe sus textos" if previa == "textos" else "Daniela apruebe su diseño"
+            raise ErrorNegocio(f"Esta pieza se puede aprobar cuando {quien}.")
         aprob[etapa] = {"por": usuario.get("email"), "en": _ahora()}
         aprob.pop("devolucion", None)
     else:
