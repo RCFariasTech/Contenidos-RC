@@ -231,19 +231,16 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("span", { clase: "texto-item__num", "aria-hidden": "true" }, String(i + 1)),
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
-        i === 0 && estado.editandoGancho === pieza.id ? editorGancho(pieza, campo, max)
+        estado.editando === `${pieza.id}:${campo}` ? editorTexto(pieza, campo, max)
           : el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
-        i === 0 && pieza.id && pieza.estado === "generada" && estado.editandoGancho !== pieza.id
+        pieza.id && pieza.estado === "generada" && estado.editando !== `${pieza.id}:${campo}`
           ? el("div", { clase: "gancho-acciones" },
-            el("button", {
+            i === 0 ? el("button", {
               clase: "btn btn--secundario btn--chico", type: "button",
               title: "Propone con IA un gancho nuevo, distinto de los anteriores (guarda una versión nueva)",
               onclick: () => procesar(pieza.id, "regenerar-gancho"),
-            }, "Otro gancho"),
-            el("button", {
-              clase: "btn btn--texto btn--chico", type: "button", title: "Escribe el gancho a mano",
-              onclick: () => { estado.editandoGancho = pieza.id; render(); $(`gancho-${pieza.id}`)?.focus(); },
-            }, "Editar gancho"))
+            }, "Otro gancho") : null,
+            botonEditar(pieza, campo, i === 0 ? "Editar gancho" : "Editar"))
           : null,
         conMiniaturas && opcionCifra(pieza, i + 1) ? selectorCifra(pieza, i + 1, c[campo] || "") : null,
         conMiniaturas && opcionFoto(pieza, i + 1) ? el("label", { clase: "reel-foto",
@@ -282,13 +279,18 @@ function renderTextos(pieza, conMiniaturas = true) {
     el("ol", { clase: "textos" }, items));
 }
 
-function renderCaption(c) {
+function renderCaption(c, pieza = null) {
+  if (pieza && estado.editando === `${pieza.id}:caption`) {
+    return el("section", { clase: "bloque caption" }, el("h3", {}, "Caption"),
+      editorTexto(pieza, "caption", estado.maxCaption || 150));
+  }
   const cta = c.cta || "";
   let cuerpo = (c.caption || "").trim();
   if (cta && cuerpo.endsWith(cta)) cuerpo = cuerpo.slice(0, -cta.length).trim();
   const parrafos = cuerpo.split(/\n+/).filter(Boolean).map((t) => el("p", {}, t));
   return el("section", { clase: "bloque caption" },
-    el("h3", {}, `Caption · ${contarPalabras(c.caption)} palabras`),
+    el("div", { clase: "bloque__titulo" }, el("h3", {}, `Caption · ${contarPalabras(c.caption)} palabras`),
+      pieza?.id && pieza.estado === "generada" ? el("div", { clase: "gancho-acciones" }, botonEditar(pieza, "caption", "Editar caption")) : null),
     parrafos,
     cta ? el("p", { clase: "caption__cta" }, cta) : null,
     (c.hashtags || []).length
@@ -557,9 +559,17 @@ $("musica-ninguna").addEventListener("click", () => elegirMusica(null));
 $("musica-otra").addEventListener("click", () => abrirMusica(MUSICA.pieza));
 $("dialogo-musica").addEventListener("close", () => { clearTimeout(MUSICA.timer); MUSICA.reproductor?.pause(); });
 
-function editorGancho(pieza, campo, max) {
-  const entrada = el("input", { id: `gancho-${pieza.id}`, clase: "gancho-editor__entrada", type: "text",
-    maxlength: "200", value: pieza.contenido[campo] || "", "aria-label": "Nuevo gancho" });
+function botonEditar(pieza, campo, texto = "Editar") {
+  return el("button", { clase: "btn btn--texto btn--chico", type: "button", title: "Escribe este texto a mano",
+    onclick: () => { estado.editando = `${pieza.id}:${campo}`; render(); $(`editor-${pieza.id}-${campo}`)?.focus(); } }, texto);
+}
+
+function editorTexto(pieza, campo, max) {
+  // Edición manual de una tarjeta, escena o caption: guarda una versión nueva y la pieza se vuelve a validar.
+  const largo = campo === "caption";
+  const entrada = el(largo ? "textarea" : "input", { id: `editor-${pieza.id}-${campo}`, clase: "gancho-editor__entrada",
+    ...(largo ? { rows: "8" } : { type: "text" }), maxlength: largo ? "5000" : "400", "aria-label": "Nuevo texto" });
+  entrada.value = pieza.contenido[campo] || "";
   const cuenta = el("span", { clase: "contador" }, "");
   const contar = () => {
     const n = contarPalabras(entrada.value);
@@ -568,19 +578,20 @@ function editorGancho(pieza, campo, max) {
   };
   entrada.addEventListener("input", contar);
   contar();
+  const cerrar = () => { estado.editando = null; render(); };
   const guardar = () => {
-    estado.editandoGancho = null;
-    accion(pieza.id, () => api("editar-gancho", { metodo: "POST", cuerpo: { pieza_id: pieza.id, gancho: entrada.value } }));
+    estado.editando = null;
+    accion(pieza.id, () => api("editar-texto", { metodo: "POST", cuerpo: { pieza_id: pieza.id, campo, texto: entrada.value } }))
+      .then(() => refrescarMiniaturasDe(pieza));
   };
   entrada.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") { ev.preventDefault(); guardar(); }
-    if (ev.key === "Escape") { estado.editandoGancho = null; render(); }
+    if (ev.key === "Enter" && (!largo || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); guardar(); }
+    if (ev.key === "Escape") cerrar();
   });
   return el("div", { clase: "gancho-editor" }, entrada, cuenta,
     el("div", { clase: "gancho-acciones" },
       el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: guardar }, "Guardar"),
-      el("button", { clase: "btn btn--texto btn--chico", type: "button",
-        onclick: () => { estado.editandoGancho = null; render(); } }, "Cancelar")));
+      el("button", { clase: "btn btn--texto btn--chico", type: "button", onclick: cerrar }, "Cancelar")));
 }
 
 function renderProceso(pieza) {
@@ -645,7 +656,7 @@ function renderPieza(pieza) {
       ...renderAlertas(pieza),
       renderInvestigacion(c.investigacion, pieza.id),
       renderTextos(pieza),
-      renderCaption(c),
+      renderCaption(c, pieza),
       renderComentarios(pieza, bloqueada));
   }
   if (estado.mensajes[pieza.id]) {
@@ -1516,6 +1527,7 @@ async function entrarApp() {
   try {
     const yo = await api("yo");
     estado.rol = yo.rol || "admin";
+    estado.maxCaption = yo.max_palabras_caption || 150;
     document.body.dataset.rol = estado.rol;
   } catch (e) {
     if (e.estado === 401) { Sesion.borrar(); mostrar("login"); return; }

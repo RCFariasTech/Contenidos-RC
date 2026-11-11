@@ -278,35 +278,69 @@ def ajustar_pieza(pieza_id: int) -> dict:
 CAMPO_GANCHO = {"Carrusel": "slide_1_gancho", "Reel": "escena_1_gancho"}
 
 
-def _cambiar_gancho(pieza_id: int, gancho: str, motivo: str) -> dict:
-    """Guarda una versión nueva con el gancho cambiado (el resto del contenido queda igual)."""
+CAMPOS_EDITABLES = {
+    "Carrusel": ("slide_1_gancho", "slide_2", "slide_3", "slide_4", "slide_5_cierre", "caption"),
+    "Reel": ("escena_1_gancho", "escena_2_desarrollo_a", "escena_3_desarrollo_b", "escena_4_desarrollo_c",
+             "escena_5_cta", "caption"),
+}
+
+
+def _cambiar_texto(pieza_id: int, campo: str, texto: str, motivo: str) -> dict:
+    """Guarda una versión nueva con un texto cambiado (tarjeta, escena o caption); el resto queda igual y la pieza
+    se vuelve a validar (las reglas incumplidas aparecen como siempre)."""
+    from rc import tarjetas
     pieza = _pieza(int(pieza_id))
-    campo = CAMPO_GANCHO[pieza["formato"]]
-    gancho = " ".join((gancho or "").split())
-    maximo = validador.LIMITES[pieza["formato"]][campo]
-    if not gancho:
-        raise ErrorNegocio("El gancho no puede quedar vacío.")
-    if len(gancho.split()) > maximo:
-        raise ErrorNegocio(f"El gancho tiene {len(gancho.split())} palabras; el máximo es {maximo}.")
-    if gancho == (pieza.get("contenido") or {}).get(campo):
-        raise ErrorNegocio("El gancho no cambió.")
+    if campo not in CAMPOS_EDITABLES[pieza["formato"]]:
+        raise ErrorNegocio("Ese texto no se puede editar.")
+    texto = (texto or "").strip() if campo == "caption" else " ".join((texto or "").split())
+    nombre = "El caption" if campo == "caption" else "El texto"
+    if not texto:
+        raise ErrorNegocio(f"{nombre} no puede quedar vacío.")
+    a = ajustes()
+    maximo = a["max_palabras_caption"] if campo == "caption" else validador.LIMITES[pieza["formato"]][campo]
+    palabras = len(texto.split())
+    if palabras > maximo:
+        raise ErrorNegocio(f"{nombre} tiene {palabras} palabras; el máximo es {maximo}.")
+    if texto == (pieza.get("contenido") or {}).get(campo):
+        raise ErrorNegocio(f"{nombre} no cambió.")
     reclamada = _reclamar(pieza["id"], "generada", "ajustando")
     if reclamada is None:
-        raise ErrorNegocio("El gancho no se puede cambiar ahora (la pieza está aprobada o en proceso).")
+        raise ErrorNegocio("No se puede editar ahora (la pieza está aprobada o en proceso).")
     try:
-        contenido = {**reclamada["contenido"], campo: gancho}
-        if contenido.get("diseno"):
+        contenido = {**reclamada["contenido"], campo: texto}
+        if contenido.get("diseno") and campo in tarjetas.CAMPOS_SLIDE:
+            # La tarjeta se vuelve a partir en titular + texto: la 1 todo titular, la 5 todo texto, las demás en su
+            # primera oración (o hasta los dos puntos).
+            i = tarjetas.CAMPOS_SLIDE.index(campo)
             diseno = [dict(d) for d in contenido["diseno"]]
-            diseno[0].update(titular=gancho, texto="")
+            if i == 0:
+                diseno[0].update(titular=texto, texto="")
+            elif i == len(tarjetas.CAMPOS_SLIDE) - 1:
+                diseno[i].update(titular="", texto=texto)
+            else:
+                titular, resto = tarjetas._separar(texto)
+                diseno[i].update(titular=titular, texto=resto)
             contenido["diseno"] = diseno
         validacion = reclamada.get("validacion") or {}
-        informe = {"errores": validacion.get("errores", []), "advertencias": validacion.get("advertencias", [])}
-        return _guardar_version(reclamada, contenido, informe, validacion.get("urls", []), {}, motivo)
+        urls = validacion.get("urls", [])
+        historial, hermanas = _contexto(reclamada)
+        informe = validador.validar(reclamada["formato"], contenido, urls, [h["contenido"] for h in historial],
+                                    [h["contenido"] for h in hermanas], a, planificador.hoy_bogota(), fuentes.dominios())
+        return _guardar_version(reclamada, contenido, informe, urls, {}, motivo)
     except Detenida:
         raise
     except Exception:
         db.actualizar("piezas", {"estado": "generada"}, id=f"eq.{pieza['id']}", estado="eq.ajustando")
         raise
+
+
+def _cambiar_gancho(pieza_id: int, gancho: str, motivo: str) -> dict:
+    pieza = _pieza(int(pieza_id))
+    return _cambiar_texto(pieza["id"], CAMPO_GANCHO[pieza["formato"]], gancho, motivo)
+
+
+def editar_texto(pieza_id: int, campo: str, texto: str) -> dict:
+    return _cambiar_texto(pieza_id, campo, texto, "edicion")
 
 
 def regenerar_gancho(pieza_id: int) -> dict:

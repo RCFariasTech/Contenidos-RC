@@ -531,6 +531,20 @@ class TestFlujo(unittest.TestCase):
         servicio.aprobar(piezas[0]["id"], False)
         self.assertEqual(servicio._pieza(piezas[0]["id"])["aprobaciones"], {})
 
+    def test_editar_textos_a_mano(self):
+        carrusel, reel = self._mes_generado()
+        fila = servicio.editar_texto(carrusel["id"], "slide_3", "Dato nuevo: las activaciones medidas venden más. Así se demuestra.")
+        self.assertEqual(fila["contenido"]["slide_3"], "Dato nuevo: las activaciones medidas venden más. Así se demuestra.")
+        self.assertEqual(fila["contenido"]["diseno"][2]["titular"], "Dato nuevo")              # la tarjeta se reparte sola
+        self.assertEqual(fila["contenido"]["slide_2"], carrusel["contenido"]["slide_2"])        # el resto no cambia
+        fila = servicio.editar_texto(reel["id"], "caption", "Un caption nuevo escrito a mano.\n\nCon dos párrafos.")
+        self.assertIn("\n\n", fila["contenido"]["caption"])                                    # respeta los párrafos
+        for campo, texto in (("escena_2_desarrollo_a", " ".join(["palabra"] * 16)), ("tema_especifico", "x"),
+                             ("escena_3_desarrollo_b", "   ")):
+            with self.assertRaises(servicio.ErrorNegocio):
+                servicio.editar_texto(reel["id"], campo, texto)
+        self.assertEqual({v["motivo"] for v in servicio.versiones(reel["id"])}, {"generacion", "edicion"})
+
     def test_krea_caido_no_rompe_la_generacion_de_textos(self):
         mes = date(2026, 11, 1)
         servicio.iniciar_mes(mes)

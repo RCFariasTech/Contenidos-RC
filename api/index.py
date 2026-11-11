@@ -101,7 +101,9 @@ def _entero(cuerpo: dict, campo: str) -> int:
 
 def ruta_yo(req):
     usuario = _dueno(req)
-    return 200, {"email": usuario.get("email"), "rol": usuario["rol"]}
+    from rc.config import ajustes
+    return 200, {"email": usuario.get("email"), "rol": usuario["rol"],
+                 "max_palabras_caption": ajustes()["max_palabras_caption"]}
 
 
 def ruta_mes_actual(req):
@@ -402,6 +404,12 @@ def ruta_ilustracion_animar(req):
     return 200, _servicio().animar_ilustracion(_entero(req["cuerpo"], "id"))
 
 
+def ruta_editar_texto(req):
+    _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().editar_texto(_entero(c, "pieza_id"), str(c.get("campo") or ""), str(c.get("texto") or "")[:5000])
+
+
 def ruta_detener_pieza(req):
     _dueno(req)
     return 200, _servicio().detener_pieza(_entero(req["cuerpo"], "pieza_id"))
@@ -517,6 +525,7 @@ RUTAS = {
     ("GET", "tarjeta-jpg"): ruta_tarjeta_jpg,
     ("POST", "regenerar-gancho"): ruta_regenerar_gancho,
     ("POST", "editar-gancho"): ruta_editar_gancho,
+    ("POST", "editar-texto"): ruta_editar_texto,
     ("POST", "ilustraciones-detener"): ruta_ilustraciones_detener,
     ("POST", "fuentes"): ruta_fuente_agregar,
     ("DELETE", "fuentes"): ruta_fuente_quitar,
