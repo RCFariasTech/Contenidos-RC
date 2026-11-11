@@ -232,15 +232,15 @@ function renderTextos(pieza, conMiniaturas = true) {
       el("div", {},
         el("span", { clase: "texto-item__rol" }, `${pieza.formato === "Reel" ? "Escena" : "Tarjeta"} ${i + 1} · ${rol}`),
         estado.editando === `${pieza.id}:${campo}` ? editorTexto(pieza, campo, max)
-          : el("p", { clase: "texto-item__texto" }, c[campo] || "—"),
-        pieza.id && pieza.estado === "generada" && estado.editando !== `${pieza.id}:${campo}`
+          : textoEditable(pieza, campo, el("p", { clase: "texto-item__texto" }, c[campo] || "—")),
+        i === 0 && pieza.id && pieza.estado === "generada" && estado.editando !== `${pieza.id}:${campo}`
           ? el("div", { clase: "gancho-acciones" },
-            i === 0 ? el("button", {
+            el("button", {
               clase: "btn btn--secundario btn--chico", type: "button",
               title: "Propone con IA un gancho nuevo, distinto de los anteriores (guarda una versión nueva)",
               onclick: () => procesar(pieza.id, "regenerar-gancho"),
-            }, "Otro gancho") : null,
-            botonEditar(pieza, campo, i === 0 ? "Editar gancho" : "Editar"))
+            }, "Otro gancho"),
+            null)
           : null,
         conMiniaturas && opcionCifra(pieza, i + 1) ? selectorCifra(pieza, i + 1, c[campo] || "") : null,
         conMiniaturas && opcionFoto(pieza, i + 1) ? el("label", { clase: "reel-foto",
@@ -287,10 +287,11 @@ function renderCaption(c, pieza = null) {
   const cta = c.cta || "";
   let cuerpo = (c.caption || "").trim();
   if (cta && cuerpo.endsWith(cta)) cuerpo = cuerpo.slice(0, -cta.length).trim();
-  const parrafos = cuerpo.split(/\n+/).filter(Boolean).map((t) => el("p", {}, t));
+  const parrafos = textoEditable(pieza, "caption",
+    el("div", { clase: "caption__cuerpo" }, ...cuerpo.split(/\n+/).filter(Boolean).map((t) => el("p", {}, t))));
   return el("section", { clase: "bloque caption" },
     el("div", { clase: "bloque__titulo" }, el("h3", {}, `Caption · ${contarPalabras(c.caption)} palabras`),
-      pieza?.id && pieza.estado === "generada" ? el("div", { clase: "gancho-acciones" }, botonEditar(pieza, "caption", "Editar caption")) : null),
+      null),
     parrafos,
     cta ? el("p", { clase: "caption__cta" }, cta) : null,
     (c.hashtags || []).length
@@ -574,9 +575,20 @@ $("musica-ninguna").addEventListener("click", () => elegirMusica(null));
 $("musica-otra").addEventListener("click", () => abrirMusica(MUSICA.pieza));
 $("dialogo-musica").addEventListener("close", () => { clearTimeout(MUSICA.timer); MUSICA.reproductor?.pause(); });
 
-function botonEditar(pieza, campo, texto = "Editar") {
-  return el("button", { clase: "btn btn--texto btn--chico", type: "button", title: "Escribe este texto a mano",
-    onclick: () => { estado.editando = `${pieza.id}:${campo}`; render(); $(`editor-${pieza.id}-${campo}`)?.focus(); } }, texto);
+/** Doble clic sobre el texto para editarlo ahí mismo (solo Reini, con la pieza sin aprobar). */
+function textoEditable(pieza, campo, nodo) {
+  if (!pieza?.id || estado.rol !== "admin") return nodo;
+  nodo.classList.add("editable");
+  nodo.title = pieza.estado === "generada" ? "Doble clic para editar" : "Para editar, desmarca «Aprobado»";
+  nodo.addEventListener("dblclick", () => {
+    if (pieza.estado !== "generada") { aviso("Para editar este texto, primero desmarca «Aprobado» en la pieza."); return; }
+    estado.editando = `${pieza.id}:${campo}`;
+    render();
+    const campoEd = $(`editor-${pieza.id}-${campo}`);
+    campoEd?.focus();
+    campoEd?.select?.();
+  });
+  return nodo;
 }
 
 function editorTexto(pieza, campo, max) {
@@ -593,9 +605,14 @@ function editorTexto(pieza, campo, max) {
   };
   entrada.addEventListener("input", contar);
   contar();
-  const cerrar = () => { estado.editando = null; render(); };
+  let hecho = false;
+  const original = entrada.value;
+  const cerrar = () => { if (hecho) return; hecho = true; estado.editando = null; render(); };
   const guardar = () => {
+    if (hecho) return;
+    hecho = true;
     estado.editando = null;
+    if (entrada.value.trim() === original.trim()) { render(); return; }
     accion(pieza.id, () => api("editar-texto", { metodo: "POST", cuerpo: { pieza_id: pieza.id, campo, texto: entrada.value } }))
       .then(() => refrescarMiniaturasDe(pieza));
   };
@@ -603,6 +620,8 @@ function editorTexto(pieza, campo, max) {
     if (ev.key === "Enter" && (!largo || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); guardar(); }
     if (ev.key === "Escape") cerrar();
   });
+  // Al salir del campo (clic fuera) se guarda solo; los botones se atienden antes con mousedown.
+  entrada.addEventListener("blur", () => setTimeout(guardar, 150));
   return el("div", { clase: "gancho-editor" }, entrada, cuenta,
     el("div", { clase: "gancho-acciones" },
       el("button", { clase: "btn btn--primario btn--chico", type: "button", onclick: guardar }, "Guardar"),

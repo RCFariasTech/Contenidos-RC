@@ -511,9 +511,17 @@ class TestFlujo(unittest.TestCase):
             for p in piezas[1:]:
                 servicio.aprobar(p["id"], True)
             self.assertEqual(avisos, ["Textos aprobados"])              # aviso a Teams para Daniela
+            # imágenes de la primera pieza: una elegida y otra no; al aprobar el diseño, la no elegida se borra
+            with mock.patch.object(krea, "configurado", return_value=True), \
+                    mock.patch.object(krea, "crear_trabajo", side_effect=["e", "n"]):
+                servicio.generar_ilustraciones(piezas[0]["id"], 1, descripcion="x", cantidad=2)
+            for f in self.bd.tablas["ilustraciones"]:
+                f.update(estado="lista", url=f"https://gen.krea.ai/images/{f['job_id']}.png")
+            servicio.elegir_ilustracion(self.bd.tablas["ilustraciones"][0]["id"])
             for p in piezas:
                 servicio.aprobar_etapa(p["id"], "diseno", True, daniela)
             self.assertEqual(avisos[-1], "Diseños aprobados")
+            self.assertEqual([f["job_id"] for f in self.bd.tablas["ilustraciones"]], ["e"])   # solo queda la elegida
             servicio.aprobar_etapa(piezas[0]["id"], "publicacion", True, luis)
             # Luís devuelve otra pieza a diseño: pierde la aprobación de diseño
             fila = servicio.devolver(piezas[1]["id"], "Cambia el ícono", luis)

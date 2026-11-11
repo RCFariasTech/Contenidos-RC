@@ -320,3 +320,12 @@ body:not([data-rol="admin"]) :is(#btn-generar, #btn-ajustes, .pieza__controles >
 .pieza__resumen { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pieza__gancho { margin: 0; font-family: "Arial Black", Arial, sans-serif; font-size: 1.1rem; }
 .pieza__plegar { display: flex; justify-content: flex-end; margin-bottom: -8px; }
+.editable { cursor: text; border-radius: 6px; transition: background .15s; }
+body[data-rol="admin"] .editable:hover { background: rgba(0, 94, 255, .07); outline: 1px dashed rgba(0, 94, 255, .35); outline-offset: 2px; }
+.reel-marco { position: relative; }
+.reel-marco .reel-lienzo { display: block; }
+.reel-preparando { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; padding: 20px; text-align: center;
+  background: rgba(18, 36, 74, .82); color: #fff; border-radius: 10px; }
+.reel-preparando[hidden] { display: none; }
+.reel-preparando p { margin: 0; font-size: .95rem; }
+.reel-preparando progress { width: 200px; height: 8px; accent-color: #005eff; }

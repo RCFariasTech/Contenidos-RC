@@ -44,7 +44,7 @@
         <div class="barra-mes__acciones">
           <button id="btn-generar" class="btn btn--primario" type="button" hidden>Generar propuestas</button>
           <button id="btn-ajustes" class="btn btn--primario" type="button" disabled>Aplicar ajustes</button>
-          <button id="btn-pptx" class="btn btn--secundario" type="button" disabled
+          <button id="btn-pptx" class="btn btn--secundario" type="button" disabled hidden
                   title="Se habilita cuando las 4 piezas están aprobadas">Descargar PowerPoint</button>
           <button id="btn-enviar" class="btn btn--secundario" type="button" disabled
                   title="Se habilita cuando las 4 piezas están aprobadas">Enviar por correo</button>
@@ -176,7 +176,13 @@
     <dialog id="dialogo-reel" class="dialogo dialogo--reel" aria-labelledby="titulo-reel">
       <h2 id="titulo-reel">Reel terminado</h2>
       <div class="reel-cuerpo">
-        <canvas id="reel-lienzo" class="reel-lienzo" width="1080" height="1920" aria-label="Vista previa del reel"></canvas>
+        <div class="reel-marco">
+          <canvas id="reel-lienzo" class="reel-lienzo" width="1080" height="1920" aria-label="Vista previa del reel"></canvas>
+          <div id="reel-preparando" class="reel-preparando" role="status" hidden>
+            <p id="reel-prep-texto">Preparando escenas…</p>
+            <progress id="reel-prep" max="100" value="0"></progress>
+          </div>
+        </div>
         <div class="reel-panel">
           <p class="ayuda">El reel se reproduce completo en bucle: textos animados, ícono animado en la escena 1 y la transición elegida entre escenas. «Descargar video» lo graba (sin sonido, 1080 × 1920). Cada escena dura según su tiempo de lectura (~3 palabras por segundo).</p>
           <fieldset class="reel-transiciones-caja"><legend>Transiciones</legend><div id="reel-transiciones"></div></fieldset>

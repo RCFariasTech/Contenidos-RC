@@ -558,6 +558,20 @@ def _avisar_si_etapa_completa(mes_id: int, etapa: str) -> None:
     teams.avisar_etapa(mes, nombres[etapa], texto)
 
 
+def _limpiar_no_elegidas(pieza_id: int) -> int:
+    """Diseño aprobado: borra las imágenes y animaciones que no se eligieron (no ocupan espacio en Supabase).
+    Nunca hace fallar la aprobación."""
+    borradas = 0
+    tarjetas_con_imagenes = {int(f["tarjeta"]) for f in
+                             db.seleccionar("ilustraciones", select="tarjeta", pieza_id=f"eq.{int(pieza_id)}")}
+    for tarjeta in sorted(tarjetas_con_imagenes):
+        try:
+            borradas += borrar_ilustraciones(pieza_id, tarjeta)["borradas"]
+        except Exception:  # noqa: BLE001
+            log.warning("No se pudieron borrar las imágenes no usadas de la tarjeta %s", tarjeta, exc_info=True)
+    return borradas
+
+
 def aprobar_etapa(pieza_id: int, etapa: str, aprobada: bool, usuario: dict) -> dict:
     """Aprueba (o quita la aprobación de) la etapa de diseño o de publicación de una pieza. Cada etapa se abre
     cuando TODAS las piezas del mes pasaron la anterior."""
@@ -577,6 +591,8 @@ def aprobar_etapa(pieza_id: int, etapa: str, aprobada: bool, usuario: dict) -> d
         if etapa == "diseno":
             aprob.pop("publicacion", None)
     fila = db.actualizar("piezas", {"aprobaciones": aprob}, id=f"eq.{pieza['id']}")[0]
+    if aprobada and etapa == "diseno":
+        _limpiar_no_elegidas(pieza["id"])
     if aprobada:
         _avisar_si_etapa_completa(pieza["mes_id"], etapa)
     return fila

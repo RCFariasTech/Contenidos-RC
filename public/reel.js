@@ -412,6 +412,25 @@ function cancelarGrabacion() {
   if (REEL.grabador?.state === "recording") REEL.grabador.stop();
 }
 
+function avance(pct, texto) {
+  // Barra de preparación sobre la vista previa: escenas, transiciones, ícono animado y música.
+  const caja = $("reel-preparando");
+  if (pct === null) { caja.hidden = true; clearInterval(REEL.relleno); return; }
+  caja.hidden = false;
+  $("reel-prep").value = pct;
+  if (texto) $("reel-prep-texto").textContent = texto;
+}
+
+function avanceMientras(desde, hasta, texto) {
+  // Mientras el servidor arma las escenas (no informa avance), la barra avanza sola y se frena antes de `hasta`.
+  avance(desde, texto);
+  clearInterval(REEL.relleno);
+  REEL.relleno = setInterval(() => {
+    const v = $("reel-prep").value;
+    $("reel-prep").value = v + (hasta - v) * 0.06;
+  }, 250);
+}
+
 async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, descargarPublicacion = false } = {}) {
   REEL.pieza = pieza;
   REEL.datos = null;
@@ -432,17 +451,22 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, desca
     } }, ...TRANSICIONES.map(([v, t]) => el("option", { value: v, selected: v === trans[i - 1] }, t))))));
   if (!$("dialogo-reel").open) $("dialogo-reel").showModal();
   try {
+    avanceMientras(3, 60, "Armando las escenas y los textos…");
     const [datos] = await Promise.all([api(`reel-animable?pieza=${pieza.id}`), cargarFuentes()]);
+    clearInterval(REEL.relleno);
+    avance(62, "Preparando las transiciones…");
     const lienzo = $("reel-lienzo");
     lienzo.width = datos.ancho;
     lienzo.height = datos.alto;
     REEL.buf = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: datos.ancho, height: datos.alto }));
     REEL.aux = document.createElement("canvas");
     REEL.imagenes = await Promise.all(datos.escenas.map((e) => cargarImagen(e.fondo)));
+    avance(72, "Preparando las fotos…");
     REEL.fotos = await Promise.all(datos.escenas.map((e) => (e.foto ? cargarImagen(e.foto.src) : null)));
     REEL.video = null;
     REEL.videoGrabable = false;
     if (datos.video_escena_1) {
+      avance(80, "Cargando el ícono animado…");
       const r = await cargarVideoIcono(pieza, datos.video_escena_1.url);
       REEL.video = r.video;
       REEL.videoGrabable = r.grabable;
@@ -454,6 +478,7 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, desca
     REEL.audio = null;
     REEL.audioBuffer = null;
     if (datos.musica) {
+      avance(90, "Cargando la música…");
       try {
         const r = await fetch(`/api/musica-audio?pieza=${pieza.id}`,
           { headers: { Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` } });
@@ -466,13 +491,16 @@ async function abrirReel(pieza, { reproducir: autoplay = false, desde = 0, desca
         }
       } catch { /* sin música */ }
     }
+    avance(100, "Listo");
     REEL.datos = datos;  // listo: recién ahora el reproductor puede dibujar
+    setTimeout(() => avance(null), 250);
     controlesReel(true);
     estadoReel(datos.video_escena_1 ? "" : "Aún no hay ícono animado listo para la escena 1: el reel usa el ícono fijo.");
     REEL.t = autoplay ? inicioEscena(Math.min(desde, datos.escenas.length - 1)) : 1.5;
     if (descargarPublicacion) { arrancarBucle(); descargarReel(); }
     else if (autoplay) reproducir(); else arrancarBucle();
   } catch (e) {
+    avance(null);
     estadoReel(`No se pudo preparar el reel: ${e.message}`);
   }
 }
@@ -502,6 +530,7 @@ $("dialogo-reel").addEventListener("close", () => {
   REEL.grabando = false;
   REEL.video?.pause();
   REEL.audio?.pause();
+  avance(null);
   cancelAnimationFrame(REEL.bucle);
   REEL.bucle = 0;
 });
