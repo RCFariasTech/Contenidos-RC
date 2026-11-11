@@ -1494,6 +1494,84 @@ $("form-login").addEventListener("submit", async (ev) => {
 
 $("btn-salir").addEventListener("click", () => { Sesion.borrar(); mostrar("login"); });
 
+// ---------- restablecer contraseña (Supabase Auth: enlace por correo) ----------
+
+function pantallaLogin(cual) {
+  // cual: "ingresar" | "recuperar" | "nueva"
+  $("form-login").hidden = cual !== "ingresar";
+  $("form-recuperar").hidden = cual !== "recuperar";
+  $("form-nueva-clave").hidden = cual !== "nueva";
+  document.querySelector("#vista-login h1").textContent =
+    { ingresar: "Ingresar", recuperar: "Restablecer contraseña", nueva: "Nueva contraseña" }[cual];
+  mostrar("login");
+}
+
+$("btn-olvide").addEventListener("click", () => {
+  $("email-recuperar").value = $("email").value;
+  $("recuperar-mensaje").textContent = "";
+  pantallaLogin("recuperar");
+  $("email-recuperar").focus();
+});
+$("btn-volver-login").addEventListener("click", () => pantallaLogin("ingresar"));
+
+$("form-recuperar").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const boton = ev.submitter;
+  boton.disabled = true;
+  const destino = encodeURIComponent(`${location.origin}/`);
+  try {
+    await fetch(`${config.supabase_url}/auth/v1/recover?redirect_to=${destino}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: config.supabase_anon_key },
+      body: JSON.stringify({ email: $("email-recuperar").value.trim() }),
+    });
+    // Mismo mensaje exista o no la cuenta (no revela qué correos están registrados).
+    $("recuperar-mensaje").textContent = "Si ese correo tiene una cuenta, te llegará un enlace en unos minutos. Revisa también la carpeta de spam.";
+  } catch {
+    $("recuperar-mensaje").textContent = "No se pudo enviar el enlace. Intenta de nuevo.";
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("form-nueva-clave").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const clave = $("clave-nueva").value;
+  $("nueva-clave-error").textContent = "";
+  if (clave.length < 8) { $("nueva-clave-error").textContent = "La contraseña debe tener al menos 8 caracteres."; return; }
+  if (clave !== $("clave-nueva-2").value) { $("nueva-clave-error").textContent = "Las contraseñas no coinciden."; return; }
+  const r = await fetch(`${config.supabase_url}/auth/v1/user`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", apikey: config.supabase_anon_key,
+      Authorization: `Bearer ${Sesion.leer()?.access_token || ""}` },
+    body: JSON.stringify({ password: clave }),
+  });
+  const datos = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    $("nueva-clave-error").textContent = datos.msg || datos.error_description || "No se pudo guardar. Pide un enlace nuevo.";
+    return;
+  }
+  $("clave-nueva").value = $("clave-nueva-2").value = "";
+  pantallaLogin("ingresar");
+  await entrarApp();
+});
+
+/** Enlace del correo (restablecer contraseña o invitación): trae la sesión en el fragmento de la URL. */
+function leerEnlaceDeCorreo() {
+  const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (!h.toString()) return null;
+  history.replaceState(null, "", location.pathname + location.search);  // no dejar los tokens en la barra
+  if (h.get("error") || h.get("error_description")) {
+    return { error: "El enlace no es válido o ya venció. Pide uno nuevo con «¿Olvidaste tu contraseña?»." };
+  }
+  const tipo = h.get("type");
+  if (h.get("access_token") && ["recovery", "invite", "signup"].includes(tipo)) {
+    Sesion.guardar({ access_token: h.get("access_token"), refresh_token: h.get("refresh_token") });
+    return { tipo };
+  }
+  return null;
+}
+
 (async () => {
   try {
     await cargarConfig();
@@ -1502,6 +1580,9 @@ $("btn-salir").addEventListener("click", () => { Sesion.borrar(); mostrar("login
     $("login-error").textContent = e.message;
     return;
   }
+  const enlace = leerEnlaceDeCorreo();
+  if (enlace?.error) { pantallaLogin("ingresar"); $("login-error").textContent = enlace.error; return; }
+  if (enlace) { pantallaLogin("nueva"); $("clave-nueva").focus(); return; }  // crear o cambiar la contraseña
   if (Sesion.leer()) await entrarApp(); else mostrar("login");
 })();
 

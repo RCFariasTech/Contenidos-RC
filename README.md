@@ -86,6 +86,8 @@ Junto al texto de cada tarjeta o escena se ve su miniatura gráfica desde el pri
 
 **Limpieza.** Al aprobarse el diseño de una pieza se borran de la base de datos las imágenes y animaciones que no se eligieron. La exportación a PowerPoint y su envío por correo se eliminaron: la entrega es con «Descargar para publicar».
 
+**Contraseñas.** En el ingreso, «¿Olvidaste tu contraseña?» envía (Supabase Auth) un enlace al correo; al abrirlo, la app pide la contraseña nueva. El mismo formulario sirve para el enlace de invitación (crear la contraseña la primera vez). En Supabase → Authentication → URL Configuration, «Site URL» debe ser `https://contenidos-rc.vercel.app` (y estar en «Redirect URLs»).
+
 **Aprobaciones en 3 tiempos.** 1) Reini (`OWNER_EMAIL`, administrador: puede todo) revisa investigación y textos y aprueba cada pieza. 2) Cuando las 4 piezas tienen ese aprobado, Daniela (`DISENO_EMAILS`) revisa diseños y animaciones y aprueba cada pieza (puede generar y elegir imágenes, animar, elegir cifras, fotos y música). 3) Cuando Daniela aprueba las 4, Luís (`PUBLICACION_EMAILS`) da la aprobación final y descarga. Cada etapa puede **devolver** una pieza con una nota: Luís → diseño; Daniela → textos (la nota queda como comentario para «Aplicar ajustes»). Al completarse una etapa o devolverse una pieza se avisa a Teams (`TEAMS_WEBHOOK_URL`). Daniela y Luís necesitan una cuenta en Supabase Auth con esos correos; no ven los controles de textos.
 
 **Descarga para publicar (Luís).** Carrusel: un ZIP `Semana_N_carrusel.zip` con `Semana_N_tarjeta_01.jpg` … `05.jpg` (1080 × 1350) y `Semana_N_carrusel_LinkedIn.pdf` con todas las tarjetas (se arma en el navegador con JSZip y jsPDF). Reel: solo `Semana_N_reel.mp4`, grabado con la música elegida.

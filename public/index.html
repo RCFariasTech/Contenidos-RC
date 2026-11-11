@@ -23,6 +23,26 @@
         <input id="clave" type="password" autocomplete="current-password" required>
         <button type="submit" class="btn btn--primario btn--bloque">Ingresar</button>
         <p id="login-error" class="mensaje mensaje--error" role="alert"></p>
+        <button id="btn-olvide" type="button" class="btn btn--texto">¿Olvidaste tu contraseña?</button>
+      </form>
+
+      <form id="form-recuperar" hidden>
+        <p class="ayuda">Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.</p>
+        <label for="email-recuperar">Correo</label>
+        <input id="email-recuperar" type="email" autocomplete="username" required>
+        <button type="submit" class="btn btn--primario btn--bloque">Enviar enlace</button>
+        <p id="recuperar-mensaje" class="mensaje" role="status"></p>
+        <button id="btn-volver-login" type="button" class="btn btn--texto">Volver a ingresar</button>
+      </form>
+
+      <form id="form-nueva-clave" hidden>
+        <p class="ayuda">Crea tu contraseña (mínimo 8 caracteres).</p>
+        <label for="clave-nueva">Contraseña nueva</label>
+        <input id="clave-nueva" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="clave-nueva-2">Repite la contraseña</label>
+        <input id="clave-nueva-2" type="password" autocomplete="new-password" minlength="8" required>
+        <button type="submit" class="btn btn--primario btn--bloque">Guardar contraseña</button>
+        <p id="nueva-clave-error" class="mensaje mensaje--error" role="alert"></p>
       </form>
     </section>
 
