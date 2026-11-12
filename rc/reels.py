@@ -212,11 +212,11 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
             abajo_vis = total  # termina en la línea de base de la cifra
         alto_vis = abajo_vis - arriba_vis
         y = max(ARRIBA, min((H - alto_vis) / 2 - arriba_vis, ABAJO - total))
-        usado = L.bloque(antes, TITULO, tema["texto"], M, y, ancho_txt, h_antes + 2, tam_txt, inter=INTER_TXT)
+        usado = L.bloque(antes, TITULO, tema.get("texto_dato", tema["texto"]), M, y, ancho_txt, h_antes + 2, tam_txt, inter=INTER_TXT)
         y += usado + (40 if usado else 0)
         L.texto(cifra, TITULO, tam, tema["cifra"], M - tam * 0.04, H - y - tam * 0.86, rol="cifra")
         y += tam * 0.86 + SEPARACION
-        L.bloque(despues, TITULO, tema["texto"], M, y, ancho_txt, h_despues + 2, tam_txt, inter=INTER_TXT)
+        L.bloque(despues, TITULO, tema.get("texto_dato", tema["texto"]), M, y, ancho_txt, h_despues + 2, tam_txt, inter=INTER_TXT)
         return
     if numero in L.fotos:  # foto con velo del color de la escena arriba (como la tarjeta 2 del carrusel) y texto abajo
         alto_foto = ALTO_FOTO

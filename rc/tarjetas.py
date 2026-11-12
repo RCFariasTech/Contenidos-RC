@@ -289,7 +289,8 @@ TEMAS = {
     "marino": {"titulo": "gris", "texto": "blanco", "cifra": "gris", "linea": "blanco", "acento": "rojo", "logos": "blanco"},
     "azul": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "linea": "blanco", "acento": "marino", "logos": "blanco"},
     "gris": {"titulo": "marino", "texto": "marino", "cifra": "rojo", "linea": "marino", "acento": "rojo", "logos": "marino"},
-    "rojo2": {"titulo": "blanco", "texto": "blanco", "cifra": "gris", "linea": "blanco", "acento": "marino", "logos": "blanco"},
+    # Sobre rojo, en las tarjetas y escenas con cifra: cifra blanca y el resto del texto beige (gris claro #C9CACB).
+    "rojo2": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "texto_dato": "gris", "linea": "blanco", "acento": "marino", "logos": "blanco"},
 }
 
 
@@ -498,7 +499,7 @@ def t4_dato(L, d):
     # que de la línea base de la cifra al tope de las mayúsculas del renglón siguiente.
     aire = 60 + 46 * (0.9 - ALTO_MAYUS)
     if (antes or "").strip():
-        usado = L.bloque(antes, TEXTO, tema["texto"], M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
+        usado = L.bloque(antes, TEXTO, tema.get("texto_dato", tema["texto"]), M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
         base_antes = 120 + usado - 46 * 1.3 + 46 * 0.9
         y = base_antes + aire - tam * (0.86 - ALTO_CIFRA)
     else:
@@ -507,7 +508,7 @@ def t4_dato(L, d):
     L.c.setFont(TITULO, tam)
     L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
     y += tam * 0.86 + 60
-    L.bloque(despues, TEXTO, tema["texto"], M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
+    L.bloque(despues, TEXTO, tema.get("texto_dato", tema["texto"]), M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
 
 
 def t5_cierre(L, d):
