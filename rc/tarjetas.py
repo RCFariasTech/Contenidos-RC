@@ -306,15 +306,23 @@ def t1_gancho(L, d):
     datos = _fondo_con_imagen(L, L.imagenes.get(1))
     ancho, alto = AREA_IMAGEN[1]
     x, y_sup = W - ancho - 50, H - alto - 50
-    # Gancho como la portada del reel: Space Grotesk Light en mayúsculas, alineado a la izquierda en la zona de arriba
-    # como máximo en 2/3 del ancho útil (2 de 3 columnas); si es largo, la letra se reduce para que quepa.
-    from rc.reels import GANCHO_TAM, GANCHO_INTER
-    ancho_titular = (W - 2 * M) * 2 / 3
-    alto_max = H - AREA_IMAGEN[1][1] - 50 - 110 - (150 if d.get("texto") else 30)
-    usado = L.bloque((d["titular"] or "").upper(), TITULO_LIGERO, tema["titulo"], M, 110, ancho_titular, alto_max,
-                     GANCHO_TAM, inter=GANCHO_INTER)
-    if d.get("texto"):
-        L.bloque(d["texto"], TEXTO, tema["texto"], M, 140 + usado, ancho_titular, 120, 34)
+    # Gancho como la portada del reel (Space Grotesk Light en mayúsculas), con la letra más grande que quepa en un área
+    # invisible de 2/3 del ancho (desde la izquierda) por 1/2 del alto (desde arriba), centrado en ella. Las líneas
+    # quedan alineadas a la izquierda entre sí.
+    from rc.reels import GANCHO_INTER
+    ax, ay, aw, ah = M, M, W * 2 / 3 - M, H / 2 - M
+    secundario = (d.get("texto") or "").strip()
+    alto_sec = 130 if secundario else 0
+    titular = (d["titular"] or "").upper()
+    if titular.strip():
+        tam, lineas = ajustar(titular, TITULO_LIGERO, aw, ah - alto_sec, 240, GANCHO_INTER)
+        ancho_txt = max(stringWidth(ln, TITULO_LIGERO, tam) for ln in lineas)
+        alto_txt = len(lineas) * tam * GANCHO_INTER - tam * (GANCHO_INTER - 0.75)  # hasta la línea base
+        x0 = ax + (aw - ancho_txt) / 2
+        y0 = ay + (ah - alto_sec - alto_txt) / 2 - tam * 0.15
+        L.bloque(titular, TITULO_LIGERO, tema["titulo"], x0, y0, ancho_txt + 1, ah, tam, inter=GANCHO_INTER)
+        if secundario:
+            L.bloque(secundario, TEXTO, tema["texto"], x0, y0 + alto_txt + tam * 0.4, aw, 120, 34)
     if datos:
         try:
             L.png(recortar(datos, ancho, alto, borde_suave=True), x, y_sup, ancho, alto)
