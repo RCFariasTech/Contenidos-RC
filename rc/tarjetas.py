@@ -286,11 +286,11 @@ ROTACION = ("marino", "azul", "gris", "rojo2")
 # Por fondo: color del titular, del texto, de la cifra, de los trazos del ícono de línea y de su acento, de las comillas
 # y versión de los logos.
 TEMAS = {
-    "marino": {"titulo": "gris", "texto": "blanco", "cifra": "blanco", "texto_dato": "gris", "linea": "blanco", "acento": "rojo", "logos": "blanco"},
+    "marino": {"titulo": "gris", "texto": "blanco", "cifra": "blanco", "linea": "blanco", "acento": "rojo", "logos": "blanco"},
     "azul": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "linea": "blanco", "acento": "marino", "logos": "blanco"},
     "gris": {"titulo": "marino", "texto": "marino", "cifra": "rojo", "linea": "marino", "acento": "rojo", "logos": "marino"},
-    # Sobre marino y rojo, en las tarjetas y escenas con cifra: cifra blanca y el resto del texto beige (gris claro #C9CACB).
-    "rojo2": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "texto_dato": "gris", "linea": "blanco", "acento": "marino", "logos": "blanco"},
+    # Sobre marino y rojo, la cifra y el texto van en blanco (en beige no se leía bien con mucho texto).
+    "rojo2": {"titulo": "blanco", "texto": "blanco", "cifra": "blanco", "linea": "blanco", "acento": "marino", "logos": "blanco"},
 }
 
 
