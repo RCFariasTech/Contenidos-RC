@@ -63,9 +63,9 @@ def iconos_linea() -> tuple[str, ...]:
 
 # ---------- texto ----------
 
-def envolver(texto, fuente, tam, ancho):
+def _envolver_voraz(palabras, fuente, tam, ancho):
     lineas, actual = [], ""
-    for palabra in texto.split():
+    for palabra in palabras:
         prueba = f"{actual} {palabra}".strip()
         if stringWidth(prueba, fuente, tam) <= ancho or not actual:
             actual = prueba
@@ -75,6 +75,50 @@ def envolver(texto, fuente, tam, ancho):
     if actual:
         lineas.append(actual)
     return lineas
+
+
+def envolver(texto, fuente, tam, ancho):
+    """Parte el texto en renglones de largo parejo (como `text-wrap: balance`): con el mismo número de renglones que
+    cabe en `ancho`, busca el ancho más angosto posible, para que no queden renglones muy largos junto a otros muy
+    cortos. Nunca parte palabras."""
+    palabras = texto.split()
+    lineas = _envolver_voraz(palabras, fuente, tam, ancho)
+    if len(lineas) < 2:
+        return lineas
+    # Programación dinámica: entre todas las formas de repartir las palabras en esos n renglones (sin pasarse del
+    # ancho), la de renglones más parejos (menor suma de cuadrados de la diferencia con el largo promedio).
+    n, k = len(lineas), len(palabras)
+    largo = {}
+
+    def w(i, j):
+        if (i, j) not in largo:
+            largo[(i, j)] = stringWidth(" ".join(palabras[i:j]), fuente, tam)
+        return largo[(i, j)]
+
+    meta = w(0, k) / n
+    INF = float("inf")
+    costo = [[INF] * (k + 1) for _ in range(n + 1)]
+    corte = [[0] * (k + 1) for _ in range(n + 1)]
+    costo[0][0] = 0
+    for r in range(1, n + 1):
+        for j in range(r, k + 1):
+            for i in range(r - 1, j):
+                if costo[r - 1][i] == INF:
+                    continue
+                ancho_ij = w(i, j)
+                if ancho_ij > ancho and j - i > 1:
+                    continue
+                c = costo[r - 1][i] + (ancho_ij - meta) ** 2
+                if c < costo[r][j]:
+                    costo[r][j], corte[r][j] = c, i
+    if costo[n][k] == INF:
+        return lineas
+    resultado, j = [], k
+    for r in range(n, 0, -1):
+        i = corte[r][j]
+        resultado.append(" ".join(palabras[i:j]))
+        j = i
+    return resultado[::-1]
 
 
 TAM_MINIMO = 16  # suelo absoluto: el texto siempre debe caber completo, aunque la letra quede pequeña
