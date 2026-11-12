@@ -519,6 +519,7 @@ def _error_conocido(e: Exception):
         return 400, {"error": "JSON inválido"}
     nombre = type(e).__name__
     if nombre == "ErrorNegocio":
+        logging.getLogger(__name__).info("409: %s", e)  # deja el motivo en los registros de Vercel
         return 409, {"error": str(e)}
     if nombre == "ErrorGeneracion":
         return 502, {"error": f"No se pudo generar con Claude: {e}"}

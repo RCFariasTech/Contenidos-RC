@@ -227,14 +227,15 @@ def describir_ilustracion(tema: str, titular: str, texto: str, nota: str = "", t
     try:
         respuesta = _cliente().messages.create(
             # Modelo rápido: es una descripción corta y el usuario espera con el panel abierto.
-            model=ajustes().get("modelo_sugerencias") or ajustes()["modelo"], max_tokens=400, system=sistema,
+            model=ajustes().get("modelo_sugerencias") or ajustes()["modelo"], max_tokens=1500, system=sistema,
             messages=[{"role": "user", "content": usuario}])
     except anthropic.APIError as e:
         raise ErrorGeneracion(f"No se pudo sugerir la descripción: {e}") from e
     descripcion = " ".join(b.text for b in respuesta.content if getattr(b, "type", None) == "text").strip()
     if not descripcion:
-        raise ErrorGeneracion("El modelo no devolvió la descripción.")
-    return " ".join(descripcion.split()).strip('"').strip()[:500]
+        log.warning("Sugerencia de imagen vacía (stop_reason=%s)", getattr(respuesta, "stop_reason", "?"))
+        raise ErrorGeneracion("El modelo no devolvió la descripción; intenta de nuevo.")
+    return " ".join(descripcion.split()).strip('"«»').strip()[:500]
 
 
 def proponer_gancho(formato: str, contenido: dict, evitar: list[str], max_palabras: int) -> str:
