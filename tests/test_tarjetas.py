@@ -20,7 +20,7 @@ class TestTarjetas(unittest.TestCase):
         self.assertEqual((doc[0].rect.width, doc[0].rect.height), (1080, 1350))
         fuentes = {f[3] for f in doc[0].get_fonts()}
         self.assertTrue(any("SpaceGrotesk-Bold" in f for f in fuentes), fuentes)   # titular gancho en bold
-        self.assertIn("Tu góndola ya es un medio", " ".join(doc[0].get_text().split()))
+        self.assertIn("TU GÓNDOLA YA ES UN MEDIO", " ".join(doc[0].get_text().split()))
         self.assertIn("Constellation", doc[4].get_text())
 
     def test_contenido_viejo_sin_diseno(self):

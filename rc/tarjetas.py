@@ -306,11 +306,15 @@ def t1_gancho(L, d):
     datos = _fondo_con_imagen(L, L.imagenes.get(1))
     ancho, alto = AREA_IMAGEN[1]
     x, y_sup = W - ancho - 50, H - alto - 50
-    # El titular ocupa como máximo 2/3 del ancho útil (2 de 3 columnas) y crece en renglones hacia abajo.
-    ancho_titular = (W - 2 * M) * 2 / 3
-    usado = L.bloque(d["titular"], TITULO, tema["titulo"], M, 110, ancho_titular, 470, 130, inter=1.0)
+    # Gancho como la portada del reel: Space Grotesk Light en mayúsculas, alineado a la izquierda en la zona de arriba
+    # (todo el ancho útil, hasta donde empieza la ilustración); si es largo, la letra se reduce para que quepa.
+    from rc.reels import GANCHO_TAM, GANCHO_INTER
+    ancho_titular = W - 2 * M
+    alto_max = H - AREA_IMAGEN[1][1] - 50 - 110 - (150 if d.get("texto") else 30)
+    usado = L.bloque((d["titular"] or "").upper(), TITULO_LIGERO, tema["titulo"], M, 110, ancho_titular, alto_max,
+                     GANCHO_TAM, inter=GANCHO_INTER)
     if d.get("texto"):
-        L.bloque(d["texto"], TEXTO, tema["texto"], M, 150 + usado, ancho_titular, 120, 34)
+        L.bloque(d["texto"], TEXTO, tema["texto"], M, 140 + usado, ancho_titular * 2 / 3, 120, 34)
     if datos:
         try:
             L.png(recortar(datos, ancho, alto, borde_suave=True), x, y_sup, ancho, alto)
