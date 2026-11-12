@@ -439,16 +439,26 @@ def separar_cifra(texto: str, preferida: str | None = None) -> tuple[str, str, s
     return texto, "", ""
 
 
+ALTO_MAYUS, ALTO_CIFRA = 0.70, 0.72  # alto de mayúsculas del texto y de los números de la cifra (fracción del cuerpo)
+
+
 def t4_dato(L, d):
     tema = TEMAS[L.fondo_clave]
     todo = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     antes, cifra, despues = separar_cifra(todo, d.get("cifra"))
     L.fondo(L.fondo_clave)
-    usado = L.bloque(antes, TEXTO, tema["texto"], M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
-    y = 120 + usado + 30
     tam = 300
     while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
         tam -= 10
+    # Mismo aire visual arriba y abajo de la cifra: de la línea base del texto anterior al tope de la cifra, igual
+    # que de la línea base de la cifra al tope de las mayúsculas del renglón siguiente.
+    aire = 60 + 46 * (0.9 - ALTO_MAYUS)
+    if (antes or "").strip():
+        usado = L.bloque(antes, TEXTO, tema["texto"], M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
+        base_antes = 120 + usado - 46 * 1.3 + 46 * 0.9
+        y = base_antes + aire - tam * (0.86 - ALTO_CIFRA)
+    else:
+        y = 120
     L.c.setFillColor(L.col[tema["cifra"]])
     L.c.setFont(TITULO, tam)
     L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
