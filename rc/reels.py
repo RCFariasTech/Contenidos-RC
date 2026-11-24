@@ -34,6 +34,10 @@ class _Hoja:
         self.fondo_clave, self.tarjeta, self.ancho, self.alto = "marino", 0, W, H
         self.fotos = ()
         self.cifras = {}  # {"escena": cifra elegida para resaltar}
+        self.espejo = False  # diagramación espejo: imagen y texto alineados a la derecha
+
+    def x(self, x, ancho):
+        return W - x - ancho if self.espejo else x
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color])
@@ -51,6 +55,8 @@ class _Hoja:
 
     def texto(self, ln, fuente, tam, color, x, y, linea=0, rol="texto"):
         """Una línea de texto (y = línea de base desde abajo), dibujada o anotada para animarla."""
+        if self.espejo:
+            x = W - x - stringWidth(ln, fuente, tam)
         if self.registro is not None:
             self.registro.append({"texto": ln, "fuente": fuente, "tam": tam, "x": x, "y": H - y, "linea": linea,
                                   "color": "#" + self.col[color].hexval()[2:].upper(), "rol": rol})
@@ -61,14 +67,14 @@ class _Hoja:
 
     def png(self, datos, x, y_sup, ancho, alto):
         from reportlab.lib.utils import ImageReader
-        self.c.drawImage(ImageReader(io.BytesIO(datos)), x, H - y_sup - alto, ancho, alto, mask="auto",
+        self.c.drawImage(ImageReader(io.BytesIO(datos)), self.x(x, ancho), H - y_sup - alto, ancho, alto, mask="auto",
                          preserveAspectRatio=True, anchor="sw")
 
     def guia(self, x, y_sup, ancho, alto, rotulo, tinta):
         """Recuadro punteado con el rótulo de qué va (solo en la vista previa)."""
         if not self.guias:
             return
-        c, y = self.c, H - y_sup - alto
+        c, y, x = self.c, H - y_sup - alto, self.x(x, ancho)
         c.saveState()
         c.setFillColor(self.col[tinta])
         c.setFillAlpha(0.12)
@@ -96,12 +102,9 @@ def escenas_sin_cifra(contenido: dict) -> list[int]:
 
 
 def fotos_validas(contenido: dict, fotos) -> list[int]:
-    """Escenas con foto: solo entre las intermedias sin cifra, y solo si hay al menos dos (siempre queda un ícono)."""
+    """Escenas con foto: cualquiera de las intermedias sin cifra (diseño elige foto o ícono de línea en cada una)."""
     sin = escenas_sin_cifra(contenido)
-    if len(sin) < 2:
-        return []
-    elegidas = [int(n) for n in (fotos or []) if int(n) in sin]
-    return sorted(set(elegidas))[: len(sin) - 1]
+    return sorted({int(n) for n in (fotos or []) if int(n) in sin})
 
 
 def tipos_imagen(contenido: dict, fotos=()) -> dict[int, str]:
@@ -267,7 +270,7 @@ def _pagina(L, numero: int, texto: str, variante: int) -> None:
                 L.col[tema["linea"]], L.col[tema["acento"]])
             k = 200 / dib.width
             dib.scale(k, k)
-            renderPDF.draw(dib, L.c, x, H - y_img - dib.height * k)
+            renderPDF.draw(dib, L.c, L.x(x, 200), H - y_img - dib.height * k)
     if numero == 1:  # portada: Space Grotesk Light, en mayúsculas y grande
         y_texto = y_img + lado + GANCHO_SEPARACION
         # Mismo alto máximo que en caja_icono: así el tamaño de letra calculado para centrar es el que se dibuja.
@@ -304,8 +307,19 @@ def _logos(L) -> None:
                   height=128, mask="auto", preserveAspectRatio=True, anchor="sw")
 
 
+def _en_espejo(numero: int, espejo) -> bool:
+    return numero < len(CAMPOS) and numero in {int(n) for n in espejo or ()}  # el cierre conserva su diagramación
+
+
+def caja_icono_en(contenido: dict, espejo=()) -> tuple[float, float, float]:
+    """caja_icono, reflejada si la escena 1 va en espejo (para superponer el video animado)."""
+    x, y, lado = caja_icono(contenido)
+    return (W - x - lado if _en_espejo(1, espejo) else x), y, lado
+
+
 def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semilla: int = 0,
-                guias: bool = False, imagenes: dict[int, bytes] | None = None, fotos=(), cifras=None) -> bytes:
+                guias: bool = False, imagenes: dict[int, bytes] | None = None, fotos=(), cifras=None,
+                espejo=()) -> bytes:
     """guias=True añade la etiqueta de cada escena (vista previa); False la omite (descarga)."""
     tarjetas._registrar_fuentes()
     buffer = io.BytesIO()
@@ -316,6 +330,7 @@ def generar_pdf(contenido: dict, titulo: str = "Reel", variante: int = 0, semill
     L.fotos = fotos_validas(contenido, fotos)
     L.cifras = cifras or {}
     for i, campo in enumerate(CAMPOS, 1):
+        L.espejo = _en_espejo(i, espejo)
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante + semilla)
         c.showPage()
     c.save()
@@ -341,7 +356,7 @@ def duraciones(contenido: dict | None = None) -> list[float]:
 
 
 def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, bytes] | None = None,
-                      ancho: int = 1080, fotos=(), cifras=None) -> list[dict]:
+                      ancho: int = 1080, fotos=(), cifras=None, espejo=()) -> list[dict]:
     """Para armar el reel en video: cada escena como imagen de fondo SIN textos (JPEG en data URI) y los textos con
     su posición, fuente, tamaño y color (en px de 1080 x 1920; y = línea de base desde arriba), para que la pantalla
     los anime encima."""
@@ -357,6 +372,7 @@ def escenas_animables(contenido: dict, variante: int = 0, imagenes: dict[int, by
         L.fotos = fotos_validas(contenido, fotos)
         L.cifras = cifras or {}
         L.foto = None
+        L.espejo = _en_espejo(i, espejo)
         _pagina(L, i, (contenido.get(campo) or "").strip(), variante)
         fotos_mov[i - 1] = L.foto
         c.showPage()

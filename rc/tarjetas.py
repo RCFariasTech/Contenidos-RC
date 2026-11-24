@@ -34,8 +34,7 @@ DIR_ICONOS = PLANTILLA / "iconos_linea"
 
 NOMBRES = {1: "Gancho", 2: "Foto", 3: "Ícono", 4: "Dato", 5: "Cierre"}
 # Tarjetas que llevan imagen de Krea, qué tipo y su caja (ancho, alto) en px.
-TIPO_IMAGEN = {1: "icono", 2: "foto", 3: "linea"}
-AREA_IMAGEN = {1: (660, 660), 2: (W, 620), 3: (260, 260)}
+AREA_IMAGEN = {1: (660, 660), 2: (W, 620), 3: (325, 325)}  # ícono de línea 25 % más grande (antes 260)
 PROPORCION_KREA = {1: "1:1", 2: "16:9", 3: "1:1"}
 
 PALETA_2026 = {"marino": "#12244A", "rojo": "#FF0006", "rojo2": "#FF1F35", "azul": "#005EFF",
@@ -224,6 +223,17 @@ class Lienzo:
         # imagenes: {tarjeta: bytes} con la imagen elegida en Krea (1: ícono isométrico, 2: foto).
         self.c, self.col, self.guias, self.imagenes, self.tarjeta = c, col, guias, imagenes or {}, 0
         self.fondo_clave = "marino"
+        self.espejo = False  # diagramación espejo: lo de la izquierda pasa a la derecha y el texto se alinea a la derecha
+
+    def x(self, x, ancho):
+        """Posición horizontal de una caja de `ancho` en `x`, reflejada si la tarjeta va en espejo."""
+        return W - x - ancho if self.espejo else x
+
+    def cadena(self, texto, fuente, tam, color, x, y):
+        """Una línea suelta (y = línea de base desde abajo); en espejo, alineada a la derecha."""
+        self.c.setFillColor(self.col[color])
+        self.c.setFont(fuente, tam)
+        self.c.drawString(self.x(x, stringWidth(texto, fuente, tam)), y, texto)
 
     def fondo(self, color):
         self.c.setFillColor(self.col[color] if color in self.col else HexColor(color))
@@ -238,7 +248,7 @@ class Lienzo:
         self.c.setFont(fuente, tam)
         y = H - y_sup - tam * 0.9
         for ln in lineas:
-            self.c.drawString(x, y, ln)
+            self.c.drawString(self.x(x, stringWidth(ln, fuente, tam)), y, ln)
             y -= tam * inter
         return len(lineas) * tam * inter
 
@@ -247,19 +257,19 @@ class Lienzo:
         dib = svg2rlg(str(ruta))
         k = ancho / dib.width
         dib.scale(k, k)
-        renderPDF.draw(dib, self.c, x, H - y_sup - dib.height * k)
+        renderPDF.draw(dib, self.c, self.x(x, ancho), H - y_sup - dib.height * k)
         return dib.height * k
 
     def png(self, ruta_o_bytes, x, y_sup, ancho, alto):
         fuente = io.BytesIO(ruta_o_bytes) if isinstance(ruta_o_bytes, bytes) else str(ruta_o_bytes)
-        self.c.drawImage(ImageReader(fuente), x, H - y_sup - alto, ancho, alto, mask="auto",
+        self.c.drawImage(ImageReader(fuente), self.x(x, ancho), H - y_sup - alto, ancho, alto, mask="auto",
                          preserveAspectRatio=True, anchor="sw")
 
     def recuadro_guia(self, x, y_sup, ancho, alto, rotulo, nota, tinta="blanco"):
         """En la vista previa: recuadro punteado con qué imagen va y la nota de qué mostrar."""
         if not self.guias:
             return
-        c, y = self.c, H - y_sup - alto
+        c, y, x = self.c, H - y_sup - alto, self.x(x, ancho)
         c.saveState()
         c.setFillColor(self.col[tinta])
         c.setFillAlpha(0.12)
@@ -352,10 +362,10 @@ def t1_gancho(L, d):
     ancho, alto = AREA_IMAGEN[1]
     x, y_sup = W - ancho - 50, H - alto - 50
     # Gancho como la portada del reel (Space Grotesk Light en mayúsculas), con la letra más grande que quepa en un área
-    # invisible de 2/3 del ancho (desde la izquierda) por 1/2 del alto (desde arriba), centrado en ella. Las líneas
+    # invisible de todo el ancho útil por 1/2 del alto (desde arriba), centrado en ella. Las líneas
     # quedan alineadas a la izquierda entre sí.
     from rc.reels import GANCHO_INTER
-    ax, ay, aw, ah = M, M, W * 2 / 3 - M, H / 2 - M
+    ax, ay, aw, ah = M, M, W - 2 * M, H / 2 - M
     secundario = (d.get("texto") or "").strip()
     alto_sec = 130 if secundario else 0
     titular = (d["titular"] or "").upper()
@@ -384,7 +394,7 @@ def t2_foto(L, d):
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     ancho, alto = AREA_IMAGEN[2]
     L.bloque(texto, TEXTO, tema["texto"], M, 110, W - 2 * M - 40, H - alto - 180, 50, inter=1.3)
-    datos = L.imagenes.get(2)
+    datos = L.imagenes.get(L.tarjeta)
     if datos:
         try:
             L.png(recortar(datos, ancho, alto, foto=True), 0, H - alto, ancho, alto)
@@ -408,24 +418,23 @@ def _icono_de(d: dict, alternativa: int) -> str:
 
 def t3_icono(L, d):
     tema = TEMAS[L.fondo_clave]
-    # La imagen de Krea (ícono de línea generado) solo aplica a la tarjeta 3; la 4 sin cifra usa el ícono de la guía.
-    datos = _fondo_con_imagen(L, L.imagenes.get(3) if L.tarjeta == 3 else None)
+    datos = _fondo_con_imagen(L, L.imagenes.get(L.tarjeta))  # ícono de línea generado en Krea para esta tarjeta
     ancho, alto = AREA_IMAGEN[3]
     puesto = False
     if datos:
         try:
-            L.png(recortar(datos, ancho, alto, borde_suave=True), M - 40, 110, ancho, alto)
+            L.png(recortar(datos, ancho, alto, borde_suave=True), M - 50, 110, ancho, alto)
             puesto = True
         except Exception:
             pass
     if not puesto:
         dib = _svg_recoloreado(DIR_ICONOS / f"{_icono_de(d, d.get('alternativa', 0))}.svg",
                                L.col[tema["linea"]], L.col[tema["acento"]])
-        k = 180 / dib.width
+        k = 225 / dib.width
         dib.scale(k, k)
-        renderPDF.draw(dib, L.c, M, H - 150 - dib.height * k)
+        renderPDF.draw(dib, L.c, L.x(M, 225), H - 150 - dib.height * k)
     texto = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
-    L.bloque(texto, TEXTO, tema["texto"], M, 520, W - 2 * M - 60, H - 520 - M, 54, inter=1.3)
+    L.bloque(texto, TEXTO, tema["texto"], M, 585, W - 2 * M - 60, H - 585 - M, 54, inter=1.3)
 
 
 RE_RANGO = re.compile(r"\d+(?:[.,]\d+)*\s?[-–/]\s?\d+(?:[.,]\d+)*\s?%?")
@@ -492,23 +501,33 @@ def t4_dato(L, d):
     todo = d.get("completo") or " ".join(p for p in (d["titular"], d["texto"]) if p)
     antes, cifra, despues = separar_cifra(todo, d.get("cifra"))
     L.fondo(L.fondo_clave)
+    color_txt = tema.get("texto_dato", tema["texto"])
     tam = 300
     while tam > 120 and stringWidth(cifra, TITULO, tam) > W - 2 * M:
         tam -= 10
+    ancho_txt, tam_txt, inter = W - 2 * M - 60, 46, 1.3
     # Mismo aire visual arriba y abajo de la cifra: de la línea base del texto anterior al tope de la cifra, igual
     # que de la línea base de la cifra al tope de las mayúsculas del renglón siguiente.
-    aire = 60 + 46 * (0.9 - ALTO_MAYUS)
-    if (antes or "").strip():
-        usado = L.bloque(antes, TEXTO, tema.get("texto_dato", tema["texto"]), M, 120, W - 2 * M - 60, 340, 46, inter=1.3)
-        base_antes = 120 + usado - 46 * 1.3 + 46 * 0.9
-        y = base_antes + aire - tam * (0.86 - ALTO_CIFRA)
-    else:
-        y = 120
-    L.c.setFillColor(L.col[tema["cifra"]])
-    L.c.setFont(TITULO, tam)
-    L.c.drawString(M - tam * 0.04, H - y - tam * 0.86, cifra)
+    aire = 60 + tam_txt * (0.9 - ALTO_MAYUS)
+
+    def alto_de(t, alto_max):
+        if not (t or "").strip():
+            return 0, tam_txt
+        t_tam, lineas = ajustar(t, TEXTO, ancho_txt, alto_max, tam_txt, inter)
+        return len(lineas) * t_tam * inter, t_tam
+    h_antes, _ = alto_de(antes, 340)
+    h_desp, _ = alto_de(despues, H - 2 * M - h_antes - tam - 160)
+    # Alto del grupo (texto anterior + cifra + texto posterior) para centrarlo en la tarjeta (sin dejar vacía la parte
+    # de abajo cuando el texto es corto).
+    sube = (h_antes - tam_txt * inter + tam_txt * 0.9 + aire - tam * (0.86 - ALTO_CIFRA)) if h_antes else 0
+    total = sube + tam * 0.86 + 60 + h_desp
+    y0 = max(110, (H - total) / 2)
+    if h_antes:
+        L.bloque(antes, TEXTO, color_txt, M, y0, ancho_txt, 340, tam_txt, inter=inter)
+    y = y0 + sube
+    L.cadena(cifra, TITULO, tam, tema["cifra"], M - tam * 0.04, H - y - tam * 0.86)
     y += tam * 0.86 + 60
-    L.bloque(despues, TEXTO, tema.get("texto_dato", tema["texto"]), M, y, W - 2 * M - 60, H - y - M, 46, inter=1.3)
+    L.bloque(despues, TEXTO, color_txt, M, y, ancho_txt, H - y - M, tam_txt, inter=inter)
 
 
 def t5_cierre(L, d):
@@ -567,16 +586,39 @@ def datos_tarjetas(contenido: dict) -> list[dict]:
     return tarjetas
 
 
-def plantillas_de(contenido: dict) -> list[int]:
-    """Plantilla de cada tarjeta: orden fijo; la 4 pasa a «ícono» si no tiene cifra."""
-    t4 = datos_tarjetas(contenido)[3]
-    tiene_cifra = bool(separar_cifra(t4["completo"])[1])
-    return [1, 2, 3, 4 if tiene_cifra else 3, 5]
+PLANTILLA_POR_NOMBRE = {"foto": 2, "icono": 3, "cifra": 4}
+NOMBRE_PLANTILLA = {v: k for k, v in PLANTILLA_POR_NOMBRE.items()}
+TIPO_DE_PLANTILLA = {2: "foto", 3: "linea"}  # imagen de Krea que lleva cada plantilla
+
+
+def tiene_cifra(contenido: dict, numero: int) -> bool:
+    return bool(separar_cifra(datos_tarjetas(contenido)[numero - 1]["completo"])[1])
+
+
+def plantillas_de(contenido: dict, elegidas: dict | None = None) -> list[int]:
+    """Plantilla de cada tarjeta. Por defecto: 1 portada, 2 foto, 3 ícono, 4 cifra (o ícono si no tiene cifra) y 5
+    cierre. `elegidas` ({"2".."4": "foto" | "icono" | "cifra"}) es lo que eligió diseño; la cifra solo aplica si el
+    texto de la tarjeta tiene una."""
+    plantillas = [1, 2, 3, 4 if tiene_cifra(contenido, 4) else 3, 5]
+    for n in (2, 3, 4):
+        nombre = (elegidas or {}).get(str(n))
+        if nombre in PLANTILLA_POR_NOMBRE and (nombre != "cifra" or tiene_cifra(contenido, n)):
+            plantillas[n - 1] = PLANTILLA_POR_NOMBRE[nombre]
+    return plantillas
+
+
+def tipos_imagen(contenido: dict, elegidas: dict | None = None) -> dict[int, str]:
+    """{tarjeta: tipo de imagen de Krea}: 1 ilustración, y en las 2-4 foto o ícono de línea según su plantilla."""
+    tipos = {1: "icono"}
+    for n, p in enumerate(plantillas_de(contenido, elegidas), 1):
+        if 2 <= n <= 4 and p in TIPO_DE_PLANTILLA:
+            tipos[n] = TIPO_DE_PLANTILLA[p]
+    return tipos
 
 
 def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, semilla: int = 0,
                 guias: bool = False, imagenes: dict[int, bytes] | None = None, inicio: int = 0,
-                cifras: dict | None = None) -> bytes:
+                cifras: dict | None = None, plantillas: dict | None = None, espejo=()) -> bytes:
     """guias=True dibuja los recuadros de imagen con su nota (vista previa); False los omite (descarga).
 
     inicio: color con que empieza la pieza (según su semana, ver ROTACION).
@@ -588,8 +630,10 @@ def generar_pdf(contenido: dict, titulo: str = "Carrusel", variante: int = 0, se
     c.setTitle(titulo)
     c.setAuthor("RC Farías")
     L = Lienzo(c, _colores(), guias=guias, imagenes=imagenes)
-    for numero, (plantilla, datos) in enumerate(zip(plantillas_de(contenido), datos_tarjetas(contenido)), 1):
+    espejo = {int(n) for n in espejo or ()}
+    for numero, (plantilla, datos) in enumerate(zip(plantillas_de(contenido, plantillas), datos_tarjetas(contenido)), 1):
         L.tarjeta, L.fondo_clave = numero, color_de_tarjeta(numero, inicio)
+        L.espejo = numero in espejo and numero < 5  # el cierre conserva su diagramación (logos)
         PLANTILLAS[plantilla](L, {**datos, "alternativa": variante + semilla * 3 + numero * 5,
                                   "cifra": (cifras or {}).get(str(numero))})
         c.showPage()

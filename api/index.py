@@ -61,7 +61,7 @@ PERMISOS = {
     ("POST", "ilustraciones"): DISENO, ("POST", "ilustracion-elegir"): DISENO, ("POST", "ilustracion-sugerir"): DISENO,
     ("POST", "ilustraciones-detener"): DISENO, ("POST", "ilustracion-animar"): DISENO,
     ("POST", "ilustraciones-borrar"): DISENO, ("POST", "reel-foto"): DISENO, ("POST", "cifra"): DISENO,
-    ("POST", "aprobar-diseno"): DISENO, ("POST", "musica"): DISENO, ("POST", "musica-elegir"): DISENO,
+    ("POST", "aprobar-diseno"): DISENO, ("POST", "plantilla"): DISENO, ("POST", "espejo"): DISENO, ("POST", "musica"): DISENO, ("POST", "musica-elegir"): DISENO,
     ("POST", "aprobar-publicacion"): {"admin", "publicacion"},
     ("POST", "devolver"): {"admin", "diseno", "publicacion"},
 }
@@ -293,6 +293,18 @@ def ruta_cifra(req):
                                          str(cuerpo.get("cifra") or "")[:40])
 
 
+def ruta_plantilla(req):
+    _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().elegir_plantilla(_entero(c, "pieza_id"), _entero(c, "numero"), str(c.get("plantilla") or ""))
+
+
+def ruta_espejo(req):
+    _dueno(req)
+    c = req["cuerpo"]
+    return 200, _servicio().elegir_espejo(_entero(c, "pieza_id"), _entero(c, "numero"), bool(c.get("activo", True)))
+
+
 def ruta_aprobar_diseno(req):
     usuario = _dueno(req)
     c = req["cuerpo"]
@@ -465,6 +477,8 @@ RUTAS = {
     ("GET", "yo"): ruta_yo,
     ("GET", "mes-actual"): ruta_mes_actual,
     ("GET", "meses"): ruta_meses,
+    ("POST", "plantilla"): ruta_plantilla,
+    ("POST", "espejo"): ruta_espejo,
     ("POST", "iniciar-mes"): ruta_iniciar_mes,
     ("POST", "generar-pieza"): ruta_generar_pieza,
     ("POST", "ajustar-pieza"): ruta_ajustar_pieza,

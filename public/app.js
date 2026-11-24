@@ -248,11 +248,13 @@ function renderTextos(pieza, conMiniaturas = true) {
             }, "Otro gancho"),
             null)
           : null,
+        conMiniaturas && opcionPlantilla(pieza, i + 1) ? selectorPlantilla(pieza, i + 1) : null,
         conMiniaturas && opcionCifra(pieza, i + 1) ? selectorCifra(pieza, i + 1, c[campo] || "") : null,
+        conMiniaturas && i < 4 ? selectorEspejo(pieza, i + 1) : null,
         conMiniaturas && opcionFoto(pieza, i + 1) ? el("label", { clase: "reel-foto",
           title: "La escena muestra una foto de apoyo con velo de color en vez del ícono de línea" },
           el("input", { type: "checkbox", checked: (pieza.diseno_reel?.fotos || []).includes(i + 1),
-            disabled: pieza.estado === "aprobada",
+            disabled: disenoBloqueado(pieza),
             onchange: (ev) => accion(pieza.id, () => api("reel-foto", { metodo: "POST",
               cuerpo: { pieza_id: pieza.id, escena: i + 1, activa: ev.target.checked } })).then(() => refrescarMiniaturasDe(pieza)) }),
           " Usar foto en esta escena") : null,
@@ -952,10 +954,6 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 const IMAGEN_TARJETA = {
   1: { boton: "Ilustración de la tarjeta 1", titulo: "Ilustración vectorial · Tarjeta 1", generar: "Generar ilustraciones", alt: "Ilustración generada en Krea",
        ayuda: "Genera en Krea variantes de la ilustración de la portada en el estilo vectorial RC. Descríbela como «Escena: … Protagonista: … Apoyo: … Punto focal: …» (el punto focal va en rojo)" },
-  2: { boton: "Foto de la tarjeta 2", titulo: "Foto · Tarjeta 2", generar: "Generar fotos", alt: "Foto generada en Krea",
-       ayuda: "Genera en Krea variantes de la foto realista de la tarjeta 2" },
-  3: { boton: "Ícono de la tarjeta 3", titulo: "Ícono de línea · Tarjeta 3", generar: "Generar íconos", alt: "Ícono de línea generado en Krea",
-       ayuda: "Genera en Krea variantes del ícono de línea de la tarjeta 3, con el estilo de los íconos de la guía visual" },
 };
 
 // Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.
@@ -991,7 +989,7 @@ function candidatosCifra(texto) {
 /** Tarjeta o escena donde la cifra va en grande y el texto tiene más de una opción para resaltar. */
 function opcionCifra(pieza, n) {
   const campo = CAMPOS[pieza.formato]?.[n - 1]?.campo;
-  const enGrande = pieza.formato === "Reel" ? n >= 2 && n <= 4 : n === 4;
+  const enGrande = pieza.formato === "Reel" ? n >= 2 && n <= 4 : plantillaDe(pieza, n) === 4;
   const texto = pieza.contenido?.[campo] || "";
   return enGrande && tieneCifra(texto) && candidatosCifra(texto).length > 1;
 }
@@ -1000,23 +998,69 @@ function selectorCifra(pieza, n, texto) {
   const elegida = pieza.diseno_reel?.cifras?.[String(n)] || "";
   const opciones = candidatosCifra(texto);
   return el("label", { clase: "reel-foto", title: "Qué cifra del texto se muestra en grande" }, "Cifra a resaltar: ",
-    el("select", { disabled: pieza.estado === "aprobada",
+    el("select", { disabled: disenoBloqueado(pieza),
       onchange: (ev) => accion(pieza.id, () => api("cifra", { metodo: "POST",
         cuerpo: { pieza_id: pieza.id, numero: n, cifra: ev.target.value } })).then(() => refrescarMiniaturasDe(pieza)) },
       el("option", { value: "", selected: !elegida }, `Automática (${opciones[0]})`),
       ...opciones.map((o) => el("option", { value: o, selected: o === elegida }, o))));
 }
 
-/** Escenas intermedias del reel sin cifra: si hay dos o más, cualquiera (menos una) puede llevar foto. */
+/** Escenas intermedias del reel sin cifra: cada una puede llevar foto o ícono de línea. */
 function opcionFoto(pieza, n) {
   if (pieza.formato !== "Reel" || n < 2 || n > 4) return false;
-  const sin = [2, 3, 4].filter((k) => !tieneCifra(pieza.contenido?.[CAMPOS.Reel[k - 1].campo] || ""));
-  return sin.length >= 2 && sin.includes(n);
+  return !tieneCifra(pieza.contenido?.[CAMPOS.Reel[n - 1].campo] || "");
+}
+
+/** Los controles de diseño se bloquean cuando el diseño de la pieza ya está aprobado (no con los textos). */
+function disenoBloqueado(pieza) {
+  return Boolean(pieza.aprobaciones?.diseno) || !["admin", "diseno"].includes(estado.rol);
+}
+
+// Plantillas del carrusel (misma regla que rc/tarjetas.py · plantillas_de): 2 foto, 3 ícono, 4 cifra (o ícono).
+const PLANTILLAS = { foto: 2, icono: 3, cifra: 4 };
+function plantillaDe(pieza, n) {
+  const texto = (k) => pieza.contenido?.[CAMPOS.Carrusel[k - 1].campo] || "";
+  const base = [1, 2, 3, tieneCifra(texto(4)) ? 4 : 3, 5][n - 1];
+  const elegida = pieza.diseno_reel?.plantillas?.[String(n)];
+  if (n < 2 || n > 4 || !PLANTILLAS[elegida] || (elegida === "cifra" && !tieneCifra(texto(n)))) return base;
+  return PLANTILLAS[elegida];
+}
+
+function opcionPlantilla(pieza, n) { return pieza.formato === "Carrusel" && n >= 2 && n <= 4; }
+
+function selectorPlantilla(pieza, n) {
+  const actual = plantillaDe(pieza, n);
+  const conCifra = tieneCifra(pieza.contenido?.[CAMPOS.Carrusel[n - 1].campo] || "");
+  const opciones = [["foto", "Foto"], ["icono", "Ícono de línea"], ...(conCifra ? [["cifra", "Cifra en grande"]] : [])];
+  return el("label", { clase: "reel-foto", title: "Qué lleva la tarjeta junto al texto" }, "Plantilla: ",
+    el("select", { disabled: disenoBloqueado(pieza),
+      onchange: (ev) => accion(pieza.id, () => api("plantilla", { metodo: "POST",
+        cuerpo: { pieza_id: pieza.id, numero: n, plantilla: ev.target.value } })).then(() => refrescarMiniaturasDe(pieza)) },
+      ...opciones.map(([v, t]) => el("option", { value: v, selected: PLANTILLAS[v] === actual }, t))));
+}
+
+function selectorEspejo(pieza, n) {
+  const espejo = (pieza.diseno_reel?.espejo || []).includes(n);
+  return el("label", { clase: "reel-foto", title: "Espejo: la imagen y el texto pasan al lado contrario y el texto se alinea a la derecha" },
+    "Diagramación: ",
+    el("select", { disabled: disenoBloqueado(pieza),
+      onchange: (ev) => accion(pieza.id, () => api("espejo", { metodo: "POST",
+        cuerpo: { pieza_id: pieza.id, numero: n, activo: ev.target.value === "espejo" } })).then(() => refrescarMiniaturasDe(pieza)) },
+      el("option", { value: "normal", selected: !espejo }, "Normal"),
+      el("option", { value: "espejo", selected: espejo }, "Espejo (texto a la derecha)")));
 }
 
 /** Qué imagen lleva la tarjeta o escena `n` de la pieza (null si no lleva). */
 function infoImagen(pieza, n) {
-  if (pieza.formato !== "Reel") return IMAGEN_TARJETA[n] || null;
+  if (pieza.formato !== "Reel") {
+    if (n === 1) return IMAGEN_TARJETA[1];
+    const plantilla = n <= 4 ? plantillaDe(pieza, n) : null;
+    if (plantilla === 2) return { boton: `Foto de la tarjeta ${n}`, titulo: `Foto · Tarjeta ${n}`, generar: "Generar fotos",
+      alt: "Foto generada en Krea", ayuda: `Genera en Krea variantes de la foto realista de la tarjeta ${n}` };
+    if (plantilla === 3) return { boton: `Ícono de la tarjeta ${n}`, titulo: `Ícono de línea · Tarjeta ${n}`, generar: "Generar íconos",
+      alt: "Ícono de línea generado en Krea", ayuda: `Genera en Krea variantes del ícono de línea de la tarjeta ${n}, con el estilo de los íconos de la guía visual` };
+    return null;  // cifra en grande o cierre: sin imagen
+  }
   if (n === 1) return { reel: true, boton: "Ilustración animada de la escena 1", titulo: "Ilustración vectorial animada · Escena 1",
     generar: "Generar íconos", alt: "Ícono generado en Krea",
     ayuda: "Genera en Krea la ilustración vectorial de la escena 1 y su animación corta en video" };

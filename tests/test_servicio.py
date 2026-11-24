@@ -358,7 +358,7 @@ class TestFlujo(unittest.TestCase):
                 mock.patch.object(krea, "consultar", return_value={"estado": "lista", "url": "https://gen.krea.ai/images/x.png", "error": None}):
             servicio.ilustraciones(pieza_id)
         elegidas = [f["tarjeta"] for f in filas if f["pieza_id"] == pieza_id and f["elegida"]]
-        self.assertEqual(sorted(elegidas), [1, 2, 3])                          # la primera lista se usa sola
+        self.assertEqual(sorted(elegidas), sorted(servicio._tipos_imagen(servicio._pieza(pieza_id))))  # la primera lista se usa sola
 
     def test_el_icono_de_la_escena_1_del_reel_se_anima_solo(self):
         _, reel = self._mes_generado()
@@ -428,10 +428,9 @@ class TestFlujo(unittest.TestCase):
         r = servicio.foto_en_escena(reel["id"], sin[0], True)
         self.assertEqual(r["fotos"], [sin[0]])
         self.assertEqual(servicio._tipos_imagen(servicio._pieza(reel["id"]))[sin[0]], "foto")
-        with self.assertRaises(servicio.ErrorNegocio):                       # siempre queda al menos un ícono
-            for n in sin[1:]:
-                servicio.foto_en_escena(reel["id"], n, True)
-        self.assertEqual(servicio.foto_en_escena(reel["id"], sin[0], False)["fotos"], sin[1:-1])  # quitar una
+        for n in sin[1:]:                                                    # todas pueden llevar foto
+            servicio.foto_en_escena(reel["id"], n, True)
+        self.assertEqual(servicio.foto_en_escena(reel["id"], sin[0], False)["fotos"], sin[1:])  # quitar una
 
     def test_elegir_cifra_a_resaltar(self):
         carrusel, _ = self._mes_generado()
@@ -580,7 +579,7 @@ class TestFlujo(unittest.TestCase):
             self.assertIn("minimalist line icon", prompt)                      # tarjeta 3: ícono de línea
             self.assertIn("una lupa", prompt)
             self.assertTrue(referencias and all("/marca/linea/" in r for r in referencias))
-            for caso in ((carrusel["id"], 4), (reel["id"], 5)):
+            for caso in ((carrusel["id"], 5), (reel["id"], 5)):
                 with self.assertRaises(servicio.ErrorNegocio):
                     servicio.generar_ilustraciones(*caso)
         with mock.patch.object(krea, "configurado", return_value=False):

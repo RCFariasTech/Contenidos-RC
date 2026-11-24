@@ -673,11 +673,12 @@ def tarjetas_pdf(pieza_id: int, semilla: int = 0, guias: bool = False) -> tuple[
         modulo = reels
         pdf = reels.generar_pdf(contenido, titulo, inicio, semilla=max(0, int(semilla)), guias=guias,
                                 imagenes=_imagenes_elegidas(pieza["id"]), fotos=_fotos_reel(pieza),
-                                cifras=_cifras(pieza))
+                                cifras=_cifras(pieza), espejo=_espejo(pieza))
     else:
         modulo = tarjetas
         pdf = tarjetas.generar_pdf(contenido, titulo, variante, semilla=max(0, int(semilla)), guias=guias,
-                                   imagenes=_imagenes_elegidas(pieza["id"]), inicio=inicio, cifras=_cifras(pieza))
+                                   imagenes=_imagenes_elegidas(pieza["id"]), inicio=inicio, cifras=_cifras(pieza),
+                                   plantillas=_plantillas(pieza), espejo=_espejo(pieza))
     return modulo.nombre_archivo(contenido, mes), pdf
 
 
@@ -701,7 +702,7 @@ def vista_tarjetas(pieza_id: int, semilla: int = 0, ancho: int = 720) -> dict:
                       and str(f.get("video_url") or "").startswith("https://")), None)
         if video:
             from rc import reels
-            x, y, lado = reels.caja_icono(pieza["contenido"])
+            x, y, lado = reels.caja_icono_en(pieza["contenido"], _espejo(pieza))
             respuesta["video_escena_1"] = {"url": video, "x": x / reels.W, "y": y / reels.H,
                                            "ancho": lado / reels.W, "alto": lado / reels.H}
         respuesta["video_en_cola"] = any(f.get("video_estado") == "en_cola" for f in filas)
@@ -744,7 +745,7 @@ def reel_animable(pieza_id: int) -> dict:
     inicio = tarjetas.inicio_de_semana(pieza.get("semana"))
     imagenes = _imagenes_elegidas(pieza["id"])  # también actualiza imágenes y videos que seguían en Krea
     escenas = reels.escenas_animables(pieza["contenido"], inicio, imagenes, fotos=_fotos_reel(pieza),
-                                      cifras=_cifras(pieza))
+                                      cifras=_cifras(pieza), espejo=_espejo(pieza))
     filas = db.seleccionar("ilustraciones", select="video_url,video_estado", pieza_id=f"eq.{pieza['id']}",
                            tarjeta="eq.1", elegida="is.true")
     video = next((f["video_url"] for f in filas if f.get("video_estado") == "lista"
@@ -754,12 +755,13 @@ def reel_animable(pieza_id: int) -> dict:
                  "tema": pieza["contenido"].get("tema_especifico", ""), "semana": pieza.get("semana"),
                  "musica": musica.get("elegida") is not None}
     if video:
-        x, y, lado = reels.caja_icono(pieza["contenido"])
+        x, y, lado = reels.caja_icono_en(pieza["contenido"], _espejo(pieza))
         respuesta["video_escena_1"] = {"url": video, "x": x, "y": y, "lado": lado}
         # Fondo de la escena 1 sin el ícono fijo, para poner encima el animado con su fondo recortado.
         sin_icono = {k: v for k, v in imagenes.items() if k != 1}
         respuesta["fondo_escena_1_sin_icono"] = reels.escenas_animables(
-            pieza["contenido"], inicio, sin_icono, fotos=_fotos_reel(pieza), cifras=_cifras(pieza))[0]["fondo"]
+            pieza["contenido"], inicio, sin_icono, fotos=_fotos_reel(pieza), cifras=_cifras(pieza),
+            espejo=_espejo(pieza))[0]["fondo"]
     return respuesta
 
 
@@ -792,9 +794,9 @@ def elegir_cifra(pieza_id: int, numero: int, cifra: str) -> dict:
             raise ErrorNegocio("Solo las escenas 2 a 4 resaltan cifras.")
         texto = pieza["contenido"].get(reels.CAMPOS[numero - 1], "")
     else:
-        if numero != 4:
-            raise ErrorNegocio("En los carruseles, la cifra se resalta en la tarjeta 4.")
-        texto = tarjetas.datos_tarjetas(pieza["contenido"])[3]["completo"]
+        if numero not in (2, 3, 4):
+            raise ErrorNegocio("En los carruseles, la cifra se resalta en las tarjetas 2 a 4.")
+        texto = tarjetas.datos_tarjetas(pieza["contenido"])[numero - 1]["completo"]
     cifra = " ".join((cifra or "").split())
     if cifra and cifra not in tarjetas.candidatos_cifra(texto):
         raise ErrorNegocio("Esa cifra no está en el texto.")
@@ -806,6 +808,66 @@ def elegir_cifra(pieza_id: int, numero: int, cifra: str) -> dict:
     db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "cifras": cifras}},
                   id=f"eq.{pieza['id']}")
     return {"cifras": cifras}
+
+
+def _plantillas(pieza: dict) -> dict:
+    """{"2".."4": "foto" | "icono" | "cifra"}: plantilla que eligió diseño para cada tarjeta intermedia del carrusel."""
+    return dict((pieza.get("diseno_reel") or {}).get("plantillas") or {})
+
+
+def _espejo(pieza: dict) -> list[int]:
+    """Tarjetas o escenas con la diagramación espejo (imagen y texto del lado contrario, texto alineado a la derecha)."""
+    return [int(n) for n in (pieza.get("diseno_reel") or {}).get("espejo") or []]
+
+
+def _diseno_bloqueado(pieza: dict) -> None:
+    if not pieza.get("contenido"):
+        raise ErrorNegocio("Esta pieza aún no tiene contenido.")
+    if (pieza.get("aprobaciones") or {}).get("diseno"):
+        raise ErrorNegocio("El diseño de esta pieza ya está aprobado: quita la aprobación para cambiarlo.")
+
+
+def elegir_plantilla(pieza_id: int, numero: int, plantilla: str) -> dict:
+    """Carrusel: diseño cambia la plantilla de la tarjeta 2, 3 o 4 entre foto, ícono de línea y cifra en grande. La
+    imagen elegida antes para esa tarjeta ya no aplica si cambia el tipo; si Krea está activo, se pide una nueva."""
+    from rc import tarjetas
+    pieza = _pieza(int(pieza_id))
+    numero = int(numero)
+    _diseno_bloqueado(pieza)
+    if pieza["formato"] != "Carrusel" or numero not in (2, 3, 4):
+        raise ErrorNegocio("La plantilla se elige en las tarjetas 2 a 4 de los carruseles.")
+    if plantilla not in tarjetas.PLANTILLA_POR_NOMBRE:
+        raise ErrorNegocio("Plantilla no válida.")
+    if plantilla == "cifra" and not tarjetas.tiene_cifra(pieza["contenido"], numero):
+        raise ErrorNegocio("Esta tarjeta no tiene una cifra para mostrar en grande.")
+    antes = _tipos_imagen(pieza).get(numero)
+    plantillas = {**_plantillas(pieza), str(numero): plantilla}
+    db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "plantillas": plantillas}},
+                  id=f"eq.{pieza['id']}")
+    pieza["diseno_reel"] = {**(pieza.get("diseno_reel") or {}), "plantillas": plantillas}
+    despues = _tipos_imagen(pieza).get(numero)
+    if despues != antes:
+        db.actualizar("ilustraciones", {"elegida": False}, pieza_id=f"eq.{pieza['id']}", tarjeta=f"eq.{numero}",
+                      elegida="is.true")
+        if despues and krea.configurado() and ajustes()["krea"].get("automaticas", True):
+            try:
+                generar_ilustraciones(pieza["id"], numero, cantidad=1, automatica=True)
+            except Exception:  # noqa: BLE001 (la imagen es un extra)
+                log.warning("No se pudo pedir la imagen de la tarjeta %s", numero, exc_info=True)
+    return {"plantillas": plantillas}
+
+
+def elegir_espejo(pieza_id: int, numero: int, activo: bool) -> dict:
+    """Diagramación normal o espejo de una tarjeta (1-4) o escena (1-4); el cierre no cambia."""
+    pieza = _pieza(int(pieza_id))
+    numero = int(numero)
+    _diseno_bloqueado(pieza)
+    if numero not in (1, 2, 3, 4):
+        raise ErrorNegocio("La diagramación se cambia en las tarjetas o escenas 1 a 4.")
+    espejo = sorted({n for n in _espejo(pieza) if n != numero} | ({numero} if activo else set()))
+    db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "espejo": espejo}},
+                  id=f"eq.{pieza['id']}")
+    return {"espejo": espejo}
 
 
 def _fotos_reel(pieza: dict) -> list[int]:
@@ -821,12 +883,10 @@ def foto_en_escena(pieza_id: int, escena: int, activa: bool) -> dict:
     if pieza["formato"] != "Reel" or not pieza.get("contenido"):
         raise ErrorNegocio("La foto en escenas es para reels con contenido.")
     sin = reels.escenas_sin_cifra(pieza["contenido"])
-    if escena not in sin or len(sin) < 2:
-        raise ErrorNegocio("Solo puede llevar foto una escena intermedia sin cifra, cuando hay al menos dos.")
+    if escena not in sin:
+        raise ErrorNegocio("Solo puede llevar foto una escena intermedia sin cifra.")
     fotos = [n for n in _fotos_reel(pieza) if n != escena] + ([escena] if activa else [])
     validas = reels.fotos_validas(pieza["contenido"], fotos)
-    if activa and escena not in validas:
-        raise ErrorNegocio("Al menos una escena intermedia debe conservar su ícono.")
     db.actualizar("piezas", {"diseno_reel": {**(pieza.get("diseno_reel") or {}), "fotos": validas}},
                   id=f"eq.{pieza['id']}")
     db.actualizar("ilustraciones", {"elegida": False}, pieza_id=f"eq.{pieza['id']}", tarjeta=f"eq.{escena}",
@@ -847,7 +907,7 @@ def _tipos_imagen(pieza: dict) -> dict[int, str]:
         return {}
     if pieza["formato"] == "Reel":
         return reels.tipos_imagen(pieza["contenido"], _fotos_reel(pieza))
-    return dict(tarjetas.TIPO_IMAGEN)
+    return tarjetas.tipos_imagen(pieza["contenido"], _plantillas(pieza))
 
 
 def _texto_imagen(pieza: dict, numero: int) -> dict:

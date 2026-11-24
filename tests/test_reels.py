@@ -34,7 +34,7 @@ class TestReels(unittest.TestCase):
     def test_escena_con_foto_y_velo(self):
         reel = dict(REEL, escena_2_desarrollo_a="Primera idea sin datos", escena_3_desarrollo_b="Segunda idea sin datos",
                     escena_4_desarrollo_c="Tercera idea sin datos")
-        self.assertEqual(reels.fotos_validas(reel, [2, 3, 4]), [2, 3])            # siempre queda un ícono
+        self.assertEqual(reels.fotos_validas(reel, [2, 3, 4]), [2, 3, 4])         # diseño elige foto o ícono en cada una
         self.assertEqual(reels.tipos_imagen(reel, [3])[3], "foto")
         import io
         from PIL import Image

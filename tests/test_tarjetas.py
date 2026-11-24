@@ -186,5 +186,21 @@ class TestTarjetas(unittest.TestCase):
                          "tarjetas-2026-11-retail-media-ya.pdf")
 
 
+    def test_plantilla_y_espejo_por_tarjeta(self):
+        pieza = carrusel()
+        pieza["slide_3"] = "El 60% de los CMO ya mide incrementalidad."
+        base = tarjetas.plantillas_de(pieza)
+        self.assertEqual(base[:3], [1, 2, 3])
+        elegidas = tarjetas.plantillas_de(pieza, {"2": "icono", "3": "cifra"})
+        self.assertEqual(elegidas[1:3], [3, 4])
+        self.assertEqual(tarjetas.tipos_imagen(pieza, {"2": "icono", "3": "cifra"})[2], "linea")
+        self.assertNotIn(3, tarjetas.tipos_imagen(pieza, {"3": "cifra"}))        # con cifra en grande, sin imagen
+        self.assertEqual(tarjetas.plantillas_de(pieza, {"2": "cifra"})[1], 2)  # sin cifra en el texto: se ignora
+        doc = pymupdf.open(stream=tarjetas.generar_pdf(pieza, plantillas={"3": "cifra"}, espejo=[3]), filetype="pdf")
+        palabras = doc[2].get_text("words")
+        self.assertTrue(any(w[4] == "60%" for w in palabras))
+        derecha = max(w[2] for w in palabras)
+        self.assertGreater(derecha, tarjetas.W - tarjetas.M - 5)                 # espejo: texto alineado a la derecha
+
 if __name__ == "__main__":
     unittest.main()
