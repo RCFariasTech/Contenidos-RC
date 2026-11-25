@@ -45,10 +45,10 @@ FORMATO CARRUSEL:
   ${iconos_linea}.
   "prompt_krea" (solo tarjetas 1 y 2; vacío en las demás), EN INGLÉS:
   · Tarjeta 1 = ilustración vectorial editorial de marca, imagen de APOYO que convierte la idea en UNA metáfora visual
-    conceptual (no representa todo el texto), con este formato: "Scene: <metaphor>. Protagonist: <main element>.
-    Secondary: <2-3 simple elements>. Focal point: <one key detail, will be red>." Máximo 45 palabras, sin estilo,
-    colores, fondo, texto ni logos. Ej.: "Scene: an event strategy that wins the game. Protagonist: a large chess
-    king. Secondary: a chessboard in perspective and two pawns. Focal point: the king's crown."
+    conceptual simple y concreta (no representa todo el texto), con este formato: "Scene: <short visual phrase>.
+    Protagonist: <main element>. Focal point: <one visible detail, will be red>." Máximo 30 palabras, sin elementos
+    de apoyo, sin estilo, colores, fondo, texto ni logos. Ej.: "Scene: a giant stamp stamping several marks.
+    Protagonist: a large rubber stamp. Focal point: the rubber face with the stamp design."
   · Tarjeta 2 = foto documental realista de un evento o activación de marca CON TECNOLOGÍA (pantallas LED grandes, gafas VR,
     simuladores, hologramas, pantallas táctiles, juegos multimedia, activaciones phygital): quién (personas latinas comunes de
     clase media, edad y género), dónde y qué tecnología usan (15 a 40 palabras), sin palabras de estilo ni de cámara, sin texto

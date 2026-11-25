@@ -1,7 +1,7 @@
 """Prompts de Krea para el sistema gráfico RC Farías 2026.
 
 - Ilustración vectorial (tarjeta 1 y escena 1 del reel): estilo vectorial RC de la guía de Daniela
-  (metáfora con protagonista, apoyos y un punto focal rojo), con sus referencias publicadas en Krea.
+  (escena simple con protagonista y un punto focal rojo), con sus referencias publicadas en Krea.
 - Ícono de línea (tarjeta 3): estilo de los íconos de línea de la guía, con /marca/linea/ como referencias.
 - Foto (tarjeta 2 y reels): fotografía documental realista, gente común.
 """
@@ -27,12 +27,12 @@ ESTILO_ICONO = (
     "their content. The brief may be written in Spanish.\n"
     "New illustration: {escena}.\n"
     "Protagonist: {protagonista}, with the richest color and volume through two-tone gradients and grain shading.\n"
-    "Secondary: {apoyo}, simpler than the protagonist.\n"
+    "{apoyo}"
     "Focal point: {focal} in {color_focal}, the only {nombre_focal} element.\n"
     "Colors: deep navy (#162447), electric blue (#1A5CFF), light grey (#E9E9E9, #CACBCC), charcoal (#353841, "
     "#171719), white. Depth from gradients, planes in slight perspective and translucent glass-like layers. "
     "Each gradient is one single continuous smooth seamless gradient, no visible bands or edges. "
-    "Still-life composition: few large objects on a diagonal, generous negative space.\n"
+    "Simple composition: one large protagonist, generous negative space.\n"
     "People: abstract and faceless, no eyes, no mouth, no eyebrows, no eyelashes, no blush.\n"
     "Background: solid flat uniform {fondo_nombre} ({fondo_hex}), completely plain, no circle, no container, no "
     "gradient, no glow, no grain, no cast shadows. Edges in {bordes} colors to separate from the background.\n"
@@ -65,7 +65,9 @@ def partes_metafora(descripcion: str) -> dict:
         partes["escena"] = texto
     partes.setdefault("escena", partes.get("protagonista", texto))
     partes.setdefault("protagonista", "the main element of the scene")
-    partes.setdefault("apoyo", "two or three simple supporting elements that complete the metaphor")
+    # Sin apoyos salvo que la descripción los traiga: el protagonista solo, simple y grande.
+    partes["apoyo"] = (f"Secondary: {partes['apoyo']}, simpler than the protagonist.\n" if partes.get("apoyo")
+                       else "Keep it minimal: no extra props beyond what the scene describes.\n")
     partes.setdefault("focal", "one key detail of the protagonist")
     return partes
 

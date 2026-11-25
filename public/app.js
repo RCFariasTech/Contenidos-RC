@@ -953,7 +953,7 @@ $("tarjetas-descargar").addEventListener("click", async (ev) => {
 
 const IMAGEN_TARJETA = {
   1: { boton: "Ilustración de la tarjeta 1", titulo: "Ilustración vectorial · Tarjeta 1", generar: "Generar ilustraciones", alt: "Ilustración generada en Krea",
-       ayuda: "Genera en Krea variantes de la ilustración de la portada en el estilo vectorial RC. Descríbela como «Escena: … Protagonista: … Apoyo: … Punto focal: …» (el punto focal va en rojo)" },
+       ayuda: "Genera en Krea variantes de la ilustración de la portada en el estilo vectorial RC. Descríbela como «Escena: … Protagonista: … Punto focal: …» (el punto focal va en rojo)" },
 };
 
 // Misma regla que el servidor (rc/tarjetas.py · RE_CIFRA): la primera cifra del texto se muestra en grande.

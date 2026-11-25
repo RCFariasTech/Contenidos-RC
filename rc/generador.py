@@ -187,11 +187,13 @@ SISTEMAS_IMAGEN = {
         "idea central en UNA metáfora visual conceptual (ajedrez = estrategia, bombillo = concepto, mano = acción), "
         "en composición tipo bodegón con pocos objetos grandes. No intenta representar todo el texto. Si hay "
         "personas, son abstractas y sin rostro.\n"
-        "Responde EN ESPAÑOL con exactamente este formato, en una sola línea (máximo 45 palabras en total):\n"
-        "Escena: <la metáfora en una frase>. Protagonista: <el elemento principal>. Apoyo: <2 o 3 elementos simples>. "
-        "Punto focal: <UN detalle clave del protagonista, que irá en rojo>.\n"
-        "Ejemplo: «Escena: una estrategia de evento que gana la partida. Protagonista: un rey de ajedrez grande. "
-        "Apoyo: un tablero en perspectiva y dos peones. Punto focal: la corona del rey.»\n"
+        "Sé simple y concreto: describe una imagen que se pueda dibujar, no una explicación de la idea.\n"
+        "Responde EN ESPAÑOL con exactamente este formato, en una sola línea (máximo 30 palabras en total):\n"
+        "Escena: <qué se ve, en una frase corta y visual>. Protagonista: <el elemento principal>. "
+        "Punto focal: <UN detalle visible del protagonista, que irá en rojo>.\n"
+        "Ejemplo: «Escena: un sello gigante estampando varios sellos. Protagonista: un sello de caucho grande. "
+        "Punto focal: la goma con el estampado del sello.»\n"
+        "No agregues elementos de apoyo.\n"
         "Sin palabras de estilo, colores, fondo, textos, letras, números, logos ni marcas."
     ),
     "linea": (
